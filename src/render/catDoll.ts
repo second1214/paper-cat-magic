@@ -15,7 +15,7 @@ const FRAMES: Record<string, number> = {
   P09_belly_up: 1.25 / 417,
 };
 
-export type CatState = "idle" | "walk" | "dash" | "hurt" | "happy" | "down";
+export type CatState = "idle" | "walk" | "dash" | "jump" | "hurt" | "happy" | "down";
 
 export class CatDoll {
   group = new THREE.Group();
@@ -57,15 +57,24 @@ export class CatDoll {
   /** 歩き・走りのコマ送り位置。速さに合わせて積み上げる（t×速さで直接求めると、加速中にコマが飛び飛びになる）。 */
   private stride = 0;
 
-  /** t: 経過秒、facing: 右=1/左=-1、blinking: 点滅（無敵中）。 */
-  update(t: number, state: CatState, facing: 1 | -1, speed: number, blinking: boolean) {
+  /** t: 経過秒、facing: 右=1/左=-1、blinking: 点滅（無敵中）、jump: ねこジャンプの進み 0..1。 */
+  update(t: number, state: CatState, facing: 1 | -1, speed: number, blinking: boolean, jump = 0) {
     const dt = Math.min(0.1, Math.max(0, t - this.lastT)); this.lastT = t;
-    let name: string, bob = 0, sy = 1;
+    let name: string, bob = 0, sy = 1, tilt = 0;
     switch (state) {
       case "walk": {
-        this.stride += dt * (2.5 + speed * 1.1);            // 速さ5.2で約8コマ/秒
-        const f = Math.floor(this.stride) % 4;
-        name = `A01_walk_${f + 1}`; bob = f % 2 ? 0.025 : 0; break;
+        // 歩き素材は脚の動きが小さいので、紙人形らしく左右に傾けながら小さく弾ませて歩かせる
+        this.stride += dt * (1.6 + speed * 0.45);           // 1歩 = stride 1（速さ5.2で約4歩/秒）
+        const ph = this.stride * Math.PI;
+        name = `A01_walk_${(Math.floor(this.stride * 2) % 4) + 1}`;
+        bob = Math.abs(Math.sin(ph)) * 0.12;
+        tilt = Math.sin(ph) * 0.12;
+        sy = 1 - Math.abs(Math.cos(ph)) * 0.035;            // 着地でわずかにつぶれる
+        break;
+      }
+      case "jump": {
+        name = `A05_jump_${Math.min(4, Math.floor(jump * 4) + 1)}`;
+        bob = Math.sin(Math.min(1, jump / 0.8) * Math.PI) * 0.7; break;
       }
       case "dash": this.stride += dt * 16; name = `A02_run_${(Math.floor(this.stride) % 4) + 1}`; bob = 0.06; break;
       case "hurt": name = "P14_hiss"; break;
@@ -80,6 +89,7 @@ export class CatDoll {
     }
     this.show(name);
     this.pivot.position.y = bob;
+    this.pivot.rotation.z = tilt * facing;
     this.pivot.scale.set(facing, sy, 1);   // 左向きは表を反転（紙の裏は見せない）
     this.pivot.visible = !blinking || Math.floor(t * 20) % 2 === 0;
   }
