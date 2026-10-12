@@ -22,75 +22,82 @@ function sticker(w: number, h: number, draw: (g: CanvasRenderingContext2D) => vo
   return t;
 }
 
-// 虫は「猫と同じ画風で少しリアル」: 茶色の主線、塗り＋ハイライト、白いダイカット縁。右向きに描く。
-function legs(g: CanvasRenderingContext2D, pts: [number, number, number, number, number, number][], w: number) {
-  g.strokeStyle = INK; g.lineWidth = w;
-  for (const [x0, y0, x1, y1, x2, y2] of pts) { g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
+// 虫は苦手な人でも見られるよう、まんまるの体・大きな目・短い足のぬいぐるみ風デフォルメ。右向きに描く。
+function cuteEyes(g: CanvasRenderingContext2D, x: number, y: number, r: number, gap: number, mood: "plain" | "grumpy" = "plain") {
+  for (const dx of [0, gap]) {
+    g.fillStyle = "#fff"; g.strokeStyle = INK; g.lineWidth = r * 0.22;
+    g.beginPath(); g.ellipse(x + dx, y, r, r * 1.15, 0, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#2a1a10"; g.beginPath(); g.ellipse(x + dx + r * 0.2, y + r * 0.1, r * 0.55, r * 0.68, 0, 0, 7); g.fill();
+    g.fillStyle = "#fff"; g.beginPath(); g.arc(x + dx + r * 0.38, y - r * 0.22, r * 0.22, 0, 7); g.fill();
+    if (mood === "grumpy") { g.strokeStyle = INK; g.lineWidth = r * 0.3; g.beginPath(); g.moveTo(x + dx - r, y - r * 1.15); g.lineTo(x + dx + r, y - r * 0.75); g.stroke(); }
+  }
+}
+function blush(g: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  g.fillStyle = "rgba(255,130,150,.55)"; g.beginPath(); g.ellipse(x, y, r, r * 0.6, 0, 0, 7); g.fill();
+}
+function stubs(g: CanvasRenderingContext2D, xs: number[], y: number, len: number, w: number, color = INK) {
+  g.strokeStyle = color; g.lineWidth = w; g.lineCap = "round";
+  for (const x of xs) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + len); g.stroke(); }
 }
 
 export function enemyTexture(type: EnemyType): THREE.CanvasTexture {
-  if (type === "roach") return sticker(340, 220, (g) => {
-    // 脚（とげのある6本）と長い触角
-    legs(g, [[150, 120, 120, 180, 80, 205], [185, 125, 185, 185, 160, 212], [215, 120, 250, 175, 290, 195],
-             [150, 100, 115, 50, 70, 30], [185, 95, 190, 40, 165, 15], [215, 100, 255, 55, 300, 45]], 7);
-    g.strokeStyle = INK; g.lineWidth = 4;
-    g.beginPath(); g.moveTo(285, 100); g.quadraticCurveTo(320, 60, 335, 20); g.moveTo(285, 112); g.quadraticCurveTo(325, 130, 338, 175); g.stroke();
-    // 体（つやのある茶色の楕円）
-    const gr = g.createLinearGradient(0, 60, 0, 160); gr.addColorStop(0, "#9a5a2c"); gr.addColorStop(1, "#5a3014");
+  if (type === "roach") return sticker(300, 240, (g) => {   // まるいおまんじゅう型のゴキちゃん
+    stubs(g, [95, 150, 205], 175, 30, 12);
+    g.strokeStyle = INK; g.lineWidth = 6; g.lineCap = "round";                          // くるんとした触角
+    g.beginPath(); g.moveTo(235, 85); g.quadraticCurveTo(255, 30, 285, 40); g.moveTo(245, 95); g.quadraticCurveTo(290, 70, 290, 100); g.stroke();
+    const gr = g.createRadialGradient(130, 100, 10, 150, 130, 130); gr.addColorStop(0, "#c98a52"); gr.addColorStop(1, "#8a5228");
     g.fillStyle = gr; g.strokeStyle = INK; g.lineWidth = 8;
-    g.beginPath(); g.ellipse(170, 110, 115, 52, 0, 0, 7); g.fill(); g.stroke();
-    g.fillStyle = "#7a4520"; g.beginPath(); g.ellipse(268, 108, 34, 38, 0, 0, 7); g.fill(); g.stroke();   // 前胸
-    g.strokeStyle = "#3b1d0a"; g.lineWidth = 4; g.beginPath(); g.moveTo(240, 110); g.lineTo(60, 110); g.stroke();   // 翅の合わせ目
-    g.strokeStyle = "rgba(255,230,190,.55)"; g.lineWidth = 6; g.beginPath(); g.ellipse(160, 92, 70, 16, -0.05, Math.PI * 1.1, Math.PI * 1.85); g.stroke();
-    g.fillStyle = "#1a0d05"; g.beginPath(); g.arc(288, 98, 6, 0, 7); g.fill();
+    g.beginPath(); g.ellipse(150, 135, 120, 72, 0, 0, 7); g.fill(); g.stroke();
+    g.strokeStyle = "#6b3c1a"; g.lineWidth = 5; g.beginPath(); g.moveTo(150, 68); g.lineTo(150, 205); g.stroke();
+    g.fillStyle = "rgba(255,240,215,.6)"; g.beginPath(); g.ellipse(105, 100, 30, 14, -0.4, 0, 7); g.fill();
+    cuteEyes(g, 195, 125, 17, 38); blush(g, 205, 165, 12);
+    g.strokeStyle = INK; g.lineWidth = 4; g.beginPath(); g.arc(222, 158, 9, 0.2, Math.PI - 0.2); g.stroke();
   });
-  if (type === "mosquito") return sticker(300, 240, (g) => {
-    legs(g, [[150, 130, 110, 190, 60, 230], [160, 132, 160, 200, 140, 236], [170, 130, 215, 190, 265, 225],
-             [150, 120, 100, 150, 40, 160], [175, 118, 230, 140, 285, 150]], 4);
-    g.fillStyle = "rgba(220,235,255,.75)"; g.strokeStyle = INK; g.lineWidth = 4;   // 翅
-    g.beginPath(); g.ellipse(130, 70, 70, 26, -0.5, 0, 7); g.fill(); g.stroke();
-    g.beginPath(); g.ellipse(175, 72, 60, 22, 0.35, 0, 7); g.fill(); g.stroke();
-    g.fillStyle = "#3d3a44"; g.lineWidth = 6;
-    g.beginPath(); g.ellipse(100, 125, 62, 16, 0.25, 0, 7); g.fill(); g.stroke();                       // 腹
-    g.strokeStyle = "#cfc8b8"; g.lineWidth = 3; for (let k = 0; k < 4; k++) { g.beginPath(); g.moveTo(70 + k * 18, 112 + k * 4); g.lineTo(66 + k * 18, 136 + k * 4); g.stroke(); }
-    g.fillStyle = "#4a4652"; g.strokeStyle = INK; g.lineWidth = 6;
-    g.beginPath(); g.ellipse(170, 118, 26, 20, 0, 0, 7); g.fill(); g.stroke();                          // 胸
-    g.beginPath(); g.arc(205, 112, 13, 0, 7); g.fill(); g.stroke();                                     // 頭
-    g.strokeStyle = INK; g.lineWidth = 4; g.beginPath(); g.moveTo(215, 115); g.lineTo(270, 132); g.stroke();   // 口
-    g.fillStyle = "#c02020"; g.beginPath(); g.arc(208, 108, 4, 0, 7); g.fill();
+  if (type === "mosquito") return sticker(280, 260, (g) => {   // ちびっこ蚊。ストローみたいな口
+    g.fillStyle = "rgba(225,240,255,.9)"; g.strokeStyle = INK; g.lineWidth = 5;
+    g.beginPath(); g.ellipse(105, 70, 55, 30, -0.6, 0, 7); g.fill(); g.stroke();
+    g.beginPath(); g.ellipse(155, 70, 50, 27, 0.5, 0, 7); g.fill(); g.stroke();
+    stubs(g, [100, 130, 160], 185, 40, 6);
+    g.fillStyle = "#9aa3c7"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.ellipse(80, 150, 50, 34, 0.2, 0, 7); g.fill(); g.stroke();                 // おしり
+    g.strokeStyle = "#cfd5ee"; g.lineWidth = 5; for (const x of [62, 85]) { g.beginPath(); g.moveTo(x, 122); g.lineTo(x - 6, 178); g.stroke(); }
+    g.fillStyle = "#b8c0e0"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.arc(165, 140, 50, 0, 7); g.fill(); g.stroke();                              // あたま
+    g.strokeStyle = INK; g.lineWidth = 6; g.beginPath(); g.moveTo(212, 152); g.lineTo(262, 170); g.stroke();
+    g.fillStyle = "#ff8fa3"; g.beginPath(); g.arc(264, 171, 7, 0, 7); g.fill();
+    cuteEyes(g, 150, 132, 13, 30); blush(g, 186, 165, 10);
   });
-  if (type === "spider") return sticker(320, 260, (g) => {
-    const L: [number, number, number, number, number, number][] = [];
-    for (let k = 0; k < 4; k++) {
-      const a = -0.9 + k * 0.6;
-      L.push([190, 130, 190 + Math.cos(a) * 70, 130 - 60 - k * 6, 190 + Math.cos(a) * 125, 135 + (k - 1.5) * 18]);
-      L.push([190, 140, 190 - Math.cos(a) * 60 + 40, 140 + 70, 190 - Math.cos(a) * 110 + 60, 245 - k * 8]);
+  if (type === "spider") return sticker(300, 260, (g) => {   // ふわふわ毛玉クモ
+    g.strokeStyle = INK; g.lineWidth = 10; g.lineCap = "round";
+    for (const [x0, y0, x1, y1] of [[90, 150, 30, 120], [90, 170, 25, 200], [210, 150, 270, 120], [210, 170, 275, 200]]) {
+      g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo((x0 + x1) / 2, y1 - 30, x1, y1); g.stroke();
     }
-    legs(g, L, 7);
-    g.fillStyle = "#3a2c22"; g.strokeStyle = INK; g.lineWidth = 8;
-    g.beginPath(); g.ellipse(115, 135, 75, 62, 0, 0, 7); g.fill(); g.stroke();                           // 腹
-    g.strokeStyle = "#c9a36a"; g.lineWidth = 6; g.beginPath(); g.moveTo(70, 115); g.lineTo(150, 115); g.moveTo(80, 145); g.lineTo(145, 145); g.stroke();
-    g.fillStyle = "#4e3a2c"; g.strokeStyle = INK; g.lineWidth = 8;
-    g.beginPath(); g.ellipse(215, 132, 42, 36, 0, 0, 7); g.fill(); g.stroke();                           // 頭胸
-    g.fillStyle = "#111"; for (const [x, y, r] of [[238, 118, 7], [250, 128, 6], [232, 132, 5], [246, 142, 5]]) { g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
-    g.fillStyle = "#fff"; g.beginPath(); g.arc(236, 115, 2.5, 0, 7); g.fill();
+    stubs(g, [120, 180], 205, 30, 10);
+    g.fillStyle = "#6b5a8e"; g.strokeStyle = INK; g.lineWidth = 8;
+    g.beginPath();
+    for (let k = 0; k <= 24; k++) { const a = (k / 24) * Math.PI * 2, r = k % 2 ? 92 : 82; g.lineTo(150 + Math.cos(a) * r, 145 + Math.sin(a) * r * 0.85); }
+    g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "rgba(255,255,255,.35)"; g.beginPath(); g.ellipse(115, 100, 26, 14, -0.4, 0, 7); g.fill();
+    cuteEyes(g, 128, 135, 18, 44); blush(g, 116, 178, 12); blush(g, 186, 178, 12);
+    g.strokeStyle = INK; g.lineWidth = 4; g.beginPath(); g.arc(150, 170, 10, 0.2, Math.PI - 0.2); g.stroke();
   });
-  return sticker(460, 380, (g) => {   // スズメバチ（ボス）
-    legs(g, [[220, 220, 200, 290, 170, 330], [250, 225, 255, 300, 240, 345], [280, 220, 310, 290, 340, 320]], 9);
-    g.fillStyle = "rgba(225,235,250,.8)"; g.strokeStyle = INK; g.lineWidth = 6;
-    g.beginPath(); g.ellipse(210, 95, 120, 45, -0.35, 0, 7); g.fill(); g.stroke();
-    g.beginPath(); g.ellipse(275, 100, 105, 38, 0.2, 0, 7); g.fill(); g.stroke();
-    g.save(); g.beginPath(); g.ellipse(140, 200, 120, 78, 0.12, 0, 7); g.clip();                          // 腹（黄と黒のしま）
-    g.fillStyle = "#f2b705"; g.fillRect(0, 0, 460, 380);
-    g.fillStyle = "#2a1a08"; for (let k = 0; k < 4; k++) g.fillRect(40 + k * 52, 100, 24, 200);
+  return sticker(420, 360, (g) => {   // ボス: ぷっくりハチ（ちょっとむっとした顔）
+    g.fillStyle = "rgba(230,240,255,.92)"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.ellipse(170, 80, 85, 50, -0.5, 0, 7); g.fill(); g.stroke();
+    g.beginPath(); g.ellipse(250, 80, 80, 46, 0.45, 0, 7); g.fill(); g.stroke();
+    stubs(g, [150, 210, 270], 290, 40, 14);
+    g.save(); g.beginPath(); g.ellipse(210, 200, 175, 115, 0, 0, 7); g.clip();
+    g.fillStyle = "#ffcf3a"; g.fillRect(0, 0, 420, 360);
+    g.fillStyle = "#4a3418"; for (const x of [70, 135]) g.fillRect(x, 60, 34, 300);
     g.restore();
-    g.strokeStyle = INK; g.lineWidth = 9; g.beginPath(); g.ellipse(140, 200, 120, 78, 0.12, 0, 7); g.stroke();
-    g.fillStyle = INK; g.beginPath(); g.moveTo(25, 210); g.lineTo(0, 225); g.lineTo(28, 232); g.fill();     // 針
-    g.fillStyle = "#6b3a12"; g.beginPath(); g.ellipse(285, 185, 55, 50, 0, 0, 7); g.fill(); g.stroke();       // 胸
-    g.fillStyle = "#e88a1a"; g.beginPath(); g.ellipse(365, 180, 58, 54, 0, 0, 7); g.fill(); g.stroke();      // 頭
-    g.fillStyle = "#2a1a08"; g.beginPath(); g.ellipse(385, 165, 18, 26, 0.3, 0, 7); g.fill();               // 複眼
-    g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.moveTo(410, 200); g.lineTo(440, 215); g.moveTo(405, 212); g.lineTo(430, 232); g.stroke();
-    g.lineWidth = 5; g.beginPath(); g.moveTo(370, 130); g.quadraticCurveTo(395, 80, 430, 70); g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 10; g.beginPath(); g.ellipse(210, 200, 175, 115, 0, 0, 7); g.stroke();
+    g.fillStyle = "#fff"; g.strokeStyle = INK; g.lineWidth = 6;                                 // 丸い針
+    g.beginPath(); g.moveTo(38, 195); g.lineTo(8, 210); g.lineTo(40, 222); g.closePath(); g.fill(); g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 7; g.lineCap = "round";
+    g.beginPath(); g.moveTo(300, 100); g.quadraticCurveTo(310, 40, 345, 45); g.moveTo(330, 110); g.quadraticCurveTo(360, 60, 390, 75); g.stroke();
+    g.fillStyle = "#ff9a3c"; g.beginPath(); g.arc(347, 45, 10, 0, 7); g.arc(392, 76, 10, 0, 7); g.fill();
+    cuteEyes(g, 270, 180, 26, 62, "grumpy"); blush(g, 262, 238, 18); blush(g, 352, 238, 18);
+    g.strokeStyle = INK; g.lineWidth = 6; g.beginPath(); g.moveTo(290, 250); g.quadraticCurveTo(310, 238, 330, 250); g.stroke();
   });
 }
 

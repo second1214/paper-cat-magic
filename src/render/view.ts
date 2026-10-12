@@ -8,7 +8,7 @@ import type { TechFx } from "../core/spells";
 
 /** 紙人形をカメラ側へ少し倒して、見下ろしでも潰れて見えないようにする。 */
 const LEAN = 0.42;
-const ENEMY_H: Record<EnemyType, number> = { roach: 0.95, mosquito: 0.95, spider: 1.05, hornet: 2.6 };
+const ENEMY_H: Record<EnemyType, number> = { roach: 0.95, mosquito: 0.95, spider: 1.0, hornet: 2.4 };
 /** 飛ぶ虫の高さ。 */
 const FLY: Partial<Record<EnemyType, number>> = { mosquito: 0.55, hornet: 0.35 };
 
