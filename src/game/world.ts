@@ -1,11 +1,14 @@
 // ゲームの状態と1フレームの更新。描画・入力・DOM には依存しない（x,z の2D平面で計算）。
-import { planCast, STARTER_WAND, type Shot, type WandDef } from "../core/wand";
-import { SPELL_IDS } from "../core/spells";
+//
+// 物語: ママは虫が大の苦手。家に入りこんだ虫を、猫がおもちゃで追い払う。
+import { planCast, starterToy, TOYS, type Shot, type ToyDef } from "../core/wand";
+import { SPELL_IDS, type TechFx } from "../core/spells";
 import { makeRng, type Rng } from "../core/rng";
 
 export interface Vec { x: number; z: number }
 
-export type EnemyType = "slime" | "bat" | "wisp" | "golem";
+/** ゴキブリ（すばやく突進）・蚊（ふらふら飛ぶ）・クモ（離れて糸を飛ばす）・スズメバチ（ボス）。 */
+export type EnemyType = "roach" | "mosquito" | "spider" | "hornet";
 
 export interface Enemy {
   id: number;
@@ -16,10 +19,12 @@ export interface Enemy {
   maxHp: number;
   radius: number;
   speed: number;
-  slow: number; // 鈍足の残り秒
-  hurt: number; // 被弾演出の残り秒
-  t: number; // 行動タイマー
-  phase: number; // ボスの攻撃段階など
+  slow: number;
+  hurt: number;
+  t: number;
+  phase: number;
+  /** 出現中の残り秒（この間は動かず、当たり判定もない）。 */
+  spawn: number;
 }
 
 export interface Projectile {
@@ -36,11 +41,12 @@ export interface Projectile {
   explode: number;
   slow: number;
   color: string;
+  tech: TechFx;
   payload: Shot[];
   hit: Set<number>;
 }
 
-export interface Fx { kind: "boom" | "hit" | "cast" | "puff"; pos: Vec; radius: number; color: string; t: number; life: number }
+export interface Fx { kind: "boom" | "hit" | "cast" | "puff" | "tech"; tech?: TechFx; pos: Vec; radius: number; color: string; t: number; life: number }
 
 export interface Player {
   pos: Vec;
@@ -48,85 +54,94 @@ export interface Player {
   hp: number;
   maxHp: number;
   radius: number;
-  aim: Vec; // 正規化した照準方向
+  aim: Vec;
   facing: 1 | -1;
   iframes: number;
-  dash: number; // ダッシュ残り秒
+  dash: number;
   dashCd: number;
   hurt: number;
   mana: number;
   cursor: number;
   castCd: number;
   recharging: boolean;
+  /** 自動で狙っている虫（なければ null）。 */
+  target: number | null;
 }
 
 export interface Pillar { x: number; z: number; hw: number; hd: number }
 
 export interface Room {
   index: number;
+  name: string;
   kind: "combat" | "boss";
-  w: number; // 半幅（x）
-  d: number; // 半奥行き（z）
+  w: number;
+  d: number;
   pillars: Pillar[];
   waves: EnemyType[][];
   wave: number;
   cleared: boolean;
 }
 
-export type Phase = "play" | "reward" | "dead" | "win";
+export type Phase = "intro" | "play" | "reward" | "dead" | "win";
+
+export type Reward = { kind: "spell"; id: string } | { kind: "toy"; id: string };
 
 export interface Input {
-  move: Vec; // -1..1
-  aim: Vec | null; // ワールド上の照準方向（null なら移動方向）
+  move: Vec;
+  /** 狙う方向（null なら一番近い虫を自動で狙う）。 */
+  aim: Vec | null;
   fire: boolean;
   dash: boolean;
 }
 
-export const ROOM_COUNT = 5; // 戦闘4部屋 + ボス
+export const ROOMS = ["玄関", "廊下", "キッチン", "リビング", "ベランダ"];
+export const ROOM_COUNT = ROOMS.length;
 
 export class World {
   rng: Rng;
   time = 0;
-  phase: Phase = "play";
+  phase: Phase = "intro";
   player: Player;
-  wand: WandDef;
-  bag: string[] = []; // 杖に入れていない手持ちの魔法
+  toy: ToyDef;
+  bag: string[] = [];
   enemies: Enemy[] = [];
   projectiles: Projectile[] = [];
   fx: Fx[] = [];
   room!: Room;
-  rewardChoices: string[] = [];
+  rewards: Reward[] = [];
   doorOpen = false;
-  events: string[] = []; // 描画側へ伝える一度きりのイベント（"hurt" など）
+  events: string[] = [];
   private nextId = 1;
 
   constructor(seed = 1) {
     this.rng = makeRng(seed);
-    this.wand = structuredClone(STARTER_WAND);
-    this.bag = ["ice", "bounce"];
+    this.toy = starterToy();
+    this.bag = ["hiss", "bouncy"];
     this.player = {
       pos: { x: 0, z: 0 }, vel: { x: 0, z: 0 }, hp: 6, maxHp: 6, radius: 0.32,
       aim: { x: 1, z: 0 }, facing: 1, iframes: 0, dash: 0, dashCd: 0, hurt: 0,
-      mana: this.wand.manaMax, cursor: 0, castCd: 0, recharging: false,
+      mana: this.toy.manaMax, cursor: 0, castCd: 0, recharging: false, target: null,
     };
     this.enterRoom(0);
   }
 
+  start() { if (this.phase === "intro") this.phase = "play"; }
+
   // ---------- 部屋 ----------
   enterRoom(index: number) {
     const boss = index === ROOM_COUNT - 1;
-    const w = boss ? 8.5 : 7.5, d = boss ? 5.5 : 4.8;
+    const w = boss ? 10 : 9.5, d = boss ? 6.2 : 5.8;
     const pillars: Pillar[] = [];
     if (!boss) {
       const n = this.rng.int(1, 3);
-      // 柱は中央の通路（入口〜出口の一直線）をふさがない位置に置く
-      for (let k = 0; k < n; k++) pillars.push({ x: this.rng.range(-4, 4), z: this.rng.pick([-1, 1]) * this.rng.range(1.8, 3), hw: 0.5, hd: 0.5 });
+      // 家具（柱）は中央の通路（入口〜出口の一直線）をふさがない位置に置く
+      for (let k = 0; k < n; k++) pillars.push({ x: this.rng.range(-4, 5), z: this.rng.pick([-1, 1]) * this.rng.range(2.2, 3.6), hw: 0.6, hd: 0.5 });
     }
-    const pool: EnemyType[] = index === 0 ? ["slime"] : index === 1 ? ["slime", "bat"] : ["slime", "bat", "wisp"];
+    const pool: EnemyType[] = index === 0 ? ["roach"] : index === 1 ? ["roach", "mosquito"] : ["roach", "mosquito", "spider"];
     const waves: EnemyType[][] = boss
-      ? [["golem"]]
+      ? [["hornet"]]
       : Array.from({ length: index < 2 ? 1 : 2 }, () => Array.from({ length: 3 + index }, () => this.rng.pick(pool)));
-    this.room = { index, kind: boss ? "boss" : "combat", w, d, pillars, waves, wave: 0, cleared: false };
+    this.room = { index, name: ROOMS[index], kind: boss ? "boss" : "combat", w, d, pillars, waves, wave: 0, cleared: false };
     this.enemies = []; this.projectiles = []; this.doorOpen = false;
     this.player.pos = { x: -w + 1.2, z: 0 };
     this.player.vel = { x: 0, z: 0 };
@@ -135,14 +150,17 @@ export class World {
 
   private spawnWave() {
     const r = this.room;
-    for (const type of r.waves[r.wave]) {
+    r.waves[r.wave].forEach((type, k) => {
       let pos: Vec;
       let guard = 0;
+      // 猫から十分離れた所（主に部屋の右側）から現れる
       do {
-        pos = type === "golem" ? { x: 3, z: 0 } : { x: this.rng.range(-r.w + 3, r.w - 1), z: this.rng.range(-r.d + 1, r.d - 1) };
-      } while (++guard < 20 && (dist(pos, this.player.pos) < 4 || this.inPillar(pos, 0.6)));
-      this.enemies.push(makeEnemy(this.nextId++, type, pos));
-    }
+        pos = type === "hornet" ? { x: 5, z: 0 } : { x: this.rng.range(0, r.w - 1), z: this.rng.range(-r.d + 1, r.d - 1) };
+      } while (++guard < 30 && (dist(pos, this.player.pos) < 7 || this.inPillar(pos, 0.7)));
+      const e = makeEnemy(this.nextId++, type, pos);
+      e.spawn = 1.0 + k * 0.25;   // 少しずつずらして現れる
+      this.enemies.push(e);
+    });
   }
 
   // ---------- 1フレーム ----------
@@ -157,48 +175,64 @@ export class World {
     this.checkRoom();
   }
 
+  /** 一番近い（出現済みの）虫。 */
+  nearestEnemy(pos: Vec, maxD = Infinity) {
+    let best: Enemy | null = null, bd = maxD;
+    for (const e of this.enemies) { if (e.spawn > 0) continue; const d = dist(e.pos, pos); if (d < bd) { bd = d; best = e; } }
+    return best;
+  }
+
   private updatePlayer(dt: number, input: Input) {
-    const p = this.player, w = this.wand;
+    const p = this.player, toy = this.toy;
     p.iframes = Math.max(0, p.iframes - dt);
     p.hurt = Math.max(0, p.hurt - dt);
     p.dashCd = Math.max(0, p.dashCd - dt);
-    p.mana = Math.min(w.manaMax, p.mana + w.manaRegen * dt);
+    p.mana = Math.min(toy.manaMax, p.mana + toy.manaRegen * dt);
 
     let mv = input.move;
     const len = Math.hypot(mv.x, mv.z);
     if (len > 1) mv = { x: mv.x / len, z: mv.z / len };
-    if (input.dash && p.dashCd <= 0 && len > 0.1) {
-      p.dash = 0.18; p.dashCd = 0.7; p.iframes = Math.max(p.iframes, 0.25);
+    if (input.dash && p.dashCd <= 0) {
+      const dir = len > 0.1 ? norm(mv) : { x: p.facing, z: 0 };
+      p.dash = 0.18; p.dashCd = 0.7; p.iframes = Math.max(p.iframes, 0.3);
+      p.vel = { x: dir.x * 13, z: dir.z * 13 };
       this.fx.push({ kind: "puff", pos: { ...p.pos }, radius: 0.5, color: "#ffffff", t: 0, life: 0.35 });
     }
     const speed = p.dash > 0 ? 13 : 5.2;
     p.dash = Math.max(0, p.dash - dt);
-    const tx = mv.x * speed, tz = mv.z * speed;
-    const k = Math.min(1, dt * (p.dash > 0 ? 30 : 14));
-    p.vel.x += (tx - p.vel.x) * k; p.vel.z += (tz - p.vel.z) * k;
+    if (p.dash <= 0) {
+      const k = Math.min(1, dt * 14);
+      p.vel.x += (mv.x * speed - p.vel.x) * k; p.vel.z += (mv.z * speed - p.vel.z) * k;
+    }
     this.moveCircle(p.pos, p.vel, p.radius, dt);
 
+    // 狙い: 指定があればその方向、なければ一番近い虫
+    const t = this.nearestEnemy(p.pos, 14);
+    p.target = input.aim ? null : t?.id ?? null;
     if (input.aim && Math.hypot(input.aim.x, input.aim.z) > 0.01) p.aim = norm(input.aim);
+    else if (t) p.aim = norm({ x: t.pos.x - p.pos.x, z: t.pos.z - p.pos.z });
     else if (len > 0.1) p.aim = norm(mv);
-    if (Math.abs(p.aim.x) > 0.2) p.facing = p.aim.x > 0 ? 1 : -1;
+    if (Math.abs(p.aim.x) > 0.2 && (input.fire || len < 0.1)) p.facing = p.aim.x > 0 ? 1 : -1;
+    else if (Math.abs(mv.x) > 0.2) p.facing = mv.x > 0 ? 1 : -1;
 
-    // 杖
+    // おもちゃを振る
     p.castCd -= dt;
-    if (p.castCd <= 0 && p.recharging) { p.recharging = false; }
+    if (p.castCd <= 0 && p.recharging) p.recharging = false;
     if (input.fire && p.castCd <= 0) {
-      const res = planCast(w, p.cursor, p.mana);
+      const res = planCast(toy, p.cursor, p.mana);
       if (res.shots.length) {
         p.mana -= res.manaUsed;
         const muzzle = { x: p.pos.x + p.aim.x * 0.5, z: p.pos.z + p.aim.z * 0.5 };
         res.shots.forEach((s, n) => this.fire(s, muzzle, p.aim, "player", (n - (res.shots.length - 1) / 2) * 0.16));
         this.fx.push({ kind: "cast", pos: muzzle, radius: 0.35, color: res.shots[0].stats.color, t: 0, life: 0.15 });
         p.cursor = res.nextCursor;
-        p.castCd = res.wrapped ? w.recharge : w.castDelay;
+        p.castCd = res.wrapped ? toy.recharge : toy.castDelay;
         p.recharging = res.wrapped;
+        this.events.push("cast");
       } else if (res.fizzled) {
-        p.castCd = 0.1; // マナ待ち
+        p.castCd = 0.1;
       } else {
-        p.cursor = 0; p.castCd = w.recharge; p.recharging = true;
+        p.cursor = 0; p.castCd = toy.recharge; p.recharging = true;
       }
     }
   }
@@ -209,58 +243,52 @@ export class World {
     this.projectiles.push({
       id: this.nextId++, owner, pos: { ...from }, vel: { x: Math.cos(a) * s.speed, z: Math.sin(a) * s.speed },
       damage: s.damage, radius: s.radius, life: s.life, pierce: s.pierce, bounce: s.bounce, homing: s.homing,
-      explode: s.explode, slow: s.slow, color: s.color, payload: shot.payload, hit: new Set(),
+      explode: s.explode, slow: s.slow, color: s.color, tech: s.tech, payload: shot.payload, hit: new Set(),
     });
   }
 
   private updateEnemies(dt: number) {
     const p = this.player;
     for (const e of this.enemies) {
+      if (e.spawn > 0) { e.spawn = Math.max(0, e.spawn - dt); continue; }
       e.t += dt;
       e.hurt = Math.max(0, e.hurt - dt);
       e.slow = Math.max(0, e.slow - dt);
       const sp = e.speed * (e.slow > 0 ? 0.45 : 1);
       const to = norm({ x: p.pos.x - e.pos.x, z: p.pos.z - e.pos.z });
-      if (e.type === "slime") {
-        // ぴょんぴょん跳ねて近づく
-        const hop = (e.t % 1.1) < 0.45;
-        e.vel = hop ? { x: to.x * sp, z: to.z * sp } : { x: e.vel.x * 0.85, z: e.vel.z * 0.85 };
-      } else if (e.type === "bat") {
-        // 蛇行しながら素早く
-        const side = { x: -to.z, z: to.x }, w = Math.sin(e.t * 5 + e.id) * 0.9;
+      if (e.type === "roach") {
+        // カサカサ: 立ち止まっては素早く走る
+        const run = (e.t % 1.4) < 0.6;
+        const side = { x: -to.z, z: to.x }, w = Math.sin(e.id * 1.7) * 0.4;
+        e.vel = run ? { x: (to.x + side.x * w) * sp, z: (to.z + side.z * w) * sp } : { x: e.vel.x * 0.8, z: e.vel.z * 0.8 };
+      } else if (e.type === "mosquito") {
+        const side = { x: -to.z, z: to.x }, w = Math.sin(e.t * 4 + e.id) * 1.1;
         e.vel = { x: (to.x + side.x * w) * sp, z: (to.z + side.z * w) * sp };
-      } else if (e.type === "wisp") {
-        // 距離を保って弾を撃つ
-        const d = dist(e.pos, p.pos), want = d > 5 ? 1 : d < 3.5 ? -1 : 0;
+      } else if (e.type === "spider") {
+        // 距離を保って糸を飛ばす
+        const d = dist(e.pos, p.pos), want = d > 6 ? 1 : d < 4 ? -1 : 0;
         const side = { x: -to.z, z: to.x };
-        e.vel = { x: (to.x * want + side.x * 0.5) * sp, z: (to.z * want + side.z * 0.5) * sp };
-        if (e.t > 1.6) {
-          e.t = 0;
-          this.fire({ stats: enemyBolt("#7aa2ff", 6), payload: [] }, e.pos, to, "enemy");
-        }
-      } else if (e.type === "golem") {
-        // ボス: ゆっくり歩き、全方位弾と狙い撃ちを交互に
+        e.vel = { x: (to.x * want + side.x * 0.4) * sp, z: (to.z * want + side.z * 0.4) * sp };
+        if (e.t > 2.0) { e.t = 0; this.fire({ stats: enemyShot("#d8d8e8", 5.5), payload: [] }, e.pos, to, "enemy"); }
+      } else if (e.type === "hornet") {
         e.vel = { x: to.x * sp, z: to.z * sp };
-        const hpRate = e.hp / e.maxHp;
-        const period = hpRate < 0.5 ? 1.4 : 2.0;
+        const hpRate = e.hp / e.maxHp, period = hpRate < 0.5 ? 1.5 : 2.1;
         if (e.t > period) {
           e.t = 0; e.phase++;
           if (e.phase % 2) {
-            const n = hpRate < 0.5 ? 16 : 12, off = this.rng.next() * Math.PI;
+            const n = hpRate < 0.5 ? 14 : 10, off = this.rng.next() * Math.PI;
             for (let k = 0; k < n; k++) {
               const a = off + (k / n) * Math.PI * 2;
-              this.fire({ stats: enemyBolt("#ffb347", 4.5), payload: [] }, e.pos, { x: Math.cos(a), z: Math.sin(a) }, "enemy");
+              this.fire({ stats: enemyShot("#ffcf33", 4.2), payload: [] }, e.pos, { x: Math.cos(a), z: Math.sin(a) }, "enemy");
             }
           } else {
-            for (let k = -1; k <= 1; k++) this.fire({ stats: enemyBolt("#ff7a7a", 7.5), payload: [] }, e.pos, to, "enemy", k * 0.22);
+            for (let k = -1; k <= 1; k++) this.fire({ stats: enemyShot("#ff7a3d", 6.5), payload: [] }, e.pos, to, "enemy", k * 0.22);
           }
         }
       }
       this.moveCircle(e.pos, e.vel, e.radius, dt);
-      // 接触ダメージ
       if (dist(e.pos, p.pos) < e.radius + p.radius) this.hurtPlayer(1, e.pos);
     }
-    // 敵同士の押し合い
     for (let a = 0; a < this.enemies.length; a++) for (let b = a + 1; b < this.enemies.length; b++) {
       const A = this.enemies[a], B = this.enemies[b];
       const dx = B.pos.x - A.pos.x, dz = B.pos.z - A.pos.z, d = Math.hypot(dx, dz), m = A.radius + B.radius;
@@ -294,19 +322,14 @@ export class World {
       }
       pr.pos.x += pr.vel.x * dt; pr.pos.z += pr.vel.z * dt;
       let dead = pr.life <= 0;
-      // 壁・柱
-      if (!dead && this.hitWall(pr)) {
-        if (pr.bounce > 0) pr.bounce--;
-        else dead = true;
-      }
-      // 当たり判定
+      if (!dead && this.hitWall(pr)) { if (pr.bounce > 0) pr.bounce--; else dead = true; }
       if (!dead) {
         if (pr.owner === "player") {
           for (const e of this.enemies) {
-            if (pr.hit.has(e.id) || dist(e.pos, pr.pos) > e.radius + pr.radius) continue;
+            if (e.spawn > 0 || pr.hit.has(e.id) || dist(e.pos, pr.pos) > e.radius + pr.radius) continue;
             pr.hit.add(e.id);
             if (pr.explode <= 0) this.damageEnemy(e, pr.damage, pr.slow);
-            this.fx.push({ kind: "hit", pos: { ...pr.pos }, radius: 0.4, color: pr.color, t: 0, life: 0.2 });
+            this.fx.push({ kind: "tech", tech: pr.tech, pos: { ...e.pos }, radius: 0.7, color: pr.color, t: 0, life: 0.35 });
             if (pr.payload.length) for (const s of pr.payload) spawned.push({ shot: s, pos: { ...pr.pos }, dir: norm(pr.vel) });
             if (pr.pierce > 0) pr.pierce--; else { dead = true; break; }
           }
@@ -334,8 +357,9 @@ export class World {
   }
 
   private explode(pr: Projectile) {
-    this.fx.push({ kind: "boom", pos: { ...pr.pos }, radius: pr.explode, color: pr.color, t: 0, life: 0.4 });
+    this.fx.push({ kind: "tech", tech: pr.tech, pos: { ...pr.pos }, radius: pr.explode, color: pr.color, t: 0, life: 0.45 });
     for (const e of this.enemies) {
+      if (e.spawn > 0) continue;
       const d = dist(e.pos, pr.pos);
       if (d < pr.explode + e.radius) this.damageEnemy(e, pr.damage * (1 - 0.4 * Math.min(1, d / pr.explode)), pr.slow);
     }
@@ -354,7 +378,6 @@ export class World {
   private checkRoom() {
     const r = this.room;
     if (r.cleared) {
-      // 右の扉に入ったら次の部屋
       if (this.doorOpen && this.player.pos.x > r.w - 0.6 && Math.abs(this.player.pos.z) < 1.0) this.enterRoom(r.index + 1);
       return;
     }
@@ -363,35 +386,52 @@ export class World {
     r.cleared = true;
     this.projectiles = this.projectiles.filter((p) => p.owner === "player");
     if (r.kind === "boss") { this.phase = "win"; this.events.push("win"); return; }
-    this.rewardChoices = pickN(this.rng, SPELL_IDS, 3);
+    // 報酬: 技3つ。2部屋目の後は1つをおもちゃにする
+    const spells = pickN(this.rng, SPELL_IDS, 3).map((id): Reward => ({ kind: "spell", id }));
+    if (r.index === 1) {
+      const toys = Object.keys(TOYS).filter((t) => t !== this.toy.id);
+      spells[2] = { kind: "toy", id: this.rng.pick(toys) };
+    }
+    this.rewards = spells;
     this.phase = "reward";
     this.events.push("clear");
   }
 
-  /** 報酬を受け取る（手持ちに加える）。null なら受け取らない。 */
-  takeReward(id: string | null) {
+  /** 報酬を受け取る。null なら受け取らない。 */
+  takeReward(r: Reward | null) {
     if (this.phase !== "reward") return;
-    if (id) this.bag.push(id);
-    this.rewardChoices = [];
+    if (r?.kind === "spell") this.bag.push(r.id);
+    if (r?.kind === "toy") this.equipToy(r.id);
+    this.rewards = [];
     this.phase = "play";
     this.doorOpen = true;
   }
 
-  /** 杖のスロットと手持ちを入れ替える。 */
+  /** おもちゃを持ち替える。はめていた技は左から詰め直し、あふれた分は手持ちへ。 */
+  equipToy(id: string) {
+    const old = this.toy.slots.filter((s): s is string => !!s);
+    const t = structuredClone(TOYS[id]);
+    t.slots = t.slots.map((_, i) => old[i] ?? null);
+    this.bag.push(...old.slice(t.slots.length));
+    this.toy = t;
+    this.player.cursor = 0;
+    this.player.mana = Math.min(this.player.mana, t.manaMax);
+  }
+
   swap(slotIndex: number, bagIndex: number | null) {
-    const cur = this.wand.slots[slotIndex];
-    if (bagIndex === null) { if (cur) this.bag.push(cur); this.wand.slots[slotIndex] = null; }
-    else { const take = this.bag[bagIndex]; this.bag.splice(bagIndex, 1); if (cur) this.bag.push(cur); this.wand.slots[slotIndex] = take; }
+    const cur = this.toy.slots[slotIndex];
+    if (bagIndex === null) { if (cur) this.bag.push(cur); this.toy.slots[slotIndex] = null; }
+    else { const take = this.bag[bagIndex]; this.bag.splice(bagIndex, 1); if (cur) this.bag.push(cur); this.toy.slots[slotIndex] = take; }
+    this.player.cursor = 0;
+  }
+
+  /** スロット同士を入れ替える（並べ替え用）。 */
+  swapSlots(a: number, b: number) {
+    const s = this.toy.slots; [s[a], s[b]] = [s[b], s[a]];
     this.player.cursor = 0;
   }
 
   // ---------- 補助 ----------
-  private nearestEnemy(pos: Vec, maxD: number) {
-    let best: Enemy | null = null, bd = maxD;
-    for (const e of this.enemies) { const d = dist(e.pos, pos); if (d < bd) { bd = d; best = e; } }
-    return best;
-  }
-
   inPillar(pos: Vec, r: number) {
     return this.room.pillars.some((p) => Math.abs(pos.x - p.x) < p.hw + r && Math.abs(pos.z - p.z) < p.hd + r);
   }
@@ -413,7 +453,6 @@ export class World {
     return hit;
   }
 
-  /** 円を動かし、部屋の壁と柱で止める（扉が開いていれば右壁の出口だけ抜けられる）。 */
   private moveCircle(pos: Vec, vel: Vec, r: number, dt: number) {
     pos.x += vel.x * dt; pos.z += vel.z * dt;
     const room = this.room;
@@ -429,13 +468,13 @@ export class World {
 }
 
 function makeEnemy(id: number, type: EnemyType, pos: Vec): Enemy {
-  const t: Record<EnemyType, [number, number, number]> = { slime: [16, 0.42, 3.2], bat: [10, 0.32, 4.4], wisp: [14, 0.38, 2.4], golem: [420, 1.0, 1.3] };
+  const t: Record<EnemyType, [number, number, number]> = { roach: [16, 0.4, 3.0], mosquito: [9, 0.3, 2.8], spider: [14, 0.42, 2.2], hornet: [380, 1.0, 1.2] };
   const [hp, radius, speed] = t[type];
-  return { id, type, pos: { ...pos }, vel: { x: 0, z: 0 }, hp, maxHp: hp, radius, speed, slow: 0, hurt: 0, t: (id * 0.37) % 1, phase: 0 };
+  return { id, type, pos: { ...pos }, vel: { x: 0, z: 0 }, hp, maxHp: hp, radius, speed, slow: 0, hurt: 0, t: (id * 0.37) % 1, phase: 0, spawn: 0 };
 }
 
-const enemyBolt = (color: string, speed: number) => ({
-  damage: 1, speed, radius: 0.16, life: 4, pierce: 0, bounce: 0, homing: 0, explode: 0, slow: 0, spread: 0.03, color,
+const enemyShot = (color: string, speed: number) => ({
+  damage: 1, speed, radius: 0.16, life: 4, pierce: 0, bounce: 0, homing: 0, explode: 0, slow: 0, spread: 0.03, color, tech: "enemy" as TechFx,
 });
 
 function pickN<T>(rng: Rng, arr: readonly T[], n: number): T[] {

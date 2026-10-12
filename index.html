@@ -17,51 +17,98 @@
       #hearts { font-size: 26px; letter-spacing: 2px; text-shadow: 0 2px 0 #0006; }
       .heart { color: #5a4652; } .heart.full { color: #ff5f7e; } .heart.half { color: #ff9fb0; }
       #mana { width: 180px; height: 10px; background: #0005; border-radius: 6px; margin-top: 6px; overflow: hidden; border: 2px solid #fff8; }
+      #manaWrap { display: flex; gap: 6px; align-items: center; color: #fff; font-size: 11px; } #manaWrap #mana { margin-top: 0; }
       #manaFill { height: 100%; background: linear-gradient(90deg, #5aa9ff, #9fd8ff); }
       #room { color: #fff; font-weight: 700; background: #0005; padding: 4px 12px; border-radius: 999px; }
-      #bottom { left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; background: #0006; padding: 8px 10px; border-radius: 14px; flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 32px); }
-      .wandName { color: #fff; font-size: 12px; margin-left: 6px; }
-      #bagBtn { pointer-events: auto; position: fixed; right: 16px; bottom: 16px; }
+      #bottom { left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; gap: 6px; align-items: flex-end; background: #0007; padding: 8px 10px; border-radius: 14px; max-width: calc(100vw - 24px); }
+      #slots { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: center; }
+      .toyName { color: #fff; font-size: 12px; margin-right: 4px; text-align: center; }
+      .toyName small { display: block; color: #ffd8a8; }
+      #bagBtn { pointer-events: auto; position: fixed; right: 16px; top: 52px; }
       #hint { left: 50%; top: 56px; transform: translateX(-50%); color: #fff; background: #000a; padding: 6px 14px; border-radius: 999px; font-size: 14px; }
-      .spell { width: 40px; height: 40px; border-radius: 10px; background: var(--paper); border: 3px solid var(--c, #ccc); display: grid; place-items: center; font-size: 20px; color: var(--c); box-shadow: 0 2px 0 #0004; }
-      .spell span { filter: drop-shadow(0 1px 0 #0003); font-weight: 700; }
+      /* アイテム: 技＝赤系の実線・丸み、修飾＝青系の点線＋右向き矢印 */
+      .spell { position: relative; width: 44px; height: 44px; border-radius: 12px; background: var(--paper); display: grid; place-items: center; box-shadow: 0 2px 0 #0004; }
+      .spell .g { font-weight: 800; font-size: 17px; color: var(--c); }
+      .spell .badge { position: absolute; top: -7px; left: -5px; font-size: 9px; font-weight: 700; color: #fff; padding: 1px 4px; border-radius: 6px; }
+      .spell.atk { border: 3px solid var(--c); }
+      .spell.atk .badge { background: #d9480f; }
+      .spell.mod { border: 3px dashed var(--c); border-radius: 50% 12px 12px 50%; }
+      .spell.mod .badge { background: #1c7ed6; }
+      .spell .arrow { position: absolute; right: -11px; top: 50%; transform: translateY(-50%); font-size: 13px; color: #1c7ed6; text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
       .spell.empty { background: #fff3; border: 2px dashed #fff6; }
-      .spell.cursor { outline: 3px solid #fff; outline-offset: 2px; }
-      .spell.big { width: 56px; height: 56px; font-size: 28px; }
-      .overlay { position: fixed; inset: 0; display: grid; place-items: center; background: #0007; padding: 16px; }
-      .panel { background: var(--paper); border: 3px solid var(--line); border-radius: 18px; padding: 18px 20px; max-width: 640px; width: 100%; box-shadow: 0 10px 40px #0006; text-align: center; }
+      .spell.big { width: 60px; height: 60px; }
+      .spell.big .g { font-size: 24px; }
+      .toyIcon { font-size: 30px; border: 3px solid #e67700; width: 60px; height: 60px; }
+      .group { display: flex; gap: 8px; padding: 6px 7px 4px; border-radius: 12px; background: #ffffff22; border: 2px solid #ffffff44; }
+      .group.next { background: #ffd43b55; border-color: #ffd43b; box-shadow: 0 0 10px #ffd43b88; }
+      .panel .group { background: #f3e9d9; border-color: #e2d3bb; }
+      .legend { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; margin: 8px 0; }
+      .legend > span { font-size: 13px; text-align: left; margin-right: 10px; }
+      .legend.small .spell { transform: scale(.8); }
+      .example { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 6px 0; text-align: left; }
+      .howto { display: grid; gap: 6px; text-align: left; background: #f3e9d9; border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+      .howto b { display: inline-block; min-width: 4.5em; color: #d9480f; }
+      .k { display: inline-block; background: #d9480f; color: #fff; border-radius: 6px; padding: 0 6px; font-weight: 700; }
+      .small { font-size: 13px; line-height: 1.7; }
+      .tag { color: #1c7ed6; font-weight: 700; }
+      .overlay { position: fixed; inset: 0; display: flex; align-items: flex-start; justify-content: center; background: #0007; padding: 12px; overflow: auto; }
+      .overlay > .panel { margin: auto; }
+      .panel { background: var(--paper); border: 3px solid var(--line); border-radius: 18px; padding: 16px 18px; max-width: 680px; width: 100%; box-shadow: 0 10px 40px #0006; text-align: center; }
       .panel h2 { margin: 0 0 6px; } .panel h3 { margin: 14px 0 6px; font-size: 15px; }
       .muted { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
-      .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+      .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; align-items: center; }
+      .slotsEdit { gap: 6px; }
       button { font: inherit; cursor: pointer; border: 2px solid var(--line); background: #fff; color: var(--ink); border-radius: 12px; padding: 8px 14px; }
       button:hover { border-color: var(--accent); }
-      .pick { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; min-width: 64px; }
+      .pick { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 6px 4px; min-width: 62px; }
       .pick.sel { border-color: var(--accent); background: #ffe9d6; }
-      .card { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 170px; padding: 12px; }
-      .close, .skip, .again { margin-top: 14px; }
+      .card { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 180px; padding: 12px; }
+      .close, .skip, .again, .go { margin-top: 14px; }
+      .go { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; padding: 10px 28px; }
       .desc { min-height: 1.4em; margin-top: 8px; font-size: 14px; }
-      .stick { position: fixed; width: 100px; height: 100px; margin: -50px 0 0 -50px; border-radius: 50%; border: 3px solid #fff7; background: #fff2; pointer-events: none; }
-      .stick > div { position: absolute; left: 30px; top: 30px; width: 40px; height: 40px; border-radius: 50%; background: #fffc; }
+      #stick { position: fixed; width: 100px; height: 100px; margin: -50px 0 0 -50px; border-radius: 50%; border: 3px solid #fff7; background: #fff2; pointer-events: none; }
+      #stick > div { position: absolute; left: 30px; top: 30px; width: 40px; height: 40px; border-radius: 50%; background: #fffc; }
       #help { left: 16px; bottom: 16px; color: #fffb; font-size: 12px; line-height: 1.6; }
-      @media (max-width: 700px) { #help { display: none; } .spell { width: 32px; height: 32px; font-size: 16px; } #mana { width: 120px; } }
+      /* タッチ用ボタン（スマホのみ表示） */
+      .tbtn { display: none; position: fixed; border-radius: 50%; border: 3px solid #fff; color: #fff; font-weight: 800; touch-action: none; user-select: none; -webkit-user-select: none; }
+      body.touch .tbtn { display: grid; place-items: center; }
+      body.touch #help { display: none; }
+      #atkBtn { right: 18px; bottom: 96px; width: 92px; height: 92px; background: #d9480fcc; font-size: 20px; }
+      #dashBtn { right: 120px; bottom: 100px; width: 62px; height: 62px; background: #1c7ed6cc; font-size: 13px; }
+      .tbtn.on { transform: scale(.92); filter: brightness(1.2); }
+      body.touch #bottom { bottom: auto; top: 6px; padding: 4px 6px; }
+      body.touch .toyName { display: none; }
+      body.touch #bagBtn { top: auto; bottom: 14px; right: 200px; }
+      @media (max-height: 520px) {
+        .spell { width: 30px; height: 30px; border-width: 2px !important; } .spell .g { font-size: 12px; } .spell .badge { font-size: 8px; top: -6px; }
+        .spell .arrow { font-size: 10px; right: -9px; } .group { gap: 5px; padding: 4px 4px 2px; }
+        #hearts { font-size: 20px; } #mana { width: 110px; height: 8px; }
+        .panel { padding: 10px 14px; } .panel h2 { font-size: 18px; } .small, .howto { font-size: 12px; } .panel p { margin: 4px 0; }
+        .pick small, .card small { font-size: 11px; } .card { width: 150px; padding: 8px; }
+        #atkBtn { width: 84px; height: 84px; bottom: 22px; } #dashBtn { bottom: 30px; right: 112px; }
+        #hint { top: 46px; }
+      }
+      @media (max-width: 760px) { .spell { width: 36px; height: 36px; } .spell .g { font-size: 14px; } .group { gap: 6px; padding: 5px 5px 3px; } #mana { width: 120px; } }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
     <div id="loading">読み込み中…</div>
     <div class="hud" id="top">
-      <div><div id="hearts"></div><div id="mana"><div id="manaFill"></div></div></div>
+      <div><div id="hearts"></div><div id="manaWrap"><span>やる気</span><div id="mana"><div id="manaFill"></div></div></div></div>
       <div id="room"></div>
     </div>
-    <div class="hud" id="hint" hidden>右の出口へ進もう →</div>
-    <div class="hud" id="bottom"><div id="slots" style="display:flex;gap:6px;align-items:center"></div></div>
-    <div class="hud" id="help">WASD 移動 / マウス 狙う・クリック 発射<br />Space ダッシュ / Tab 杖の編集</div>
-    <button id="bagBtn">杖</button>
+    <div class="hud" id="hint" hidden>右の出口から次の部屋へ →</div>
+    <div class="hud" id="bottom"><div id="slots"></div></div>
+    <div class="hud" id="help">WASD 移動 ／ クリック長押し 攻撃<br />J 自動で狙って攻撃 ／ Space ダッシュ ／ Tab おもちゃ</div>
+    <button id="bagBtn">おもちゃ</button>
+    <div class="tbtn" id="atkBtn">攻撃</div>
+    <div class="tbtn" id="dashBtn">ダッシュ</div>
     <div class="overlay" id="bag" hidden></div>
     <div class="overlay" id="reward" hidden></div>
     <div class="overlay" id="result" hidden></div>
-    <div class="stick" id="stickL" hidden><div></div></div>
-    <div class="stick" id="stickR" hidden><div></div></div>
+    <div id="stick" hidden><div></div></div>
+    <div class="overlay" id="intro" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

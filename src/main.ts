@@ -7,8 +7,8 @@ const canvas = document.getElementById("game") as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
 let world = new World(Number(params.get("seed")) || Date.now() % 100000);
 const view = new GameView(canvas);
-const hud = new Hud(() => world, () => { world = new World(Date.now() % 100000); hud.bagOpen = false; });
-const controls = new Controls(canvas, document.getElementById("stickL")!, document.getElementById("stickR")!);
+const hud = new Hud(() => world, () => { world = new World(Date.now() % 100000); world.start(); hud.bagOpen = false; });
+const controls = new Controls(canvas, document.getElementById("stick")!, document.getElementById("atkBtn")!, document.getElementById("dashBtn")!);
 controls.onToggleBag = () => hud.toggleBag();
 
 const fit = () => view.resize(innerWidth, innerHeight);
