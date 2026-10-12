@@ -2,16 +2,20 @@
 import * as THREE from "three";
 import type { World, EnemyType, Room } from "../game/world";
 import { CatDoll, type CatState } from "./catDoll";
-import { enemyTexture, glowTexture, orbTexture, paperTexture } from "./stickers";
+import { enemyTexture, glowTexture, lureTexture, orbTexture, paperTexture, techTexture } from "./stickers";
+import type { Lure } from "../core/wand";
+import type { TechFx } from "../core/spells";
 
 /** 紙人形をカメラ側へ少し倒して、見下ろしでも潰れて見えないようにする。 */
 const LEAN = 0.42;
-const ENEMY_H: Record<EnemyType, number> = { slime: 0.85, bat: 0.75, wisp: 1.0, golem: 2.6 };
+const ENEMY_H: Record<EnemyType, number> = { roach: 0.95, mosquito: 0.95, spider: 1.05, hornet: 2.6 };
+/** 飛ぶ虫の高さ。 */
+const FLY: Partial<Record<EnemyType, number>> = { mosquito: 0.55, hornet: 0.35 };
 
 export class GameView {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
+  camera = new THREE.PerspectiveCamera(38, 1, 0.1, 300);
   private cat!: CatDoll;
   private roomGroup = new THREE.Group();
   private roomIndex = -1;
@@ -23,6 +27,11 @@ export class GameView {
   private enemyShotPool: THREE.Sprite[] = [];
   private orb = orbTexture();
   private fxPool: THREE.Sprite[] = [];
+  private techPool: THREE.Sprite[] = [];
+  private lurePool: THREE.Sprite[] = [];
+  private lureTex = new Map<Lure, THREE.Texture>();
+  private techTex = new Map<TechFx, THREE.Texture>();
+  private targetMark: THREE.Mesh;
   private aimMark: THREE.Mesh;
   private shake = 0;
 
@@ -40,13 +49,18 @@ export class GameView {
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.12, 0.2, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03;
     this.aimMark = ring; this.scene.add(ring);
+    // 自動で狙っている虫の足元の印
+    const tgt = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.62, 32), new THREE.MeshBasicMaterial({ color: 0xff4d4d, transparent: true, opacity: 0.85 }));
+    tgt.rotation.x = -Math.PI / 2; tgt.position.y = 0.04; this.targetMark = tgt; this.scene.add(tgt);
   }
 
   async init(base: string) {
     this.cat = await CatDoll.load(base);
     this.cat.group.traverse((o) => { o.castShadow = true; });
     this.scene.add(this.cat.group);
-    for (const t of ["slime", "bat", "wisp", "golem"] as EnemyType[]) this.enemyTex.set(t, enemyTexture(t));
+    for (const t of ["roach", "mosquito", "spider", "hornet"] as EnemyType[]) this.enemyTex.set(t, enemyTexture(t));
+    for (const l of ["feather", "dragonfly", "tissue"] as Lure[]) this.lureTex.set(l, lureTexture(l));
+    for (const t of ["claw", "bite", "hairball", "hiss"] as const) this.techTex.set(t, techTexture(t));
   }
 
   resize(w: number, h: number) {
@@ -94,10 +108,11 @@ export class GameView {
     return g;
   }
 
-  private sprite(pool: THREE.Sprite[], i: number, solid = false) {
+  private sprite(pool: THREE.Sprite[], i: number, kind: "glow" | "solid" | "sticker" = "glow") {
     if (!pool[i]) {
-      const s = new THREE.Sprite(solid
+      const s = new THREE.Sprite(kind === "solid"
         ? new THREE.SpriteMaterial({ map: this.orb, transparent: true, depthWrite: false })
+        : kind === "sticker" ? new THREE.SpriteMaterial({ transparent: true, depthWrite: false, alphaTest: 0.05 })
         : new THREE.SpriteMaterial({ map: this.glow, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
       this.scene.add(s); pool[i] = s;
     }
@@ -124,56 +139,87 @@ export class GameView {
     this.cat.update(world.time + 0.0001, state, p.facing, speed, p.iframes > 0 && world.phase === "play" && p.hurt <= 0);
     this.aimMark.position.set(p.pos.x + p.aim.x * 1.6, 0.03, p.pos.z + p.aim.z * 1.6);
     this.aimMark.visible = world.phase === "play";
+    const tgt = world.enemies.find((e) => e.id === p.target);
+    this.targetMark.visible = !!tgt && world.phase === "play";
+    if (tgt) { this.targetMark.position.set(tgt.pos.x, 0.04, tgt.pos.z); const k = tgt.radius * 1.4 + Math.sin(world.time * 8) * 0.05; this.targetMark.scale.set(k, k, k); }
 
-    // 敵
+    // 虫
     const alive = new Set<number>();
     for (const e of world.enemies) {
       alive.add(e.id);
       let g = this.enemyMeshes.get(e.id);
       if (!g) { g = this.enemyCard(e.type); this.enemyMeshes.set(e.id, g); }
-      const hop = e.type === "slime" ? Math.max(0, Math.sin((e.t % 1.1) / 0.45 * Math.PI)) * 0.25 * (e.t % 1.1 < 0.45 ? 1 : 0)
-        : e.type === "bat" ? 0.5 + Math.sin(e.t * 9) * 0.08 : e.type === "wisp" ? 0.15 + Math.sin(e.t * 2) * 0.06 : 0;
-      g.position.set(e.pos.x, hop, e.pos.z);
+      const fly = FLY[e.type] ?? 0;
+      const bob = fly ? fly + Math.sin(e.t * 8 + e.id) * 0.08 : e.type === "roach" && Math.hypot(e.vel.x, e.vel.z) > 0.5 ? Math.abs(Math.sin(e.t * 30)) * 0.03 : 0;
+      g.position.set(e.pos.x, bob, e.pos.z);
       g.rotation.x = -LEAN;
       const face = e.vel.x < -0.1 ? -1 : 1;
+      // 出現中: 小さく半透明から大きくなる
+      const appear = e.spawn > 0 ? Math.max(0.05, 1 - e.spawn / 1.0) : 1;
       const squash = e.hurt > 0 ? 0.88 : 1;
-      g.scale.set(face * (2 - squash), squash, 1);
+      g.scale.set(face * (2 - squash) * appear, squash * appear, 1);
       const mat = (g.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
-      mat.color.set(e.hurt > 0 ? 0xff9999 : e.slow > 0 ? 0xb8e2ff : 0xffffff);
+      mat.color.set(e.spawn > 0 ? 0x888888 : e.hurt > 0 ? 0xff9999 : e.slow > 0 ? 0xc9b6ff : 0xffffff);
     }
     for (const [id, g] of this.enemyMeshes) if (!alive.has(id)) { this.scene.remove(g); this.enemyMeshes.delete(id); }
 
-    // 弾
-    // 弾: 自分の弾は光、敵の弾は縁取りのある玉（見分けやすさ優先）
-    let n = 0, m = 0;
+    // 弾: 猫の技はおもちゃの先の絵＋色の光、虫の攻撃は縁取りのある玉
+    let n = 0, m = 0, l = 0;
+    const lureTex = this.lureTex.get(world.toy.lure)!;
     for (const pr of world.projectiles) {
-      const enemy = pr.owner === "enemy";
-      const s = enemy ? this.sprite(this.enemyShotPool, m++, true) : this.sprite(this.projPool, n++);
-      s.position.set(pr.pos.x, 0.45, pr.pos.z);
-      const k = pr.radius * (enemy ? 2.6 : 4);
-      s.scale.set(k, k, k);
-      s.material.color.set(pr.color);
+      if (pr.owner === "enemy") {
+        const s = this.sprite(this.enemyShotPool, m++, "solid");
+        s.position.set(pr.pos.x, 0.45, pr.pos.z);
+        const k = pr.radius * 2.6; s.scale.set(k, k, k); s.material.color.set(pr.color);
+        continue;
+      }
+      const glow = this.sprite(this.projPool, n++);
+      glow.position.set(pr.pos.x, 0.4, pr.pos.z);
+      const k = pr.radius * 3.4; glow.scale.set(k, k, k); glow.material.color.set(pr.color); glow.material.opacity = 0.75;
+      const lure = this.sprite(this.lurePool, l++, "sticker");
+      if (lure.material.map !== lureTex) { lure.material.map = lureTex; lure.material.needsUpdate = true; }
+      lure.position.set(pr.pos.x, 0.5, pr.pos.z);
+      const img = lureTex.image as HTMLCanvasElement, h = 0.55;
+      lure.scale.set(h * img.width / img.height, h, 1);
+      lure.material.rotation = Math.atan2(-pr.vel.z, pr.vel.x);   // 飛ぶ向きに回す
     }
     for (let i = n; i < this.projPool.length; i++) this.projPool[i].visible = false;
     for (let i = m; i < this.enemyShotPool.length; i++) this.enemyShotPool[i].visible = false;
+    for (let i = l; i < this.lurePool.length; i++) this.lurePool[i].visible = false;
 
-    // エフェクト
-    n = 0;
+    // エフェクト: 技の絵（爪あと・ガブッ・毛玉・シャー）と光
+    n = 0; m = 0;
     for (const f of world.fx) {
-      const s = this.sprite(this.fxPool, n++), k = f.t / f.life;
+      const k = f.t / f.life;
+      if (f.kind === "tech" && f.tech && f.tech !== "enemy") {
+        const s = this.sprite(this.techPool, m++, "sticker");
+        const tex = this.techTex.get(f.tech)!;
+        if (s.material.map !== tex) { s.material.map = tex; s.material.needsUpdate = true; }
+        s.position.set(f.pos.x, 0.8, f.pos.z);
+        const pop = k < 0.25 ? 0.6 + k * 2 : 1.1, r = Math.max(0.9, f.radius * 1.3) * pop;
+        const img = tex.image as HTMLCanvasElement;
+        s.scale.set(r * img.width / img.height, r, 1);
+        s.material.opacity = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
+        continue;
+      }
+      const s = this.sprite(this.fxPool, n++);
       s.position.set(f.pos.x, 0.4, f.pos.z);
-      const r = f.radius * 2 * (f.kind === "boom" ? 0.6 + k * 0.6 : 0.5 + k);
+      const r = f.radius * 2 * (0.5 + k);
       s.scale.set(r, r, r);
       s.material.color.set(f.color); s.material.opacity = 1 - k;
     }
     for (let i = n; i < this.fxPool.length; i++) this.fxPool[i].visible = false;
+    for (let i = m; i < this.techPool.length; i++) this.techPool[i].visible = false;
 
-    // カメラ: 斜め上から主人公を追う（部屋の端では止める）
-    const cx = Math.max(-room.w + 4, Math.min(room.w - 4, p.pos.x));
-    const cz = Math.max(-room.d + 2, Math.min(room.d - 2, p.pos.z)) * 0.5;
+    // カメラ: 部屋全体が見える距離から見下ろす（縦持ちでは主人公を追う）
+    const aspect = this.camera.aspect, tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const halfW = aspect >= 1 ? room.w + 0.8 : Math.min(room.w + 0.8, 6.5);
+    const dist = Math.max(halfW / (tanV * aspect), (room.d + 1.6) / tanV / 0.92);
+    const pitch = THREE.MathUtils.degToRad(56);
+    const cx = aspect >= 1 ? 0 : Math.max(-room.w + halfW - 0.8, Math.min(room.w - halfW + 0.8, p.pos.x));
     const sh = this.shake > 0 ? (Math.random() - 0.5) * this.shake * 0.6 : 0;
-    this.camera.position.set(cx + sh, 8.6, cz + 7.4);
-    this.camera.lookAt(cx, 0.3, cz + 0.2);
+    this.camera.position.set(cx + sh, Math.sin(pitch) * dist, 0.6 + Math.cos(pitch) * dist);
+    this.camera.lookAt(cx, 0, 0.6);
     this.renderer.render(this.scene, this.camera);
   }
 }

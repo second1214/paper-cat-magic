@@ -1,23 +1,30 @@
-// 魔法の定義。DOM・three.js 非依存（ロジックとテストで共有する）。
+// 技（おもちゃにはめるアイテム）の定義。DOM・three.js 非依存。
+//
+// 遠距離の仕組み: 猫がおもちゃを振ると、おもちゃの先（羽・トンボ・ティッシュ玉）が虫へ飛んでいき、
+// 当たった所で猫の技（爪・噛みつきなど）が発動する。
 
-export type SpellKind = "projectile" | "modifier" | "multicast" | "trigger";
+export type SpellKind = "attack" | "modifier" | "multicast" | "trigger";
 
-/** 弾そのものの性能。修飾魔法で上書き・加算される。 */
+/** 技が当たったときに出す絵（描画側で使う）。 */
+export type TechFx = "claw" | "bite" | "hairball" | "hiss" | "enemy";
+
+/** 飛んでいく弾の性能。修飾で上書き・加算される。 */
 export interface ProjectileStats {
   damage: number;
   speed: number; // マス/秒
   radius: number;
   life: number; // 秒
-  pierce: number; // 貫通できる敵の数
+  pierce: number; // 貫通できる虫の数
   bounce: number; // 壁で跳ね返る回数
   homing: number; // 0..1 追尾の強さ
-  explode: number; // 爆発半径（0 で爆発なし）
+  explode: number; // 範囲半径（0 で範囲なし）
   slow: number; // 命中時の鈍足秒数
   spread: number; // ばらつき（ラジアン）
   color: string;
+  tech: TechFx;
 }
 
-/** 次に撃つ弾へ足し込む修飾。 */
+/** 次（右隣）の技へ足し込む修飾。 */
 export interface Modifier {
   damageMul?: number;
   damageAdd?: number;
@@ -33,62 +40,71 @@ export interface SpellDef {
   id: string;
   name: string;
   kind: SpellKind;
-  mana: number;
-  /** 一言説明（UI 表示用）。 */
+  mana: number; // やる気の消費
   desc: string;
-  /** アイコンの文字と色（UI 表示用）。 */
   glyph: string;
   color: string;
   projectile?: ProjectileStats;
   modifier?: Modifier;
-  /** multicast: この魔法の後に何発ぶん同時に撃つか。 */
-  count?: number;
+  count?: number; // multicast: 右に続く技を何個同時に出すか
 }
 
-const base = (o: Partial<ProjectileStats> & { color: string }): ProjectileStats => ({
-  damage: 5, speed: 12, radius: 0.18, life: 1.2, pierce: 0, bounce: 0, homing: 0, explode: 0, slow: 0, spread: 0.04, ...o,
+const base = (o: Partial<ProjectileStats> & { color: string; tech: TechFx }): ProjectileStats => ({
+  damage: 5, speed: 12, radius: 0.2, life: 1.4, pierce: 0, bounce: 0, homing: 0, explode: 0, slow: 0, spread: 0.04, ...o,
 });
 
+/** 種類ごとの表示名（UI の凡例に使う）。 */
+export const KIND_LABEL: Record<SpellKind, string> = {
+  attack: "技",
+  modifier: "修飾",
+  multicast: "修飾",
+  trigger: "修飾",
+};
+
 export const SPELLS: Record<string, SpellDef> = {
-  spark: {
-    id: "spark", name: "火花", kind: "projectile", mana: 4, glyph: "✦", color: "#ffd166",
-    desc: "速くて軽い弾。連射向き",
-    projectile: base({ damage: 4, speed: 16, radius: 0.14, life: 0.8, spread: 0.08, color: "#ffd166" }),
+  claw: {
+    id: "claw", name: "ひっかき", kind: "attack", mana: 4, glyph: "爪", color: "#e85d4a",
+    desc: "爪でひっかく。速くて軽い。連発向き",
+    projectile: base({ damage: 5, speed: 15, life: 1.0, spread: 0.08, color: "#ff8a70", tech: "claw" }),
   },
-  fireball: {
-    id: "fireball", name: "火の玉", kind: "projectile", mana: 18, glyph: "●", color: "#ff6b3d",
-    desc: "遅いが着弾で爆発する",
-    projectile: base({ damage: 10, speed: 8, radius: 0.26, life: 1.6, explode: 1.6, color: "#ff6b3d" }),
+  bite: {
+    id: "bite", name: "かみつき", kind: "attack", mana: 12, glyph: "牙", color: "#c0392b",
+    desc: "ガブッと強い一撃。少し遅い",
+    projectile: base({ damage: 14, speed: 10, radius: 0.24, life: 1.5, color: "#ff6b6b", tech: "bite" }),
   },
-  ice: {
-    id: "ice", name: "氷の矢", kind: "projectile", mana: 10, glyph: "◆", color: "#8fd3ff",
-    desc: "当てた敵を遅くする",
-    projectile: base({ damage: 7, speed: 13, radius: 0.16, life: 1.2, slow: 1.5, color: "#8fd3ff" }),
+  hairball: {
+    id: "hairball", name: "毛玉", kind: "attack", mana: 18, glyph: "毛", color: "#b07a3c",
+    desc: "当たった所で毛玉がはじけ、まわりの虫にも当たる",
+    projectile: base({ damage: 9, speed: 8, radius: 0.26, life: 1.8, explode: 1.7, color: "#e0a060", tech: "hairball" }),
   },
-  bolt: {
-    id: "bolt", name: "雷撃", kind: "projectile", mana: 14, glyph: "ϟ", color: "#c9a6ff",
-    desc: "敵を3体まで貫通する",
-    projectile: base({ damage: 8, speed: 22, radius: 0.15, life: 0.6, pierce: 3, spread: 0.02, color: "#c9a6ff" }),
+  hiss: {
+    id: "hiss", name: "シャー", kind: "attack", mana: 8, glyph: "シ", color: "#7c5cbf",
+    desc: "威嚇。当たった虫がすくんで遅くなる",
+    projectile: base({ damage: 4, speed: 12, life: 1.3, slow: 2.0, color: "#c9a6ff", tech: "hiss" }),
   },
-  empower: {
-    id: "empower", name: "強化", kind: "modifier", mana: 8, glyph: "▲", color: "#ff8fab",
-    desc: "次の弾のダメージ1.5倍＋2", modifier: { damageMul: 1.5, damageAdd: 2 },
+  matatabi: {
+    id: "matatabi", name: "またたび", kind: "modifier", mana: 8, glyph: "強", color: "#2f9e44",
+    desc: "右の技のダメージ1.5倍＋3", modifier: { damageMul: 1.5, damageAdd: 3 },
   },
-  homing: {
-    id: "homing", name: "追尾", kind: "modifier", mana: 10, glyph: "◎", color: "#7bd389",
-    desc: "次の弾が敵を追いかける", modifier: { homing: 0.7, speedMul: 0.9 },
+  stare: {
+    id: "stare", name: "じーっ", kind: "modifier", mana: 8, glyph: "追", color: "#1c7ed6",
+    desc: "右の技が虫を追いかける", modifier: { homing: 0.75, speedMul: 0.9 },
   },
-  bounce: {
-    id: "bounce", name: "反射", kind: "modifier", mana: 6, glyph: "↯", color: "#5ec2b7",
-    desc: "次の弾が壁で3回跳ね返る", modifier: { bounce: 3 },
+  bouncy: {
+    id: "bouncy", name: "ぽよん", kind: "modifier", mana: 6, glyph: "跳", color: "#0ca678",
+    desc: "右の技が壁で3回はね返る", modifier: { bounce: 3 },
   },
-  twin: {
-    id: "twin", name: "二連", kind: "multicast", mana: 6, glyph: "⇉", color: "#f4a261", count: 2,
-    desc: "続く2発を同時に撃つ",
+  pushy: {
+    id: "pushy", name: "ぐいぐい", kind: "modifier", mana: 8, glyph: "貫", color: "#5c7cfa",
+    desc: "右の技が虫を2匹ぶん突き抜ける", modifier: { pierce: 2 },
   },
-  trigger: {
-    id: "trigger", name: "誘発", kind: "trigger", mana: 8, glyph: "✚", color: "#e76f51",
-    desc: "次の弾が当たった所から、その次の弾を撃つ",
+  double: {
+    id: "double", name: "二刀流", kind: "multicast", mana: 6, glyph: "×2", color: "#e67700", count: 2,
+    desc: "右に続く2つの技を同時に出す",
+  },
+  chain: {
+    id: "chain", name: "つづけて", kind: "trigger", mana: 8, glyph: "連", color: "#d6336c",
+    desc: "右の技が当たった所から、さらに右の技を出す",
   },
 };
 

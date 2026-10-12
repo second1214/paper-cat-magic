@@ -1,7 +1,7 @@
 // 主人公の猫（紙人形）。状態に応じてステッカー画像を差し替える。
 import * as THREE from "three";
 
-const STAND = 1.15; // 立ち姿の高さ（ワールド単位）
+const STAND = 1.45; // 立ち姿の高さ（ワールド単位）。カメラを引いたので大きめ
 
 /** 画像名と、1ピクセルあたりのワールド長。素材ごとに描かれた縮尺が違うので個別に揃える。 */
 const FRAMES: Record<string, number> = {
@@ -11,8 +11,8 @@ const FRAMES: Record<string, number> = {
   A05_jump_1: STAND / 297, A05_jump_2: STAND / 297, A05_jump_3: STAND / 297, A05_jump_4: STAND / 297,
   A03_turn_4: STAND / 322,
   P14_hiss: STAND / 379,
-  P03_sit_happy: 1.3 / 420,
-  P09_belly_up: 1.0 / 417,
+  P03_sit_happy: 1.6 / 420,
+  P09_belly_up: 1.25 / 417,
 };
 
 export type CatState = "idle" | "walk" | "dash" | "hurt" | "happy" | "down";
