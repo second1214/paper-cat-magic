@@ -1,9 +1,9 @@
 // HTML の HUD と各画面（はじめに・ごほうび選び・おもちゃの編集・結果）。
 // Magicraft の説明欄のように、アイテムは「絵・名前・種類・数値・説明」をいつも同じ形で見せる。
-import { KIND_LABEL, SPELLS, spellStats } from "../core/spells";
+import { ELEMENT_INFO, KIND_LABEL, MOTION_LABEL, SPELLS, spellStats } from "../core/spells";
 import { groupSummary, TOYS, toyStats, type ToyDef } from "../core/wand";
 import { REWARD_INFO, type Choice, type World } from "../game/world";
-import { rewardCanvas, spellCanvas, toyCanvas, urlOf } from "../art/items";
+import { elementCanvas, rewardCanvas, spellCanvas, toyCanvas, urlOf } from "../art/items";
 
 export const isTouch = () => matchMedia("(pointer: coarse)").matches;
 
@@ -19,7 +19,7 @@ const cell = (id: string | null, attrs = "", extra = "") => {
   if (!id) return `<button class="cell empty ${extra}" ${attrs}></button>`;
   const s = SPELLS[id], mod = isMod(id);
   return `<button class="cell ${mod ? "mod" : "atk"} ${extra}" style="--c:${s.color}" ${attrs}>
-    <img src="${spellImg(id)}" alt=""><span class="badge">${KIND_LABEL[s.kind]}</span>${mod ? '<span class="arrow">▶</span>' : ""}</button>`;
+    <img src="${spellImg(id)}" alt=""><span class="badge">${s.modifier?.element ? "属性" : KIND_LABEL[s.kind]}</span>${mod ? '<span class="arrow">▶</span>' : ""}</button>`;
 };
 
 const statsTable = (rows: [string, string][]) =>
@@ -29,8 +29,15 @@ const statsTable = (rows: [string, string][]) =>
 function spellCard(id: string, attrs = "") {
   const s = SPELLS[id], mod = isMod(id);
   return `<div class="card" ${attrs}>
-    <div class="head"><img src="${spellImg(id)}" alt=""><div><b>${s.name}</b><span class="tag ${mod ? "mod" : "atk"}">${mod ? "修飾 ▶右の技にかかる" : "技（飛んでいく）"}</span></div></div>
-    ${statsTable(spellStats(s))}<p class="desc">${s.desc}</p></div>`;
+    <div class="head"><img src="${spellImg(id)}" alt=""><div><b>${s.name}</b><span class="tag ${mod ? "mod" : "atk"}">${mod ? (s.modifier?.element ? "属性 ▶右の技につく" : "修飾 ▶右の技にかかる") : `技（${MOTION_LABEL[s.projectile!.motion]}）`}</span></div></div>
+    ${statsTable(spellStats(s))}<p class="desc">${s.desc}</p>${elementNote(s.modifier?.element)}</div>`;
+}
+
+/** 属性の説明（しるしの絵つき）。 */
+function elementNote(el?: string) {
+  if (!el || el === "none") return "";
+  const info = ELEMENT_INFO[el as keyof typeof ELEMENT_INFO];
+  return `<p class="elem" style="--c:${info.color}"><img src="${urlOf(elementCanvas(el as keyof typeof ELEMENT_INFO))}" alt=""><span><b>${info.name}</b> ${info.desc}</span></p>`;
 }
 function toyCard(t: ToyDef, attrs = "") {
   return `<div class="card" ${attrs}>
@@ -112,7 +119,8 @@ export class Hud {
           <p>おもちゃを振ると、スロットに入れた<b>技（爪・牙など）が飛んでいく</b>。スロットは<b>左から順に</b>使われる。</p>
           <div class="example">${cell("matatabi")}${cell("bite")}<span>修飾の ▶ は<b>右隣の技</b>にかかる<br>＝「またたびで強くなったかみつき」</span></div>
           <p>スロットの下の線が「1回で一緒に出る範囲」。⚔は攻撃力の合計、⚡は使うやる気。</p>
-          <p>部屋を片付けると扉が開く。扉の上の絵が<b>次の部屋のごほうび</b>（♥最大HP／⚡やる気／★技／おもちゃ）。</p>
+          <p><b>属性</b>（静電気・水のみ皿・ガムテープ・虫よけ）を技の左に置くと効果がつく。<b>ぬれた虫にビリビリ</b>、<b>ねばねばの虫に虫よけ</b>はよく効く。</p>
+          <p>部屋を片付けると扉が開く。扉の上の絵が<b>次の部屋のごほうび</b>（♥最大HP／⚡やる気／★技／おもちゃ）。秋から始まり、夏が最後。</p>
         </div>
       </div>
       <button class="go">はじめる</button></div>`;
@@ -125,7 +133,7 @@ export class Hud {
     if (el.hidden) return;
     const toy = w.toy, sel = this.sel;
     const isSel = (where: string, i: number) => sel?.where === where && sel.i === i;
-    const BAG = Math.max(12, w.bag.length + 2);
+    const BAG = Math.max(16, Math.ceil((w.bag.length + 1) / 8) * 8);
     const selId = sel ? (sel.where === "slot" ? toy.slots[sel.i] : w.bag[sel.i]) ?? null : null;
     el.innerHTML = `<div class="panel edit">
       <div class="detail">${selId ? spellCard(selId) : toyCard(toy)}</div>
@@ -171,7 +179,7 @@ export class Hud {
     if (el.hidden) return;
     el.innerHTML = `<div class="panel"><h2>${w.phase === "win" ? "1年間、おうちを守りきった！" : "虫にやられた…"}</h2>
       ${w.phase === "win" ? mama("pet", "よくやったね、<br>えらいえらい！") : mama("scream", "いやぁぁぁ！<br>虫がーっ！")}
-      <p class="muted">${w.phase === "win" ? "春夏秋冬、ぜんぶの虫を追い払った。" : `${w.title} で力尽きた。`}</p>
+      <p class="muted">${w.phase === "win" ? "秋から夏まで、ぜんぶの虫を追い払った。" : `${w.title} で力尽きた。`}</p>
       <button class="again">もう一度</button></div>`;
     el.querySelector<HTMLButtonElement>(".again")!.onclick = () => this.onRestart();
   }

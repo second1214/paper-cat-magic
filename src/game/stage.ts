@@ -11,7 +11,7 @@ export const SEASON_NAME: Record<Season, string> = { spring: "春", summer: "夏
 export const THEME_NAME: Record<Theme, string> = {
   garden: "お庭", living: "リビング", bedroom: "寝室", study: "書斎", washitsu: "和室", western: "洋室",
 };
-export const SEASONS: Season[] = ["spring", "summer", "autumn", "winter"];
+export const SEASONS: Season[] = ["autumn", "winter", "spring", "summer"]; // 虫が一番多い夏が最終章
 export const THEMES: Theme[] = ["garden", "living", "bedroom", "study", "washitsu", "western"];
 
 export const enum Cell { Floor = 0, Wall = 1, Prop = 2, Door = 3 }

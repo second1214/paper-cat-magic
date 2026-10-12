@@ -48,6 +48,10 @@ function applyMods(p: ProjectileStats, mods: Modifier[]): ProjectileStats {
     if (m.pierce) s.pierce += m.pierce;
     if (m.explodeAdd) s.explode += m.explodeAdd;
     if (m.spread) s.spread += m.spread;
+    if (m.hitsAdd && s.hits < 99) s.hits += m.hitsAdd;
+    if (m.sizeMul) { s.radius *= m.sizeMul; s.reach *= Math.max(0.7, m.sizeMul); s.explode *= m.sizeMul; }
+    if (m.speedMul) s.hitEvery /= m.speedMul;
+    if (m.element) s.element = m.element;
   }
   return s;
 }
@@ -151,7 +155,8 @@ export function starterToy(): ToyDef {
 
 /** まとまり（1回で一緒に出る範囲）ごとの合計攻撃力と、使うやる気。 */
 export function groupSummary(toy: ToyDef): { start: number; end: number; damage: number; mana: number }[] {
-  const sum = (shots: Shot[]): number => shots.reduce((a, s) => a + s.stats.damage + sum(s.payload), 0);
+  // 多段は「1匹に当たりきったとき」の合計（置く技は5回ぶんで数える）
+  const sum = (shots: Shot[]): number => shots.reduce((a, s) => a + s.stats.damage * Math.min(5, s.stats.hits) + sum(s.payload), 0);
   return castGroups(toy).map(([start, end]) => {
     const r = planCast(toy, start, Infinity);
     return { start, end, damage: Math.round(sum(r.shots)), mana: r.manaUsed };

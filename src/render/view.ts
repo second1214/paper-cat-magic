@@ -4,8 +4,8 @@ import type { World, EnemyType, Room } from "../game/world";
 import { CatDoll, type CatState } from "./catDoll";
 import { canvasTexture, enemyTexture, glowTexture, orbTexture } from "./stickers";
 import { buildRoom, type BuiltRoom } from "./roomBuilder";
-import { rewardCanvas, techCanvas } from "../art/items";
-import type { TechFx } from "../core/spells";
+import { elementCanvas, rewardCanvas, techCanvas } from "../art/items";
+import type { Element, TechFx } from "../core/spells";
 import type { Season } from "../game/stage";
 
 /** 紙人形をカメラ側へ少し倒して、見下ろしでも潰れて見えないようにする。 */
@@ -39,6 +39,11 @@ export class GameView {
   private techTex = new Map<TechFx, THREE.Texture>();
   private pools: Record<string, THREE.Sprite[]> = {};
   private numTex = new Map<string, THREE.Texture>();
+  private elemTex = new Map<Element, THREE.Texture>();
+  /** 床に寝かせて置く板（糸・ビーム・電撃・衝撃波の輪・爪とぎ）。 */
+  private flats: Record<string, THREE.Mesh[]> = {};
+  private ringGeo = new THREE.RingGeometry(0.86, 1, 48);
+  private planeGeo = new THREE.PlaneGeometry(1, 1);
   private doorIcons: THREE.Sprite[] = [];
   private particles: { s: THREE.Sprite; v: THREE.Vector3; ph: number }[] = [];
   private targetMark: THREE.Mesh;
@@ -66,7 +71,8 @@ export class GameView {
     this.cat.group.traverse((o) => { o.castShadow = true; });
     this.scene.add(this.cat.group);
     for (const t of ["roach", "mosquito", "spider", "hornet"] as EnemyType[]) this.enemyTex.set(t, enemyTexture(t));
-    for (const t of ["claw", "bite", "hairball", "hiss"] as const) this.techTex.set(t, canvasTexture(techCanvas(t)));
+    for (const t of ["claw", "bite", "hairball", "hiss", "swing", "yarn", "laser", "pounce", "punch", "post"] as const) this.techTex.set(t, canvasTexture(techCanvas(t)));
+    for (const e of ["static", "wet", "sticky", "repel"] as const) this.elemTex.set(e, canvasTexture(elementCanvas(e)));
   }
 
   resize(w: number, h: number) {
@@ -119,16 +125,40 @@ export class GameView {
     pool[i].visible = true;
     return pool[i];
   }
-  private hideRest(kind: string, n: number) { for (const s of (this.pools[kind] ?? []).slice(n)) s.visible = false; }
+  private hideRest(kind: string, n: number) {
+    for (const s of (this.pools[kind] ?? []).slice(n)) s.visible = false;
+    for (const m of (this.flats[kind] ?? []).slice(n)) m.visible = false;
+  }
 
-  private numberTexture(v: number) {
-    const key = String(v);
+  /** 床に寝かせた板。geo を変えると輪にもなる。 */
+  private flat(kind: string, i: number, make: () => THREE.Mesh) {
+    const pool = (this.flats[kind] ??= []);
+    if (!pool[i]) { const m = make(); m.rotation.order = "YXZ"; this.scene.add(m); pool[i] = m; }
+    pool[i].visible = true;
+    return pool[i];
+  }
+
+  /** a から b へ床の上に引く帯（糸・ビーム・電撃）。 */
+  private ribbon(kind: string, i: number, a: { x: number; z: number }, b: { x: number; z: number }, width: number, color: string, y: number, additive = false) {
+    const m = this.flat(kind, i, () => new THREE.Mesh(this.planeGeo, new THREE.MeshBasicMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+    })));
+    const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+    m.position.set((a.x + b.x) / 2, y, (a.z + b.z) / 2);
+    m.rotation.set(-Math.PI / 2, Math.atan2(-dz, dx), 0);
+    m.scale.set(Math.max(0.01, len), width, 1);
+    (m.material as THREE.MeshBasicMaterial).color.set(color);
+    return m;
+  }
+
+  private numberTexture(v: number, color = "#ffffff") {
+    const key = `${v}|${color}`;
     let t = this.numTex.get(key);
     if (!t) {
       const c = document.createElement("canvas"); c.width = 128; c.height = 64;
       const g = c.getContext("2d")!;
       g.font = "bold 46px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
-      g.lineWidth = 9; g.strokeStyle = "#3a1d12"; g.strokeText(key, 64, 34); g.fillStyle = "#fff4c2"; g.fillText(key, 64, 34);
+      g.lineWidth = 9; g.strokeStyle = "#3a1d12"; g.strokeText(String(v), 64, 34); g.fillStyle = color === "#ffffff" ? "#fff4c2" : color; g.fillText(String(v), 64, 34);
       t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; this.numTex.set(key, t);
     }
     return t;
@@ -150,12 +180,13 @@ export class GameView {
     const p = world.player, speed = Math.hypot(p.vel.x, p.vel.z);
     let state: CatState = speed > 0.6 ? "walk" : "idle";
     if (p.dash > 0) state = "dash";
+    if (p.pounce > 0) state = "jump";
     if (p.hurt > 0) state = "hurt";
     if (world.phase === "reward" || world.phase === "win") state = "happy";
     if (world.phase === "dead") state = "down";
     this.cat.group.position.set(p.pos.x, 0, p.pos.z);
     this.cat.group.rotation.x = -LEAN;
-    this.cat.update(world.time + 0.0001, state, p.facing, speed, p.iframes > 0 && world.phase === "play" && p.hurt <= 0);
+    this.cat.update(world.time + 0.0001, state, p.facing, speed, p.iframes > 0 && world.phase === "play" && p.hurt <= 0, 1 - p.pounce / 0.4);
     this.aimMark.position.set(p.pos.x + p.aim.x * 1.6, 0.03, p.pos.z + p.aim.z * 1.6);
     this.aimMark.visible = world.phase === "play";
     const tgt = world.enemies.find((e) => e.id === p.target);
@@ -164,6 +195,7 @@ export class GameView {
 
     // 虫
     const alive = new Set<number>();
+    let nStat = 0;
     for (const e of world.enemies) {
       alive.add(e.id);
       let g = this.enemyMeshes.get(e.id);
@@ -177,27 +209,85 @@ export class GameView {
       const squash = e.hurt > 0 ? 0.88 : 1;
       g.scale.set(face * (2 - squash) * appear, squash * appear, 1);
       const mat = (g.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
-      mat.color.set(e.spawn > 0 ? 0x888888 : e.hurt > 0 ? 0xff9999 : e.slow > 0 ? 0xc9b6ff : 0xffffff);
+      mat.color.set(e.spawn > 0 ? 0x888888 : e.hurt > 0 ? 0xff9999 : e.sticky > 0 ? 0xe6cf8a : e.wet > 0 ? 0xa8dcff : e.repel > 0 ? 0xc4f0b4 : e.slow > 0 ? 0xc9b6ff : 0xffffff);
+      // 属性のしるし（頭の上に並べる）
+      const marks: Element[] = [];
+      if (e.wet > 0) marks.push("wet");
+      if (e.sticky > 0) marks.push("sticky");
+      if (e.repel > 0) marks.push("repel");
+      marks.forEach((el, k) => {
+        const s = this.sprite("status", nStat++, () => new THREE.SpriteMaterial({ transparent: true, depthWrite: false, alphaTest: 0.05 }));
+        const tex = this.elemTex.get(el)!;
+        if (s.material.map !== tex) { s.material.map = tex; s.material.needsUpdate = true; }
+        s.position.set(e.pos.x + (k - (marks.length - 1) / 2) * 0.38, bob + ENEMY_H[e.type] * 0.95 + 0.25, e.pos.z - 0.2); s.scale.set(0.36, 0.36, 1);
+      });
     }
+    this.hideRest("status", nStat);
     for (const [id, g] of this.enemyMeshes) if (!alive.has(id)) { this.scene.remove(g); this.enemyMeshes.delete(id); }
 
-    // 弾: 猫の技はその絵（爪・牙・毛玉・シャー）が飛ぶ。虫の攻撃は縁取りのある玉。
-    let nGlow = 0, nTech = 0, nOrb = 0;
+    // 弾: 猫の技はその絵（爪・牙・毛糸玉など）が、技ごとの動きで出る。虫の攻撃は縁取りのある玉。
+    let nGlow = 0, nTech = 0, nOrb = 0, nRib = 0, nRing = 0, nPost = 0;
+    const techSprite = (tech: TechFx, x: number, y: number, z: number, size: number, rot: number, opacity = 1) => {
+      const tex = this.techTex.get(tech);
+      if (!tex) return;
+      const s = this.sprite("tech", nTech++, () => new THREE.SpriteMaterial({ transparent: true, depthWrite: false, alphaTest: 0.05 }));
+      if (s.material.map !== tex) { s.material.map = tex; s.material.needsUpdate = true; }
+      s.position.set(x, y, z); s.scale.set(size, size, 1); s.material.rotation = rot; s.material.opacity = opacity;
+    };
     for (const pr of world.projectiles) {
       if (pr.owner === "enemy") {
         const s = this.sprite("orb", nOrb++, () => new THREE.SpriteMaterial({ map: this.orb, transparent: true, depthWrite: false }));
         s.position.set(pr.pos.x, 0.45, pr.pos.z); const k = pr.radius * 2.6; s.scale.set(k, k, k); s.material.color.set(pr.color);
         continue;
       }
-      const glow = this.sprite("glow", nGlow++, () => new THREE.SpriteMaterial({ map: this.glow, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-      glow.position.set(pr.pos.x, 0.42, pr.pos.z); const k = pr.radius * 3.2; glow.scale.set(k, k, k); glow.material.color.set(pr.color); glow.material.opacity = 0.6;
-      const tex = this.techTex.get(pr.tech);
-      if (!tex) continue;
-      const s = this.sprite("tech", nTech++, () => new THREE.SpriteMaterial({ transparent: true, depthWrite: false, alphaTest: 0.05 }));
-      if (s.material.map !== tex) { s.material.map = tex; s.material.needsUpdate = true; }
-      s.position.set(pr.pos.x, 0.55, pr.pos.z);
-      const size = 0.5 + pr.radius * 1.2; s.scale.set(size, size, 1);
-      s.material.rotation = pr.tech === "hairball" ? world.time * 8 : Math.atan2(-pr.vel.z, pr.vel.x);
+      const fade = Math.min(1, pr.life / 0.15);
+      const elColor = { none: null, static: "#ffe066", wet: "#74c0fc", sticky: "#e0b552", repel: "#8ce99a" }[pr.element];
+      if (pr.motion !== "trap" && pr.motion !== "ring") {
+        const glow = this.sprite("glow", nGlow++, () => new THREE.SpriteMaterial({ map: this.glow, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+        glow.position.set(pr.pos.x, 0.42, pr.pos.z); const k = pr.radius * 3.2 + (elColor ? 0.35 : 0); glow.scale.set(k, k, k);
+        glow.material.color.set(elColor ?? pr.color); glow.material.opacity = 0.6 * fade;
+      }
+      const size = 0.5 + pr.radius * 1.2;
+      switch (pr.motion) {
+        case "orbit":   // 猫からのびる竿と、回る先っぽ
+          this.ribbon("rib", nRib++, p.pos, pr.pos, 0.05, "#8a5a2b", 0.5);
+          techSprite(pr.tech, pr.pos.x, 0.55, pr.pos.z, size + 0.15, -pr.ang - Math.PI / 2, fade);
+          break;
+        case "beam":
+          if (pr.tech === "laser") {
+            const a = this.ribbon("rib", nRib++, pr.origin, pr.pos, 0.16, elColor ?? "#ff2020", 0.3); (a.material as THREE.MeshBasicMaterial).opacity = 0.85 * fade;
+            const b = this.ribbon("rib", nRib++, pr.origin, pr.pos, 0.05, "#ffffff", 0.31); (b.material as THREE.MeshBasicMaterial).opacity = fade;
+            techSprite("laser", pr.pos.x, 0.12, pr.pos.z, 0.6, 0, fade);
+          } else {   // 毛糸: ころがる玉と、のびた糸
+            const r = this.ribbon("rib", nRib++, pr.origin, pr.pos, 0.12 + pr.radius * 0.2, elColor ?? "#e64980", 0.08); (r.material as THREE.MeshBasicMaterial).opacity = fade;
+            techSprite(pr.tech, pr.pos.x, 0.35 + pr.radius * 0.6, pr.pos.z, size, -pr.t * 12 * Math.sign(pr.dir.x || 1), fade);
+          }
+          break;
+        case "ring": {
+          const R = pr.reach * Math.min(1, pr.t / (pr.life0 * 0.75));
+          const m = this.flat("ring", nRing++, () => new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide })));
+          m.position.set(pr.origin.x, 0.06, pr.origin.z); m.rotation.set(-Math.PI / 2, 0, 0); m.scale.set(Math.max(0.05, R), Math.max(0.05, R), 1);
+          (m.material as THREE.MeshBasicMaterial).color.set(elColor ?? "#ffc078"); (m.material as THREE.MeshBasicMaterial).opacity = 0.9 * fade;
+          if (pr.t < 0.15) techSprite(pr.tech, pr.origin.x, 0.3, pr.origin.z, 1.2 + pr.t * 4, 0, 1 - pr.t / 0.15);
+          break;
+        }
+        case "melee": {   // ぺしぺし: 肉球が前方のあちこちに出る
+          const ph = Math.floor(pr.t / 0.07);
+          const side = { x: -pr.dir.z, z: pr.dir.x }, off = Math.sin(ph * 2.3) * pr.reach * 0.35, fwd = 0.5 + (ph % 3) * 0.15 * pr.reach;
+          techSprite(pr.tech, p.pos.x + pr.dir.x * fwd + side.x * off, 0.6, p.pos.z + pr.dir.z * fwd + side.z * off, 0.55 + pr.radius * 0.6, Math.atan2(-pr.dir.z, pr.dir.x), fade);
+          break;
+        }
+        case "trap": {   // 床に置いた爪とぎ
+          const m = this.flat("post", nPost++, () => new THREE.Mesh(this.planeGeo, new THREE.MeshBasicMaterial({ map: this.techTex.get("post"), transparent: true, alphaTest: 0.1, depthWrite: false })));
+          const k = pr.radius * 3;
+          m.position.set(pr.pos.x, 0.05, pr.pos.z); m.rotation.set(-Math.PI / 2, 0, 0); m.scale.set(k, k, 1);
+          (m.material as THREE.MeshBasicMaterial).opacity = Math.min(1, pr.life / 0.8);
+          (m.material as THREE.MeshBasicMaterial).color.set(elColor ?? "#ffffff");
+          break;
+        }
+        default:
+          techSprite(pr.tech, pr.pos.x, 0.55, pr.pos.z, size, pr.tech === "hairball" ? world.time * 8 : Math.atan2(-pr.vel.z, pr.vel.x));
+      }
     }
 
     // エフェクト: 当たった技の絵・ダメージの数字・光
@@ -206,10 +296,15 @@ export class GameView {
       const k = f.t / f.life;
       if (f.kind === "num" && f.value !== undefined) {
         const s = this.sprite("num", nNum++, () => new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }));
-        const tex = this.numberTexture(f.value);
+        const tex = this.numberTexture(f.value, f.color);
         if (s.material.map !== tex) { s.material.map = tex; s.material.needsUpdate = true; }
         s.position.set(f.pos.x + Math.sin(f.value) * 0.2, 1.2 + k * 0.8, f.pos.z); s.scale.set(0.9, 0.45, 1); s.renderOrder = 10;
         s.material.opacity = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
+        continue;
+      }
+      if (f.kind === "zap" && f.to) {   // ビリビリが飛び移る線
+        const m = this.ribbon("rib", nRib++, f.pos, f.to, 0.14, "#ffc400", 0.5); (m.material as THREE.MeshBasicMaterial).opacity = 1 - k;
+        const c = this.ribbon("rib", nRib++, f.pos, f.to, 0.05, "#ffffff", 0.51); (c.material as THREE.MeshBasicMaterial).opacity = 1 - k;
         continue;
       }
       if (f.kind === "tech" && f.tech && f.tech !== "enemy") {
@@ -228,6 +323,7 @@ export class GameView {
       s.scale.set(r, r, r); s.material.color.set(f.color); s.material.opacity = 1 - k;
     }
     this.hideRest("orb", nOrb); this.hideRest("glow", nGlow); this.hideRest("tech", nTech);
+    this.hideRest("rib", nRib); this.hideRest("ring", nRing); this.hideRest("post", nPost);
     this.hideRest("num", nNum); this.hideRest("hit", nHit); this.hideRest("fx", nFx);
 
     // 季節の舞うもの
