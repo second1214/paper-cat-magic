@@ -53,12 +53,21 @@ export class CatDoll {
     this.cards.get(name)!.visible = true; this.shown = name;
   }
 
+  private lastT = 0;
+  /** 歩き・走りのコマ送り位置。速さに合わせて積み上げる（t×速さで直接求めると、加速中にコマが飛び飛びになる）。 */
+  private stride = 0;
+
   /** t: 経過秒、facing: 右=1/左=-1、blinking: 点滅（無敵中）。 */
   update(t: number, state: CatState, facing: 1 | -1, speed: number, blinking: boolean) {
+    const dt = Math.min(0.1, Math.max(0, t - this.lastT)); this.lastT = t;
     let name: string, bob = 0, sy = 1;
     switch (state) {
-      case "walk": name = `A01_walk_${(Math.floor(t * Math.max(6, speed * 1.8)) % 4) + 1}`; bob = 0.02 * Math.abs(Math.sin(t * 12)); break;
-      case "dash": name = `A02_run_${(Math.floor(t * 16) % 4) + 1}`; bob = 0.06; break;
+      case "walk": {
+        this.stride += dt * (2.5 + speed * 1.1);            // 速さ5.2で約8コマ/秒
+        const f = Math.floor(this.stride) % 4;
+        name = `A01_walk_${f + 1}`; bob = f % 2 ? 0.025 : 0; break;
+      }
+      case "dash": this.stride += dt * 16; name = `A02_run_${(Math.floor(this.stride) % 4) + 1}`; bob = 0.06; break;
       case "hurt": name = "P14_hiss"; break;
       case "happy": name = "P03_sit_happy"; sy = 1 + 0.015 * Math.sin(t * 3); break;
       case "down": name = "P09_belly_up"; break;

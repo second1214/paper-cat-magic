@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { castGroups, planCast, type ToyDef } from "../src/core/wand";
+import { castGroups, groupSummary, planCast, type ToyDef } from "../src/core/wand";
 import { SPELLS } from "../src/core/spells";
 
 const toy = (slots: (string | null)[], extra: Partial<ToyDef> = {}): ToyDef => ({
@@ -71,5 +71,16 @@ describe("castGroups", () => {
   it("修飾と、それがかかる技をひとまとめにする", () => {
     const t = toy(["claw", "matatabi", "stare", "bite", null, "double", "claw", "hiss"]);
     expect(castGroups(t)).toEqual([[0, 1], [1, 4], [4, 8]]);
+  });
+});
+
+describe("groupSummary", () => {
+  it("まとまりごとの合計攻撃力を出す", () => {
+    const t = toy(["claw", "matatabi", "bite", "chain", "claw", "claw"]);
+    const g = groupSummary(t);
+    expect(g.map((x) => [x.start, x.end])).toEqual([[0, 1], [1, 3], [3, 6]]);
+    expect(g[0].damage).toBe(5);
+    expect(g[1].damage).toBe(Math.round(14 * 1.5 + 3));
+    expect(g[2].damage).toBe(10);
   });
 });

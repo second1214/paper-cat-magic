@@ -148,3 +148,26 @@ export function starterToy(): ToyDef {
   t.slots = ["claw", "claw", "matatabi", "bite", null, null];
   return t;
 }
+
+/** まとまり（1回で一緒に出る範囲）ごとの合計攻撃力と、使うやる気。 */
+export function groupSummary(toy: ToyDef): { start: number; end: number; damage: number; mana: number }[] {
+  const sum = (shots: Shot[]): number => shots.reduce((a, s) => a + s.stats.damage + sum(s.payload), 0);
+  return castGroups(toy).map(([start, end]) => {
+    const r = planCast(toy, start, Infinity);
+    return { start, end, damage: Math.round(sum(r.shots)), mana: r.manaUsed };
+  });
+}
+
+/** おもちゃの説明欄の数値。 */
+export function toyStats(t: ToyDef): [string, string][] {
+  const out: [string, string][] = [
+    ["スロット", `${t.slots.length}`],
+    ["やる気 最大", `${t.manaMax}`],
+    ["やる気 回復", `${t.manaRegen}/秒`],
+    ["振る間隔", `${t.castDelay}秒`],
+    ["休けい", `${t.recharge}秒`],
+  ];
+  if (t.baseMod?.homing) out.push(["性質", "技が少し追尾"]);
+  if (t.baseMod?.bounce) out.push(["性質", `技が${t.baseMod.bounce}回はね返る`]);
+  return out;
+}
