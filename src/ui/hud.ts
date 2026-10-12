@@ -7,6 +7,10 @@ export const isTouch = () => matchMedia("(pointer: coarse)").matches;
 
 const isMod = (id: string) => SPELLS[id].kind !== "attack";
 
+/** ママの場面絵とセリフ。 */
+const mama = (img: "scared" | "relief" | "pet" | "scream", line: string) =>
+  `<div class="mama"><img src="${import.meta.env.BASE_URL}mama/${img}.png" alt="ママ"><div class="say">${line}</div></div>`;
+
 /** 1つのアイテム（技／修飾）のアイコン。修飾には右向きの矢印を付ける。 */
 const icon = (id: string | null, extra = "") => {
   if (!id) return `<div class="spell empty ${extra}"></div>`;
@@ -92,6 +96,7 @@ export class Hud {
     const touch = isTouch();
     this.intro.innerHTML = `<div class="panel">
       <h2>ママを虫から守れ！</h2>
+      ${mama("scared", "きゃー！虫！<br>ねこちゃん、たすけてー！")}
       <p>ママは虫が大の苦手。おうちに入りこんだ虫を、おもちゃで追い払おう。</p>
       <div class="howto">
         <div><b>移動</b>${touch ? "画面の左半分をドラッグ" : "WASD / 矢印キー"}</div>
@@ -156,7 +161,7 @@ export class Hud {
       const s = SPELLS[r.id];
       return `<button class="card" data-i="${i}">${icon(r.id, "big")}<b>${s.name}</b><small class="tag">${KIND_LABEL[s.kind]}${isMod(r.id) ? "（右隣の技にかかる）" : ""}</small><small>${s.desc}</small></button>`;
     };
-    this.reward.innerHTML = `<div class="panel"><h2>${w.room.name}の虫を追い払った！</h2><p class="muted">1つ選んで手持ちに加えよう（「おもちゃ」ボタンでスロットにはめられます）</p>
+    this.reward.innerHTML = `<div class="panel"><h2>${w.room.name}の虫を追い払った！</h2>${mama("relief", "ふぅ…ありがとう。<br>次の部屋もお願いね")}<p class="muted">1つ選んで手持ちに加えよう（「おもちゃ」ボタンでスロットにはめられます）</p>
       <div class="row">${w.rewards.map(card).join("")}</div>
       <button class="skip">いらない</button></div>`;
     this.reward.querySelectorAll<HTMLButtonElement>("[data-i]").forEach((b) => b.onclick = () => w.takeReward(w.rewards[Number(b.dataset.i)]));
@@ -167,6 +172,7 @@ export class Hud {
     this.result.hidden = !(w.phase === "dead" || w.phase === "win");
     if (this.result.hidden) return;
     this.result.innerHTML = `<div class="panel"><h2>${w.phase === "win" ? "スズメバチを追い払った！" : "虫にやられた…"}</h2>
+      ${w.phase === "win" ? mama("pet", "よくやったね、<br>えらいえらい！") : mama("scream", "いやぁぁぁ！<br>虫がーっ！")}
       <p class="muted">${w.phase === "win" ? "おうちに平和が戻った。ママもひと安心。" : `${w.room.name}で力尽きた。ママが悲鳴を上げている…`}</p>
       <button class="again">もう一度</button></div>`;
     this.result.querySelector<HTMLButtonElement>(".again")!.onclick = () => this.onRestart();

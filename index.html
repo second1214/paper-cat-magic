@@ -45,6 +45,10 @@
       .legend { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; margin: 8px 0; }
       .legend > span { font-size: 13px; text-align: left; margin-right: 10px; }
       .legend.small .spell { transform: scale(.8); }
+      .mama { display: flex; gap: 12px; align-items: center; justify-content: center; margin: 4px 0 6px; }
+      .mama img { height: 150px; width: auto; filter: drop-shadow(0 3px 4px #0003); }
+      .mama .say { position: relative; background: #fff; border: 2px solid var(--line); border-radius: 14px; padding: 8px 12px; font-weight: 700; font-size: 15px; text-align: left; }
+      .mama .say::before { content: ""; position: absolute; left: -10px; top: 50%; transform: translateY(-50%); border: 8px solid transparent; border-right-color: var(--line); border-left: 0; }
       .example { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 6px 0; text-align: left; }
       .howto { display: grid; gap: 6px; text-align: left; background: #f3e9d9; border-radius: 12px; padding: 10px 12px; font-size: 14px; }
       .howto b { display: inline-block; min-width: 4.5em; color: #d9480f; }
@@ -84,6 +88,7 @@
         .spell .arrow { font-size: 10px; right: -9px; } .group { gap: 5px; padding: 4px 4px 2px; }
         #hearts { font-size: 20px; } #mana { width: 110px; height: 8px; }
         .panel { padding: 10px 14px; } .panel h2 { font-size: 18px; } .small, .howto { font-size: 12px; } .panel p { margin: 4px 0; }
+        .mama img { height: 96px; } .mama .say { font-size: 13px; }
         .pick small, .card small { font-size: 11px; } .card { width: 150px; padding: 8px; }
         #atkBtn { width: 84px; height: 84px; bottom: 22px; } #dashBtn { bottom: 30px; right: 112px; }
         #hint { top: 46px; }
