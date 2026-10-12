@@ -1,24 +1,15 @@
 // 敵などの紙ステッカーを canvas で描く（白いダイカット縁＋茶色の主線）。
 import * as THREE from "three";
 import type { EnemyType } from "../game/world";
+import { INK, stickerCanvas } from "../art/items";
 
-const INK = "#4a2a16";
 
 function sticker(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void): THREE.CanvasTexture {
-  const art = document.createElement("canvas"); art.width = w; art.height = h;
-  const ga = art.getContext("2d")!;
-  ga.lineJoin = "round"; ga.lineCap = "round";
-  draw(ga);
-  // 白い縁: シルエットを全方向にずらして重ねる
-  const sil = document.createElement("canvas"); sil.width = w; sil.height = h;
-  const gs = sil.getContext("2d")!;
-  gs.drawImage(art, 0, 0); gs.globalCompositeOperation = "source-in"; gs.fillStyle = "#fffdf8"; gs.fillRect(0, 0, w, h);
-  const out = document.createElement("canvas"); out.width = w; out.height = h;
-  const go = out.getContext("2d")!;
-  const B = Math.round(w * 0.035);
-  for (let a = 0; a < 24; a++) go.drawImage(sil, Math.cos(a / 24 * Math.PI * 2) * B, Math.sin(a / 24 * Math.PI * 2) * B);
-  go.drawImage(art, 0, 0);
-  const t = new THREE.CanvasTexture(out); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return canvasTexture(stickerCanvas(w, h, draw));
+}
+
+export function canvasTexture(c: HTMLCanvasElement): THREE.CanvasTexture {
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   return t;
 }
 
@@ -98,67 +89,6 @@ export function enemyTexture(type: EnemyType): THREE.CanvasTexture {
     g.fillStyle = "#ff9a3c"; g.beginPath(); g.arc(347, 45, 10, 0, 7); g.arc(392, 76, 10, 0, 7); g.fill();
     cuteEyes(g, 270, 180, 26, 62, "grumpy"); blush(g, 262, 238, 18); blush(g, 352, 238, 18);
     g.strokeStyle = INK; g.lineWidth = 6; g.beginPath(); g.moveTo(290, 250); g.quadraticCurveTo(310, 238, 330, 250); g.stroke();
-  });
-}
-
-/** おもちゃの先（飛んでいくもの）。右向き。 */
-export function lureTexture(lure: "feather" | "dragonfly" | "tissue"): THREE.CanvasTexture {
-  if (lure === "feather") return sticker(200, 110, (g) => {
-    g.fillStyle = "#ff9ec4"; g.strokeStyle = INK; g.lineWidth = 5;
-    g.beginPath(); g.moveTo(20, 55); g.quadraticCurveTo(90, 0, 185, 50); g.quadraticCurveTo(90, 110, 20, 55); g.fill(); g.stroke();
-    g.strokeStyle = "#fff"; g.lineWidth = 3; g.beginPath(); g.moveTo(25, 55); g.lineTo(180, 51); g.stroke();
-    g.strokeStyle = "#e0709a"; g.lineWidth = 2; for (let k = 0; k < 7; k++) { g.beginPath(); g.moveTo(45 + k * 18, 53); g.lineTo(35 + k * 18, 30 + (k % 2) * 4); g.moveTo(45 + k * 18, 56); g.lineTo(35 + k * 18, 80 - (k % 2) * 4); g.stroke(); }
-  });
-  if (lure === "dragonfly") return sticker(220, 160, (g) => {
-    g.fillStyle = "rgba(210,235,255,.85)"; g.strokeStyle = INK; g.lineWidth = 4;
-    for (const [x, y, r] of [[105, 45, -0.35], [105, 115, 0.35], [140, 50, -0.15], [140, 110, 0.15]] as const) { g.beginPath(); g.ellipse(x, y, 42, 14, r, 0, 7); g.fill(); g.stroke(); }
-    g.fillStyle = "#2f80d0"; g.lineWidth = 5; g.beginPath(); g.roundRect(20, 72, 130, 16, 8); g.fill(); g.stroke();
-    g.fillStyle = "#1f5fa0"; g.beginPath(); g.ellipse(165, 80, 26, 20, 0, 0, 7); g.fill(); g.stroke();
-    g.fillStyle = "#7fd0ff"; g.beginPath(); g.arc(180, 72, 9, 0, 7); g.arc(180, 90, 9, 0, 7); g.fill();
-  });
-  return sticker(150, 140, (g) => {   // ティッシュを丸めた玉
-    g.fillStyle = "#ffffff"; g.strokeStyle = INK; g.lineWidth = 5;
-    g.beginPath();
-    for (let k = 0; k <= 14; k++) { const a = (k / 14) * Math.PI * 2, r = 55 + (k % 2 ? 8 : -4); g.lineTo(75 + Math.cos(a) * r, 70 + Math.sin(a) * r * 0.92); }
-    g.closePath(); g.fill(); g.stroke();
-    g.strokeStyle = "#b8b8c8"; g.lineWidth = 3;
-    for (const [x0, y0, x1, y1] of [[45, 50, 80, 70], [90, 40, 70, 90], [100, 80, 60, 100], [50, 85, 85, 55]]) { g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
-  });
-}
-
-/** 技が当たったときの絵（爪あと・かみつき・毛玉・シャー）。 */
-export function techTexture(tech: "claw" | "bite" | "hairball" | "hiss"): THREE.CanvasTexture {
-  if (tech === "claw") return sticker(200, 200, (g) => {
-    for (let k = 0; k < 3; k++) {
-      g.strokeStyle = INK; g.lineWidth = 20; g.beginPath(); g.moveTo(50 + k * 38, 30); g.quadraticCurveTo(30 + k * 38, 100, 60 + k * 38, 175); g.stroke();
-      g.strokeStyle = "#ff5a4a"; g.lineWidth = 11; g.stroke();
-    }
-  });
-  if (tech === "bite") return sticker(220, 200, (g) => {
-    g.fillStyle = "#fff"; g.strokeStyle = INK; g.lineWidth = 6;
-    for (const up of [true, false]) {
-      g.beginPath();
-      const y = up ? 70 : 130, s = up ? 1 : -1;
-      g.moveTo(25, y - s * 25); g.quadraticCurveTo(110, y - s * 70, 195, y - s * 25);
-      for (let k = 6; k >= 0; k--) { const x = 30 + k * 27; g.lineTo(x + 13, y + s * (k === 1 || k === 5 ? 34 : 18)); g.lineTo(x, y); }
-      g.closePath(); g.fill(); g.stroke();
-    }
-    g.fillStyle = "#ff6b6b"; g.font = "bold 44px sans-serif"; g.textAlign = "center"; g.fillText("ガブッ", 110, 112);
-  });
-  if (tech === "hairball") return sticker(220, 220, (g) => {
-    g.fillStyle = "#e0a060"; g.strokeStyle = INK; g.lineWidth = 6;
-    g.beginPath();
-    for (let k = 0; k <= 22; k++) { const a = (k / 22) * Math.PI * 2, r = k % 2 ? 100 : 70; g.lineTo(110 + Math.cos(a) * r, 110 + Math.sin(a) * r); }
-    g.closePath(); g.fill(); g.stroke();
-    g.fillStyle = "#fff4e0"; g.beginPath(); g.arc(110, 110, 42, 0, 7); g.fill();
-    g.strokeStyle = "#b07a3c"; g.lineWidth = 3; for (let k = 0; k < 8; k++) { const a = k * 0.8; g.beginPath(); g.moveTo(110, 110); g.lineTo(110 + Math.cos(a) * 38, 110 + Math.sin(a) * 38); g.stroke(); }
-  });
-  return sticker(240, 160, (g) => {
-    g.fillStyle = "#c9a6ff"; g.strokeStyle = INK; g.lineWidth = 6;
-    g.beginPath();
-    for (let k = 0; k <= 16; k++) { const a = (k / 16) * Math.PI * 2, r = k % 2 ? 100 : 70; g.lineTo(120 + Math.cos(a) * r, 80 + Math.sin(a) * r * 0.62); }
-    g.closePath(); g.fill(); g.stroke();
-    g.fillStyle = "#3b1d6e"; g.font = "bold 50px sans-serif"; g.textAlign = "center"; g.fillText("シャー", 120, 98);
   });
 }
 

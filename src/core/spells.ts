@@ -109,3 +109,29 @@ export const SPELLS: Record<string, SpellDef> = {
 };
 
 export const SPELL_IDS = Object.keys(SPELLS);
+
+/** 説明欄に出す数値（ラベル・値）。Magicraft の魔法説明のように、選ぶ判断に使う数字をそろえて見せる。 */
+export function spellStats(def: SpellDef): [string, string][] {
+  const out: [string, string][] = [];
+  if (def.kind === "attack" && def.projectile) {
+    const p = def.projectile;
+    out.push(["攻撃力", `${p.damage}`]);
+    out.push(["やる気", `${def.mana}`]);
+    out.push(["弾の速さ", `${p.speed}`]);
+    out.push(["とどく距離", `${Math.round(p.speed * p.life)}マス`]);
+    if (p.explode) out.push(["範囲", `半径${p.explode}`]);
+    if (p.slow) out.push(["すくみ", `${p.slow}秒`]);
+    if (p.pierce) out.push(["貫通", `${p.pierce}匹`]);
+    return out;
+  }
+  out.push(["やる気", `${def.mana}`]);
+  const m = def.modifier;
+  if (m?.damageMul || m?.damageAdd) out.push(["攻撃力", `×${m.damageMul ?? 1}${m.damageAdd ? ` ＋${m.damageAdd}` : ""}`]);
+  if (m?.homing) out.push(["追尾", "あり"]);
+  if (m?.bounce) out.push(["はね返り", `＋${m.bounce}回`]);
+  if (m?.pierce) out.push(["貫通", `＋${m.pierce}匹`]);
+  if (m?.speedMul && m.speedMul !== 1) out.push(["弾の速さ", `×${m.speedMul}`]);
+  if (def.kind === "multicast") out.push(["同時に出す", `右の${def.count}つ`]);
+  if (def.kind === "trigger") out.push(["命中で", "さらに右の技"]);
+  return out;
+}
