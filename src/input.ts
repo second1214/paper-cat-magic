@@ -9,10 +9,12 @@ export class Controls {
   private stick: { id: number; ox: number; oy: number; x: number; y: number } | null = null;
   private atkHeld = false;
   onToggleBag: () => void = () => {};
+  onPause: () => void = () => {};
 
   constructor(el: HTMLElement, private stickEl: HTMLElement, atkBtn: HTMLElement, dashBtn: HTMLElement) {
     addEventListener("keydown", (e) => {
       if (e.code === "Tab" || e.code === "KeyE") { e.preventDefault(); this.onToggleBag(); return; }
+      if (e.code === "Escape" || e.code === "KeyP") { e.preventDefault(); this.onPause(); return; }
       if (e.code === "Space" || e.code === "ShiftLeft") { e.preventDefault(); this.dashQueued = true; }
       this.keys.add(e.code);
     });
