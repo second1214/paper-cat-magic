@@ -37,13 +37,17 @@ export const ENEMY: Record<EnemyType, { hp: number; r: number; speed: number; fl
   camelKing: { hp: 340, r: 1.0, speed: 1.0, boss: true, name: "カマドウマ親分" },
   queen: { hp: 320, r: 1.05, speed: 0.9, boss: true, name: "毛虫の女王" },
   mama: { hp: 1e9, r: 0.7, speed: 1.6, boss: true, name: "ママ" },   // さいご: 倒せない。猫を病院へ連れて行こうと近づいてくる
-  // ときどきリビングに来る子どもたち。攻撃は効かない（虫ではない）。つかまると数秒だっこされて動けず、ダメージ
+  // ときどきリビングに来る子どもたち。猫と遊びたくて追いかけてくるが、猫は必死に逃げる。
+  // 攻撃は効かない（虫ではない）。つかまると数秒だっこでもみくちゃにされて動けず、♥が減る
   boy: { hp: 1e9, r: 0.5, speed: 2.7, kid: true, name: "お兄ちゃん（6さい）" },
   girl: { hp: 1e9, r: 0.45, speed: 1.6, kid: true, name: "妹（3さい）" },
 };
 export const isKid = (t: EnemyType) => !!ENEMY[t].kid;
-/** 子どもにだっこされている秒数（お兄ちゃんは短く、妹はなかなか離さない）。 */
+/** 子どもにだっこされている秒数（お兄ちゃんは短く、妹はなかなか離さない）と、逃げられたあと次に追いかけるまで。 */
 const HUG: Partial<Record<EnemyType, number>> = { boy: 2.0, girl: 2.8 };
+const REST: Partial<Record<EnemyType, number>> = { boy: 2.5, girl: 3.5 };
+/** 子どもの声。 */
+const KID_CALL: Partial<Record<EnemyType, string>> = { boy: "お兄ちゃん「ねこちゃん、あそぼー！」", girl: "妹「にゃんにゃ、まってー！」" };
 const isBoss = (t: EnemyType) => !!ENEMY[t].boss;
 const isFly = (t: EnemyType) => !!ENEMY[t].fly;
 
@@ -166,6 +170,8 @@ export interface Player {
   /** 子どもにだっこされている残り秒と、だっこしている子。 */
   held: number;
   holder: number | null;
+  /** 子どもがすぐそばにいて、必死に逃げている。 */
+  scared: boolean;
 }
 
 /** 持っているおもちゃ。やる気と、次に使うスロットはおもちゃごと（Magicraft の杖と同じ）。 */
@@ -315,7 +321,7 @@ export class World {
     this.player = {
       pos: { x: 0, z: 0 }, vel: { x: 0, z: 0 }, hp: 6, maxHp: 6, radius: 0.32,
       aim: { x: 1, z: 0 }, facing: 1, iframes: 0, dash: 0, dashCd: 0, hurt: 0,
-      mana: first.manaMax, cursor: 0, castCd: 0, recharging: false, target: null, pounce: 0, power: 0, shield: 0, held: 0, holder: null,
+      mana: first.manaMax, cursor: 0, castCd: 0, recharging: false, target: null, pounce: 0, power: 0, shield: 0, held: 0, holder: null, scared: false,
     };
     // 難易度と、ねこの成長（にぼしで買った永続強化）
     this.baseMaxHp = DIFFS[opts.difficulty].startHp;
@@ -444,7 +450,7 @@ export class World {
       const e = makeEnemy(this.nextId++, t, cellCenter(layout, layout.cols - 4 - k * 2, (layout.rows >> 1) + (k ? 2 : -2)), 0, 1);
       e.spawn = 1.2; e.phase = 2.5; this.enemies.push(e);
     }
-    if (this.room.kids.length) this.notify(this.room.kids.length > 1 ? "子どもたちが遊びに来ている！つかまらないように" : `${ENEMY[this.room.kids[0]].name}が遊びに来ている！`);
+    if (this.room.kids.length) this.notify(this.room.kids.length > 1 ? "子どもたちが猫と遊びたがっている！にげて！" : `${KID_CALL[this.room.kids[0]]} にげて！`);
   }
 
   /** 強い虫になる確率（季節・部屋が進むほど、呪いで上がる）。 */
@@ -558,7 +564,7 @@ export class World {
       p.vel = { x: 0, z: 0 };
       if (p.held <= 0 || !k) {
         p.held = 0; p.holder = null; p.iframes = Math.max(p.iframes, 1.2);
-        if (k) { k.phase = 5; p.pos = { ...k.pos }; p.vel = { x: (p.facing) * 6, z: 0 }; }
+        if (k) { k.phase = REST[k.type] ?? 3; p.pos = { ...k.pos }; p.vel = { x: p.facing * 7, z: 0 }; this.notify("にげた！"); }
       }
       return;
     }
@@ -574,7 +580,9 @@ export class World {
       this.fx.push({ kind: "puff", pos: { ...p.pos }, radius: 0.5, color: "#ffffff", t: 0, life: 0.35 });
       this.chargeSub("dash", 1);
     }
-    const speed = p.dash > 0 ? 13 : 5.2 * B.speedMul;
+    // 子どもがそばに来ると、必死に逃げる（少し速くなる）
+    p.scared = this.enemies.some((e) => isKid(e.type) && e.spawn <= 0 && e.phase <= 0 && dist(e.pos, p.pos) < 3.2);
+    const speed = p.dash > 0 ? 13 : 5.2 * B.speedMul * (p.scared ? 1.15 : 1);
     p.dash = Math.max(0, p.dash - dt);
     if (p.dash <= 0) {
       const k = Math.min(1, dt * 14);
@@ -995,18 +1003,18 @@ export class World {
   }
 
   /**
-   * 子ども: 猫を見つけると「ねこちゃーん！」と追いかけてくる（お兄ちゃんは走ってはひと休み、妹はとことこ）。
-   * つかまると数秒だっこされて動けず、♥が減る。はなしたあとはしばらく別の遊びに夢中。
+   * 子ども: 猫と遊びたくて、部屋のどこにいても追いかけてくる（お兄ちゃんは走ってはひと息、妹はとことこ）。
+   * つかまると数秒だっこでもみくちゃにされて動けず、♥が減る。逃げられると少しだけ息をととのえて、また追いかけてくる。
    */
   private updateKid(e: Enemy, dt: number, to: Vec) {
     const p = this.player;
     e.phase = Math.max(0, e.phase - dt);
     if (p.holder === e.id) { e.vel = { x: 0, z: 0 }; return; }
     const d = dist(e.pos, p.pos);
-    if (e.phase <= 0 && d < 8 && p.held <= 0) {
+    if (e.phase <= 0 && p.held <= 0) {
       const go = e.type === "girl" || (e.t % 1.5) < 1.0;
       e.vel = go ? { x: to.x * e.speed, z: to.z * e.speed } : { x: e.vel.x * 0.85, z: e.vel.z * 0.85 };
-    } else {   // ぶらぶら遊ぶ
+    } else {   // ひと息ついて、うろうろ
       const a = Math.floor(e.t / 1.6) * 2.3 + e.id;
       e.vel = { x: Math.cos(a) * e.speed * 0.35, z: Math.sin(a) * e.speed * 0.35 };
     }
@@ -1014,7 +1022,7 @@ export class World {
       this.hurtPlayer(1, e.pos);
       p.held = HUG[e.type] ?? 2; p.holder = e.id; p.vel = { x: 0, z: 0 }; p.hurt = 0;
       this.events.push("hug");
-      this.notify(`${ENEMY[e.type].name}にだっこされた！（ダッシュでじたばた）`);
+      this.notify(`${ENEMY[e.type].name}につかまった！ダッシュでじたばた！`);
     }
   }
 

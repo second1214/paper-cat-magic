@@ -227,7 +227,8 @@ export class GameView {
     // 主人公
     const p = world.player, speed = Math.hypot(p.vel.x, p.vel.z);
     let state: CatState = speed > 0.6 ? "walk" : "idle";
-    if (p.dash > 0) state = "dash";
+    if (p.dash > 0 || (p.scared && speed > 0.6)) state = "dash";   // 子どもから必死に逃げる
+    if (p.scared && speed <= 0.6) state = "hurt";
     if (p.pounce > 0) state = "jump";
     if (p.hurt > 0) state = "hurt";
     if (world.phase === "reward" || world.phase === "win") state = "happy";
@@ -238,6 +239,8 @@ export class GameView {
     this.cat.group.visible = !hug?.drawsCat;
     this.cat.group.position.set(p.pos.x, hug ? ENEMY_H[holder!.type] * 0.42 : 0, p.pos.z + (hug ? 0.15 : 0));
     this.cat.group.rotation.x = -LEAN;
+    this.cat.group.rotation.z = hug ? Math.sin(world.time * 30) * 0.12 : 0;   // だっこされてじたばた
+    if (hug) state = "hurt";
     this.cat.update(world.time + 0.0001, state, p.facing, speed, p.iframes > 0 && world.phase === "play" && p.hurt <= 0, 1 - p.pounce / 0.4);
     this.aimMark.position.set(p.pos.x + p.aim.x * 1.6, 0.03, p.pos.z + p.aim.z * 1.6);
     this.aimMark.visible = world.phase === "play";
