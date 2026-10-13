@@ -1345,11 +1345,7 @@ export class World {
     if (r.wave + 1 < r.waves.length) { r.wave++; this.spawnWave(); return; }
     r.cleared = true;
     this.projectiles = this.projectiles.filter((p) => p.owner === "player");
-    if (this.enemies.length) {   // 子どもはママに呼ばれて帰る
-      for (const e of this.enemies) this.fx.push({ kind: "puff", pos: { ...e.pos }, radius: 1, color: "#ffffff", t: 0, life: 0.5 });
-      this.enemies = []; this.player.held = 0; this.player.holder = null;
-      this.notify("ママ「おやつよ〜」 子どもたちは行ってしまった");
-    }
+    // 子どもは部屋を片付けたあとも残って追いかけてくる（扉まで逃げきる）
     this.events.push("clear");
     const p = this.player;
     this.cleared++; if (r.kind === "boss") this.bosses++;
