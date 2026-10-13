@@ -96,3 +96,30 @@ describe("おうちのもの属性", () => {
     expect(foe.wet).toBeGreaterThan(3);
   });
 });
+
+describe("召喚（Magicraft と同じ: 修飾は仲間の攻撃にかかる・上限なし）", () => {
+  it("友達猫は虫を追いかけてひっかく", () => {
+    const { w, foe } = arena(["friend", null], { dx: 4, dz: 0 });
+    run(w, 1 / 60); run(w, 4, false);
+    expect(1000 - foe.hp).toBeGreaterThanOrEqual(5 * 3);
+  });
+  it("修飾・属性が友達猫の攻撃にかかる", () => {
+    const { w, foe } = arena(["water", "matatabi", "friend", null], { dx: 2, dz: 0 });
+    run(w, 1 / 60); run(w, 1.5, false);
+    expect(foe.wet).toBeGreaterThan(0);
+    const one = w.fx.find((f) => f.kind === "num");
+    expect(one?.value).toBe(Math.round(5 * 1.5 + 3));
+  });
+  it("ルンバは部屋の中を走り回り、ぶつかった虫を吸いこむ", () => {
+    const { w, foe } = arena(["roomba", null], { dx: 2.5, dz: 0 });
+    run(w, 1 / 60); run(w, 6, false);
+    expect(1000 - foe.hp).toBeGreaterThan(0);
+    const L = w.room.layout, r = w.projectiles.find((p) => p.tech === "roomba")!;
+    expect(Math.abs(r.pos.x) < L.cols / 2 && Math.abs(r.pos.z) < L.rows / 2).toBe(true);
+  });
+  it("数の上限はない", () => {
+    const { w } = arena(["friend"], { dx: 40, dz: 0 });
+    for (let k = 0; k < 6; k++) { w.player.castCd = 0; run(w, 1 / 60); run(w, 0.2, false); }
+    expect(w.projectiles.filter((p) => p.tech === "friend").length).toBe(6);
+  });
+});
