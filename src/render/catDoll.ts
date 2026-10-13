@@ -6,7 +6,7 @@ const STAND = 1.45; // 立ち姿の高さ（ワールド単位）。カメラを
 /** 画像名と、1ピクセルあたりのワールド長。素材ごとに描かれた縮尺が違うので個別に揃える。 */
 const FRAMES: Record<string, number> = {
   A04_blink_1: STAND / 365, A04_blink_2: STAND / 365, A04_blink_3: STAND / 365,
-  A01_walk_1: STAND / 297, A01_walk_2: STAND / 297, A01_walk_3: STAND / 297, A01_walk_4: STAND / 297,
+  A01_walk_1: STAND / 300, A01_walk_2: STAND / 300, A01_walk_3: STAND / 300, A01_walk_4: STAND / 300,
   A02_run_1: STAND / 297, A02_run_2: STAND / 297, A02_run_3: STAND / 297, A02_run_4: STAND / 297,
   A05_jump_1: STAND / 297, A05_jump_2: STAND / 297, A05_jump_3: STAND / 297, A05_jump_4: STAND / 297,
   A03_turn_4: STAND / 322,
@@ -63,13 +63,12 @@ export class CatDoll {
     let name: string, bob = 0, sy = 1, tilt = 0;
     switch (state) {
       case "walk": {
-        // 歩き素材は脚の動きが小さいので、紙人形らしく左右に傾けながら小さく弾ませて歩かせる
-        this.stride += dt * (1.6 + speed * 0.45);           // 1歩 = stride 1（速さ5.2で約4歩/秒）
+        // 4コマ = 2歩（そろう→右足→そろう→左足）。紙人形らしく、歩みに合わせてわずかに弾ませて傾ける
+        this.stride += dt * (1.2 + speed * 0.35);           // 1歩 = stride 1（速さ5.2で約3歩/秒）
         const ph = this.stride * Math.PI;
         name = `A01_walk_${(Math.floor(this.stride * 2) % 4) + 1}`;
-        bob = Math.abs(Math.sin(ph)) * 0.12;
-        tilt = Math.sin(ph) * 0.12;
-        sy = 1 - Math.abs(Math.cos(ph)) * 0.035;            // 着地でわずかにつぶれる
+        bob = Math.abs(Math.sin(ph)) * 0.05;
+        tilt = Math.sin(ph) * 0.035;
         break;
       }
       case "jump": {
