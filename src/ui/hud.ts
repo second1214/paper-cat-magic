@@ -1,11 +1,11 @@
 // HTML の HUD と各画面（はじめに・ごほうび選び・おもちゃの編集・結果）。
 // Magicraft の説明欄のように、アイテムは「絵・名前・種類・数値・説明」をいつも同じ形で見せる。
-import { ELEMENT_INFO, KIND_LABEL, MOTION_LABEL, SPELLS, spellStats } from "../core/spells";
+import { baseId, ELEMENT_INFO, KIND_LABEL, MOTION_LABEL, SPELLS, spellDef, spellStats, starsOf } from "../core/spells";
 import { groupSummary, TOYS, toyStats, type ToyDef } from "../core/wand";
 import { buyUpgrade, canPick, loadRecord, recordRun, recordText } from "./record";
 import { DIFFS, runReward, UPGRADES } from "../core/meta";
 import { enemyTexture } from "../render/stickers";
-import { ENEMY, type EnemyType } from "../game/world";
+import { ENEMY, POTIONS, type EnemyType } from "../game/world";
 
 const bugUrls = new Map<EnemyType, string>();
 /** タイトル用の虫の絵（ゲーム中と同じステッカー）。 */
@@ -15,13 +15,13 @@ const bugUrl = (t: EnemyType) => {
   return u;
 };
 import { REWARD_INFO, type Choice, type World } from "../game/world";
-import { elementCanvas, gearCanvas, relicCanvas, rewardCanvas, spellCanvas, toyCanvas, urlOf } from "../art/items";
+import { elementCanvas, gearCanvas, kibbleCanvas, relicCanvas, rewardCanvas, spellCanvas, toyCanvas, urlOf } from "../art/items";
 import { bonusRows, GEAR, GEAR_FX, GEAR_IDS, GEAR_SLOTS, gearBonus, RARITY, RELIC_IDS, RELICS, SETS, setCounts, SLOT_NAME, type Gear, type GearItem } from "../core/items";
 
 export const isTouch = () => matchMedia("(pointer: coarse)").matches;
 
-const isMod = (id: string) => SPELLS[id].kind !== "attack";
-const spellImg = (id: string) => urlOf(spellCanvas(id, SPELLS[id].projectile?.tech));
+const isMod = (id: string) => spellDef(id).kind !== "attack";
+const spellImg = (id: string) => urlOf(spellCanvas(baseId(id), spellDef(id).projectile?.tech));
 
 /** ママの場面絵とセリフ。 */
 const mama = (img: "scared" | "relief" | "pet" | "scream", line: string, small = false) =>
@@ -30,9 +30,9 @@ const mama = (img: "scared" | "relief" | "pet" | "scream", line: string, small =
 /** スロット・手持ちの1マス。修飾には「右にかかる」矢印。 */
 const cell = (id: string | null, attrs = "", extra = "") => {
   if (!id) return `<button class="cell empty ${extra}" ${attrs}></button>`;
-  const s = SPELLS[id], mod = isMod(id);
+  const s = spellDef(id), mod = isMod(id);
   return `<button class="cell ${mod ? "mod" : "atk"} ${extra}" style="--c:${s.color}" ${attrs}>
-    <img src="${spellImg(id)}" alt=""><span class="badge">${s.modifier?.element ? "属性" : KIND_LABEL[s.kind]}</span>${mod ? '<span class="arrow">▶</span>' : ""}</button>`;
+    <img src="${spellImg(id)}" alt="">${starsOf(id) ? `<span class="stars">${"★".repeat(starsOf(id))}</span>` : ""}<span class="badge">${s.modifier?.element ? "属性" : KIND_LABEL[s.kind]}</span>${mod ? '<span class="arrow">▶</span>' : ""}</button>`;
 };
 
 /** おもちゃ・レリック・装備のマス。 */
@@ -48,7 +48,7 @@ const statsTable = (rows: [string, string][]) =>
 
 /** アイテムの説明カード（Magicraft の魔法説明のような形）。 */
 function spellCard(id: string, attrs = "") {
-  const s = SPELLS[id], mod = isMod(id);
+  const s = spellDef(id), mod = isMod(id);
   return `<div class="card" ${attrs}>
     <div class="head"><img src="${spellImg(id)}" alt=""><div><b>${s.name}</b><span class="tag ${mod ? "mod" : "atk"}">${mod ? (s.modifier?.element ? "属性 ▶右の技につく" : "修飾 ▶右の技にかかる") : `技（${MOTION_LABEL[s.projectile!.motion]}）`}</span></div></div>
     ${statsTable(spellStats(s))}<p class="desc">${s.desc}</p>${elementNote(s.modifier?.element)}</div>`;
@@ -117,6 +117,9 @@ export class Hud {
   bagOpen = false;
   /** 一時停止メニューを開いている。 */
   paused = false;
+  /** 音のオン・オフ（main から渡す）。 */
+  onMute: () => boolean = () => false;
+  muted: () => boolean = () => false;
   private screen: Screen = "title";
   private zukanSel = "claw";
   private recorded = new WeakSet<World>();
@@ -131,6 +134,7 @@ export class Hud {
   constructor(private world: () => World, private onRestart: () => void, private onTitle: () => void, private onStart: (difficulty: number) => void) {
     this.el("bagBtn").addEventListener("click", () => this.toggleBag());
     this.el("pauseBtn").addEventListener("click", () => this.togglePause());
+    this.el("muteBtn").addEventListener("click", () => { this.onMute(); this.lastKey = ""; });
     document.body.classList.toggle("touch", isTouch());
   }
 
@@ -155,13 +159,16 @@ export class Hud {
     }).join("");
     this.el("manaFill").style.width = `${(p.mana / w.manaMax) * 100}%`;
     this.el("manaNum").textContent = `${Math.floor(p.mana)}/${w.manaMax}`;
+    this.el("coins").innerHTML = `<img src="${urlOf(kibbleCanvas())}" alt="">${w.coins}`;
+    document.body.classList.toggle("final", w.room.kind === "final" && w.phase === "play");
+    this.el("muteBtn").textContent = this.muted() ? "♪×" : "♪";
     this.el("room").textContent = w.title;
     const toast = this.el("toast");
     toast.hidden = !w.toast; if (w.toast) toast.textContent = w.toast.text;
 
     // 記録（やられた・守りきったときに一度だけ）
     if ((w.phase === "dead" || w.phase === "win") && !this.recorded.has(w)) { this.recorded.add(w); this.earned = runReward(w.cleared, w.bosses, w.phase === "win", w.opts.difficulty); recordRun(w.room.act, w.room.index, w.phase === "win", w.opts.difficulty, this.earned); }
-    const key = JSON.stringify([w.toys.map((h) => h.def), w.cur, w.relics, w.gear, this.tab, this.pick, w.bag, p.cursor, p.recharging, this.bagOpen, this.paused, this.screen, this.zukanSel, this.sel, w.phase, w.choices, w.doorOpen, w.room.act, w.room.index]);
+    const key = JSON.stringify([w.coins, w.shop?.items, w.shop?.rerollCost, w.room.kind, w.toys.map((h) => h.def), w.cur, w.relics, w.gear, this.tab, this.pick, w.bag, p.cursor, p.recharging, this.bagOpen, this.paused, this.screen, this.zukanSel, this.sel, w.phase, w.choices, w.doorOpen, w.room.act, w.room.index]);
     if (key === this.lastKey) return;
     this.lastKey = key;
 
@@ -184,6 +191,7 @@ export class Hud {
     this.renderPause();
     this.renderBag(w);
     this.renderReward(w);
+    this.renderShop(w);
     this.renderResult(w);
   }
 
@@ -379,13 +387,41 @@ export class Hud {
     el.querySelector<HTMLButtonElement>(".skip")!.onclick = () => w.takeReward(null);
   }
 
+  /** ボス猫のお店（Magicraft のお店: 買う・品ぞろえを入れ替える・鍛冶で合成。売ることはできない）。 */
+  private renderShop(w: World) {
+    const el = this.el("shopPanel");
+    el.hidden = w.phase !== "shop" || !w.shop;
+    if (el.hidden || !w.shop) return;
+    const sh = w.shop;
+    const items = sh.items.map((it, i) => {
+      const can = !it.sold && w.coins >= it.price;
+      const icon = it.kind === "spell" ? cell(it.id, "tabindex=-1") : `<div class="potion">${it.id === "milk" ? "🥛" : it.id === "churu" ? "🍬" : "🐟"}</div>`;
+      const name = it.kind === "spell" ? spellDef(it.id).name : POTIONS[it.id].name;
+      const desc = it.kind === "spell" ? spellDef(it.id).desc : POTIONS[it.id].desc;
+      return `<div class="sitem ${it.sold ? "sold" : ""}" ${it.kind === "spell" ? `data-info="${it.id}"` : ""}>${icon}<div class="sname"><b>${name}</b><small>${desc}</small></div>
+        <button data-buy="${i}" ${can ? "" : "disabled"}>${it.sold ? "売り切れ" : `<img src="${urlOf(kibbleCanvas())}" alt="">${it.price}`}</button></div>`;
+    }).join("");
+    const forge = w.forgeable();
+    el.innerHTML = `<div class="panel shopPanel">
+      <div class="shead"><h2>ボス猫のお店</h2><span class="wallet"><img src="${urlOf(kibbleCanvas())}" alt="">${w.coins}</span>
+        <button class="reroll" ${w.coins >= sh.rerollCost ? "" : "disabled"}>品ぞろえを入れ替える <img src="${urlOf(kibbleCanvas())}" alt="">${sh.rerollCost}</button><button class="close">閉じる</button></div>
+      <div class="sitems">${items}</div>
+      <div class="forge"><b>鍛冶（合成）</b><span class="muted">手持ちの同じ技3つ → ★の技1つ（強くなる）</span>
+        <div class="fcells">${forge.length ? forge.map((id) => `<div class="fbtn" role="button" tabindex="0" data-forge="${id}">${cell(id, "tabindex=-1")}<span>×3 → ${spellDef(id + "+").name}</span></div>`).join("") : `<span class="muted">合成できる技はまだない（同じ技を3つ集めよう）</span>`}</div></div>
+    </div>`;
+    el.querySelectorAll<HTMLButtonElement>("[data-buy]").forEach((b) => b.onclick = () => { w.buy(Number(b.dataset.buy)); this.lastKey = ""; });
+    el.querySelectorAll<HTMLElement>("[data-forge]").forEach((b) => b.onclick = () => { w.forge(b.dataset.forge!); this.lastKey = ""; });
+    el.querySelector<HTMLButtonElement>(".reroll")!.onclick = () => { w.reroll(); this.lastKey = ""; };
+    el.querySelector<HTMLButtonElement>(".close")!.onclick = () => { w.closeShop(); this.lastKey = ""; };
+  }
+
   private renderResult(w: World) {
     const el = this.el("result");
     el.hidden = !(w.phase === "dead" || w.phase === "win");
     if (el.hidden) return;
-    el.innerHTML = `<div class="panel"><h2>${w.phase === "win" ? "1年間、おうちを守りきった！" : "虫にやられた…"}</h2>
-      ${w.phase === "win" ? mama("pet", "よくやったね、<br>えらいえらい！") : mama("scream", "いやぁぁぁ！<br>虫がーっ！")}
-      <p class="muted">${w.phase === "win" ? "秋から夏まで、ぜんぶの虫を追い払った。" : `${w.title} で力尽きた。`}</p>
+    el.innerHTML = `<div class="panel"><h2>${w.phase === "win" ? "ママにつかまった！" : "虫にやられた…"}</h2>
+      ${w.phase === "win" ? mama("pet", "つかまえた〜♪<br>病院でワクチン打とうね。<br>1年間ありがとう！") : mama("scream", "いやぁぁぁ！<br>虫がーっ！")}
+      <p class="muted">${w.phase === "win" ? "秋から夏まで、ぜんぶの虫を追い払った。さいごは病院へ…（おしまい）" : `${w.title} で力尽きた。`}</p>
       <p class="nibline">にぼし <b>+${this.earned}</b>（${DIFFS[w.opts.difficulty].name}・片付けた部屋 ${w.cleared}）　タイトルの「ねこの成長」で使える</p>
       <div class="menu"><button class="go again">もう一度</button><button class="toTitle">タイトルへ</button></div></div>`;
     el.querySelector<HTMLButtonElement>(".again")!.onclick = () => this.onRestart();

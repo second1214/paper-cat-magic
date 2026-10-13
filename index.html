@@ -25,8 +25,10 @@
       #room { color: #fff; font-weight: 700; background: #0006; padding: 4px 12px; border-radius: 999px; font-size: 14px; }
       #roomBox .row { display: flex; gap: 6px; }
       #bagBtn, #pauseBtn { pointer-events: auto; font-weight: 700; }
-      #pauseBtn { width: 40px; padding: 8px 0; }
-      body.titling #status, body.titling #slots, body.titling #roomBox, body.titling #help, body.titling .tbtn, body.titling #hint { visibility: hidden; }
+      #pauseBtn, #muteBtn { width: 40px; padding: 8px 0; }
+      #muteBtn { pointer-events: auto; font-weight: 700; }
+      body.titling #roomBox { visibility: visible; z-index: 20; } body.titling #room, body.titling #bagBtn, body.titling #pauseBtn { visibility: hidden; }
+      body.titling #status, body.titling #slots, body.titling #help, body.titling .tbtn, body.titling #hint { visibility: hidden; }
       #slots { left: 50%; top: 6px; transform: translateX(-50%); display: flex; align-items: flex-start; gap: 8px; background: #0007; padding: 6px 10px 2px; border-radius: 14px; }
       #slots .toyIcon { width: 40px; height: 40px; margin-top: 3px; }
       #slots .rest { color: #ffd8a8; font-size: 11px; align-self: center; }
@@ -127,6 +129,32 @@
       #result .menu { flex-direction: row; justify-content: center; width: auto; margin-top: 8px; }
       #result .menu button { font-size: 15px; padding: 8px 18px; }
 
+      /* お金・お店・さいご */
+      #coins { display: flex; align-items: center; gap: 3px; color: #ffe8cc; font-weight: 800; font-size: 14px; margin-top: 3px; text-shadow: 0 1px 0 #0008; }
+      #coins img { width: 20px; height: 20px; }
+      .shopPanel { width: min(860px, 100%); text-align: left; }
+      .shead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+      .shead h2 { margin: 0; } .shead .close { margin: 0 0 0 auto; }
+      .wallet { display: inline-flex; align-items: center; gap: 3px; font-weight: 800; font-size: 18px; color: #e8590c; }
+      .wallet img, .sitem button img, .reroll img { width: 18px; height: 18px; vertical-align: -3px; }
+      .reroll { font-size: 12px; font-weight: 700; }
+      .sitems { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+      .sitem { display: flex; align-items: center; gap: 6px; background: #fff; border: 2px solid var(--line); border-radius: 12px; padding: 5px 6px; }
+      .sitem.sold { opacity: .45; }
+      .sitem .cell { pointer-events: none; flex: none; }
+      .potion { width: var(--cell); height: var(--cell); display: grid; place-items: center; font-size: 26px; background: #e7f5ff; border-radius: 10px; border: 3px solid #74c0fc; flex: none; }
+      .sname { flex: 1; min-width: 0; } .sname b { font-size: 13px; display: block; } .sname small { font-size: 10.5px; color: var(--muted); display: block; line-height: 1.3; max-height: 2.6em; overflow: hidden; }
+      .sitem button { padding: 4px 8px; font-weight: 800; white-space: nowrap; } .sitem button:disabled, .reroll:disabled { opacity: .5; }
+      .forge { margin-top: 8px; background: #f3e9d9; border-radius: 12px; padding: 6px 8px; }
+      .forge b { margin-right: 8px; } .fcells { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+      .fbtn { display: flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; font-size: 12px; font-weight: 700; background: #fff; border: 2px solid var(--line); border-radius: 12px; cursor: pointer; }
+      .fbtn:hover { border-color: var(--accent); }
+      .fbtn .cell { pointer-events: none; }
+      .cell .stars { position: absolute; right: -4px; bottom: -6px; font-size: 11px; color: #f59f00; text-shadow: 0 0 2px #fff, 0 0 2px #fff; pointer-events: none; }
+      #finalHint { display: none; left: 50%; bottom: 14px; transform: translateX(-50%); color: #fff; background: #e64980cc; padding: 6px 14px; border-radius: 999px; font-weight: 800; font-size: 14px; }
+      body.final #finalHint { display: block; } body.final #slots { opacity: .35; }
+      body.touch.final #finalHint { bottom: auto; top: 76px; }
+
       /* 難易度・ねこの成長・レアリティ */
       .diffPanel, .growPanel { width: min(560px, 100%); }
       .diffs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 8px 0; }
@@ -209,6 +237,7 @@
         .zgroup { margin-bottom: 3px; } .ztitle { font-size: 11px; }
         .diffs { gap: 5px; margin: 4px 0; } .diff { padding: 6px 8px; } .grows { gap: 4px; margin: 4px 0; grid-template-columns: 1fr 1fr; } .grow { padding: 3px 8px; }
         .growPanel { width: min(760px, 100%); } .growPanel .back { margin-top: 2px; }
+        .sitems { grid-template-columns: repeat(3, 1fr); gap: 4px; } .sitem { padding: 3px 4px; } .forge { margin-top: 4px; padding: 4px 6px; }
         .tabs { margin-bottom: 4px; } .tab { padding: 2px 8px 2px 2px; font-size: 11px; } .tab img { width: 22px; height: 22px; }
       }
       @media (max-width: 460px) {
@@ -218,6 +247,7 @@
         .edit .detail .card { padding: 6px 8px; }
       }
       @media (max-width: 700px) {
+        .sitems { grid-template-columns: 1fr 1fr; }
         .zgroups { max-height: calc(100dvh - 400px); }
         .intro .cols, .edit { grid-template-columns: 1fr; }
         .choices { flex-direction: column; align-items: center; } .choices .card { width: 100%; max-width: none; }
@@ -228,9 +258,9 @@
   <body>
     <canvas id="game"></canvas>
     <div id="loading">読み込み中…</div>
-    <div class="hud" id="status"><div id="hearts"></div><div id="manaWrap"><span>やる気</span><div id="mana"><div id="manaFill"></div></div><span id="manaNum"></span></div></div>
+    <div class="hud" id="status"><div id="hearts"></div><div id="manaWrap"><span>やる気</span><div id="mana"><div id="manaFill"></div></div><span id="manaNum"></span></div><div id="coins"></div></div>
     <div class="hud" id="slots"></div>
-    <div class="hud" id="roomBox"><div id="room"></div><div class="row"><button id="bagBtn">持ち物</button><button id="pauseBtn" aria-label="一時停止">Ⅱ</button></div></div>
+    <div class="hud" id="roomBox"><div id="room"></div><div class="row"><button id="bagBtn">持ち物</button><button id="muteBtn" aria-label="音">♪</button><button id="pauseBtn" aria-label="一時停止">Ⅱ</button></div></div>
     <div class="hud" id="hint" hidden></div>
     <div class="hud" id="toast" hidden></div>
     <div class="hud" id="help">WASD 移動 ／ クリック長押し 攻撃 ／ J 自動で狙う<br />Space ダッシュ ／ Q 持ち替え ／ Tab 持ち物</div>
@@ -240,6 +270,8 @@
     <div class="overlay" id="reward" hidden></div>
     <div class="overlay" id="result" hidden></div>
     <div id="stick" hidden><div></div></div>
+    <div class="overlay" id="shopPanel" hidden></div>
+    <div class="hud" id="finalHint">肉球ペシペシしかできない！ ママから逃げて…</div>
     <div class="overlay" id="pause" hidden></div>
     <div class="overlay" id="intro" hidden></div>
     <script type="module" src="/src/main.ts"></script>
