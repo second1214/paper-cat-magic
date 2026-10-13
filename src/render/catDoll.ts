@@ -2,15 +2,17 @@
 import * as THREE from "three";
 
 const STAND = 1.45; // 立ち姿の高さ（ワールド単位）。カメラを引いたので大きめ
+const RUN = (STAND / 297) * 1.15;
 const STEP_RUN = 0.55;  // 走り1コマで進む距離（速さ5.2で約9.5コマ/秒）
 
 /** 画像名と、1ピクセルあたりのワールド長。素材ごとに描かれた縮尺が違うので個別に揃える。 */
 const FRAMES: Record<string, number> = {
   A04_blink_1: STAND / 365, A04_blink_2: STAND / 365, A04_blink_3: STAND / 365,
-  A02_run_1: STAND / 297, A02_run_2: STAND / 297, A02_run_3: STAND / 297, A02_run_4: STAND / 297,
-  A05_jump_1: STAND / 297, A05_jump_2: STAND / 297, A05_jump_3: STAND / 297, A05_jump_4: STAND / 297,
+  // 走り・ジャンプは体を伸ばした絵で、同じ縮尺だと立ち姿より小さく見える（面積で約2/3）。頭の大きさがそろう程度に大きくする
+  A02_run_1: RUN, A02_run_2: RUN, A02_run_3: RUN, A02_run_4: RUN,
+  A05_jump_1: RUN, A05_jump_2: RUN, A05_jump_3: RUN, A05_jump_4: RUN,
   A03_turn_4: STAND / 322,
-  P14_hiss: STAND / 379,
+  P14_hiss: STAND / 395,
   P03_sit_happy: 1.6 / 420,
   P09_belly_up: 1.25 / 417,
 };
