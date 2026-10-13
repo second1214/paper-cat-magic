@@ -21,14 +21,24 @@ export interface Bonus {
   clearHeal: number; // 部屋を片付けるたびの回復（半ハート）
   choiceAdd: number; // ごほうびの選択肢
   dashPower: number; // ダッシュのあと攻撃力1.5倍になる秒数
+  // Magicraft の装備・レリックにある特殊効果
+  crit: number; // 会心（攻撃力2倍）の確率
+  killHeal: number; // 虫を倒したとき♥0.5回復する確率
+  killBoom: number; // 倒した虫がはじける（攻撃力）
+  thorns: number; // 当たったとき、まわりの虫へ反撃（攻撃力）
+  shield: number; // 部屋に入るたびのバリア（回数）
+  extraShot: number; // 技がもう1発出る確率
+  moveMana: number; // 動いている間のやる気回復（毎秒）
+  luck: number; // 装備のレアリティが上がりやすい
 }
 
 export const NO_BONUS: Bonus = {
   maxHp: 0, dmgMul: 1, manaMax: 0, regenMul: 1, stillRegen: 0, speedMul: 1, dashCdMul: 1, iframes: 0, guard: 0,
   rangeMul: 1, elemMul: 1, zapAdd: 0, summonAdd: 0, killMana: 0, clearHeal: 0, choiceAdd: 0, dashPower: 0,
+  crit: 0, killHeal: 0, killBoom: 0, thorns: 0, shield: 0, extraShot: 0, moveMana: 0, luck: 0,
 };
 
-type Part = Partial<Bonus>;
+export type Part = Partial<Bonus>;
 
 /** 倍率（*Mul）は掛け、それ以外は足す。 */
 export function addBonus(a: Bonus, b: Part): Bonus {
@@ -58,6 +68,14 @@ export function bonusRows(b: Part): [string, string][] {
   if (b.clearHeal) rows.push(["部屋を片付けると", `♥${b.clearHeal / 2}回復`]);
   if (b.choiceAdd) rows.push(["ごほうびの選択肢", `＋${b.choiceAdd}`]);
   if (b.dashPower) rows.push(["ダッシュのあと", `${b.dashPower}秒 攻撃力1.5倍`]);
+  if (b.crit) rows.push(["会心（2倍）", `${Math.round(b.crit * 100)}%`]);
+  if (b.killHeal) rows.push(["倒すと♥0.5回復", `${Math.round(b.killHeal * 100)}%`]);
+  if (b.killBoom) rows.push(["倒した虫がはじける", `攻撃力${Math.round(b.killBoom)}`]);
+  if (b.thorns) rows.push(["当たると反撃", `攻撃力${Math.round(b.thorns)}`]);
+  if (b.shield) rows.push(["部屋ごとのバリア", `${b.shield}回`]);
+  if (b.extraShot) rows.push(["技がもう1発", `${Math.round(b.extraShot * 100)}%`]);
+  if (b.moveMana) rows.push(["動くとやる気", `＋${b.moveMana}/秒`]);
+  if (b.luck) rows.push(["レア装備が出やすい", `＋${b.luck}`]);
   return rows;
 }
 
@@ -79,6 +97,12 @@ export const RELICS: Record<string, RelicDef> = {
   shippo: { id: "shippo", name: "ふわふわしっぽ", desc: "少し速く動ける", bonus: { speedMul: 1.1 } },
   towel: { id: "towel", name: "ぬれタオル", desc: "属性（びしょぬれ・ねばねば・虫よけ）が長く効く", bonus: { elemMul: 1.5 } },
   sheet: { id: "sheet", name: "静電気シート", desc: "ビリビリがもう1匹に飛び移る", bonus: { zapAdd: 1 } },
+  biidama: { id: "biidama", name: "きらきらビー玉", desc: "ときどき会心の一撃（攻撃力2倍）", bonus: { crit: 0.12 } },
+  kaitenguruma: { id: "kaitenguruma", name: "ハムスターの回し車", desc: "走り回るほどやる気が出る", bonus: { moveMana: 6 } },
+  buzzer: { id: "buzzer", name: "防犯ブザー", desc: "当たると大きな音で、まわりの虫に反撃", bonus: { thorns: 14 } },
+  omamori: { id: "omamori", name: "ペットのお守り", desc: "部屋に入るたび、1回だけ当たりを防ぐ", bonus: { shield: 1 } },
+  nekokan: { id: "nekokan", name: "高級猫缶", desc: "虫を倒すと、ときどき元気が戻る", bonus: { killHeal: 0.1 } },
+  copy: { id: "copy", name: "ママのコピー用紙", desc: "技がときどきもう1発出る", bonus: { extraShot: 0.15 } },
 };
 export const RELIC_IDS = Object.keys(RELICS);
 
@@ -89,6 +113,64 @@ export const GEAR_SLOTS: GearSlot[] = ["hat", "body", "collar"];
 export const SLOT_NAME: Record<GearSlot, string> = { hat: "頭", body: "服", collar: "首" };
 
 export interface GearDef { id: string; name: string; slot: GearSlot; set: string; desc: string; bonus: Part }
+
+/** レアリティ（Magicraft と同じく、上がるほど効果が大きく、エピック以上は特殊効果がつく）。 */
+export type Rarity = 0 | 1 | 2 | 3;
+export const RARITY: { name: string; color: string; k: number; fx: number }[] = [
+  { name: "ふつう", color: "#868e96", k: 1, fx: 0 },
+  { name: "レア", color: "#1c7ed6", k: 1.5, fx: 0 },
+  { name: "エピック", color: "#ae3ec9", k: 2, fx: 1 },
+  { name: "伝説", color: "#f08c00", k: 2.6, fx: 2 },
+];
+
+/** 装備1つ（同じ装備でもレアリティと特殊効果が違う）。 */
+export interface GearItem { id: string; rar: Rarity; fx: string[] }
+
+/** エピック以上につく特殊効果（Magicraft の装備・レリックにある効果）。 */
+export const GEAR_FX: Record<string, { name: string; bonus: Part }> = {
+  crit: { name: "会心", bonus: { crit: 0.1 } },
+  killHeal: { name: "倒して回復", bonus: { killHeal: 0.08 } },
+  killBoom: { name: "倒すとはじける", bonus: { killBoom: 8 } },
+  thorns: { name: "反撃", bonus: { thorns: 12 } },
+  shield: { name: "バリア", bonus: { shield: 1 } },
+  extraShot: { name: "もう1発", bonus: { extraShot: 0.12 } },
+  moveMana: { name: "走ってやる気", bonus: { moveMana: 5 } },
+};
+export const GEAR_FX_IDS = Object.keys(GEAR_FX);
+
+/** 効果をレアリティの倍率で強くする（倍率は1からの差を、加算はそのまま掛ける。HPは♥単位）。 */
+export function scaleBonus(b: Part, k: number): Part {
+  const out: Part = {};
+  for (const [key, v] of Object.entries(b) as [keyof Bonus, number][]) {
+    out[key] = key.endsWith("Mul") ? 1 + (v - 1) * k : key === "maxHp" || key === "shield" || key === "clearHeal" ? Math.max(v, Math.round((v * k) / 2) * 2 || v) : +(v * k).toFixed(2);
+  }
+  if (b.shield) out.shield = b.shield;
+  return out;
+}
+
+/** 装備1つの効果（レアリティ倍率＋特殊効果）。 */
+export function gearBonus(g: GearItem): Part {
+  let b: Bonus = addBonus(NO_BONUS, scaleBonus(GEAR[g.id].bonus, RARITY[g.rar].k));
+  for (const f of g.fx) b = addBonus(b, GEAR_FX[f].bonus);
+  return diffBonus(b);
+}
+
+/** NO_BONUS との差だけを取り出す（説明欄用）。 */
+function diffBonus(b: Bonus): Part {
+  const out: Part = {};
+  for (const k of Object.keys(b) as (keyof Bonus)[]) if (b[k] !== NO_BONUS[k]) out[k] = b[k];
+  return out;
+}
+
+/** 装備を1つ作る（レアリティは運と章で上がりやすい）。 */
+export function rollGear(id: string, rand: () => number, luck: number, act: number): GearItem {
+  const w = [Math.max(10, 62 - act * 8 - luck * 6), 26 + act * 3, 9 + act * 3 + luck * 4, 3 + act * 2 + luck * 2];
+  let x = rand() * w.reduce((a, b) => a + b, 0), rar = 0;
+  while (x > w[rar] && rar < 3) { x -= w[rar]; rar++; }
+  const pool = [...GEAR_FX_IDS], fx: string[] = [];
+  for (let k = 0; k < RARITY[rar].fx; k++) fx.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+  return { id, rar: rar as Rarity, fx };
+}
 export interface SetDef { id: string; name: string; color: string; two: Part; three: Part }
 
 export const SETS: Record<string, SetDef> = {
@@ -96,6 +178,8 @@ export const SETS: Record<string, SetDef> = {
   gacha: { id: "gacha", name: "ガチャガチャの天使セット", color: "#e64980", two: { guard: 0.1 }, three: { clearHeal: 2 } },
   fruit: { id: "fruit", name: "くだものの被り物セット", color: "#f59f00", two: { maxHp: 2 }, three: { iframes: 0.5 } },
   knit: { id: "knit", name: "ママの手編みセット", color: "#2f9e44", two: { dmgMul: 1.1 }, three: { dashPower: 1.5 } },
+  hyakkin: { id: "hyakkin", name: "100円ショップセット", color: "#12b886", two: { crit: 0.1 }, three: { extraShot: 0.15 } },
+  petshop: { id: "petshop", name: "ペットショップの新作セット", color: "#4c6ef5", two: { moveMana: 4 }, three: { shield: 1 } },
 };
 
 export const GEAR: Record<string, GearDef> = {
@@ -110,24 +194,30 @@ export const GEAR: Record<string, GearDef> = {
   cherry: { id: "cherry", name: "さくらんぼの首輪", slot: "collar", set: "fruit", desc: "鈴の代わりにさくらんぼが2つ", bonus: { regenMul: 1.1 } },
   beanie: { id: "beanie", name: "毛糸の帽子", slot: "hat", set: "knit", desc: "耳の穴の位置がちょっとずれている", bonus: { dmgMul: 1.05 } },
   sweater: { id: "sweater", name: "手編みのセーター", slot: "body", set: "knit", desc: "ママの力作。猫の顔のもよう入り", bonus: { iframes: 0.2 } },
+  sunglass: { id: "sunglass", name: "おもちゃのサングラス", slot: "hat", set: "hyakkin", desc: "レンズがハート形。すぐずり落ちる", bonus: { dmgMul: 1.05 } },
+  haramaki: { id: "haramaki", name: "毛糸の腹巻き", slot: "body", set: "hyakkin", desc: "「おなかを冷やさないように」と言われた", bonus: { maxHp: 2 } },
+  bowtie: { id: "bowtie", name: "蝶ネクタイ", slot: "collar", set: "hyakkin", desc: "なぜか金色。結婚式帰りっぽい", bonus: { regenMul: 1.1 } },
+  usamimi: { id: "usamimi", name: "うさ耳フード", slot: "hat", set: "petshop", desc: "猫なのにうさぎ。店員さんのおすすめ", bonus: { speedMul: 1.05 } },
+  raincoat: { id: "raincoat", name: "黄色いレインコート", slot: "body", set: "petshop", desc: "雨の日は外に出ないのに買った", bonus: { iframes: 0.2 } },
+  gps: { id: "gps", name: "GPS首輪", slot: "collar", set: "petshop", desc: "家から一歩も出ないのに位置がわかる", bonus: { manaMax: 10 } },
   nametag: { id: "nametag", name: "迷子札の首輪", slot: "collar", set: "knit", desc: "名前と「とてもかわいい」と書いてある", bonus: { dmgMul: 1.05 } },
 };
 export const GEAR_IDS = Object.keys(GEAR);
 
-export type Gear = Record<GearSlot, string | null>;
+export type Gear = Record<GearSlot, GearItem | null>;
 
 /** 装備しているセットごとの数。 */
 export function setCounts(gear: Gear): Record<string, number> {
   const n: Record<string, number> = {};
-  for (const s of GEAR_SLOTS) { const g = gear[s]; if (g) n[GEAR[g].set] = (n[GEAR[g].set] ?? 0) + 1; }
+  for (const s of GEAR_SLOTS) { const g = gear[s]; if (g) n[GEAR[g.id].set] = (n[GEAR[g.id].set] ?? 0) + 1; }
   return n;
 }
 
 /** レリックと装備（セットボーナス込み）の合計。 */
-export function totalBonus(relics: string[], gear: Gear): Bonus {
-  let b = NO_BONUS;
+export function totalBonus(relics: string[], gear: Gear, extra: Part = {}): Bonus {
+  let b = addBonus(NO_BONUS, extra);
   for (const r of relics) b = addBonus(b, RELICS[r].bonus);
-  for (const s of GEAR_SLOTS) { const g = gear[s]; if (g) b = addBonus(b, GEAR[g].bonus); }
+  for (const s of GEAR_SLOTS) { const g = gear[s]; if (g) b = addBonus(b, gearBonus(g)); }
   for (const [set, n] of Object.entries(setCounts(gear))) {
     if (n >= 2) b = addBonus(b, SETS[set].two);
     if (n >= 3) b = addBonus(b, SETS[set].three);

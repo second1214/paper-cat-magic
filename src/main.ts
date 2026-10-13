@@ -2,15 +2,20 @@ import { World } from "./game/world";
 import { GameView } from "./render/view";
 import { Controls } from "./input";
 import { Hud } from "./ui/hud";
+import { loadRecord } from "./ui/record";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
-let world = new World(Number(params.get("seed")) || Date.now() % 100000);
+const seed = () => Date.now() % 100000;
+/** 難易度と、ねこの成長（保存してあるレベル）で新しい冒険を作る。 */
+const newWorld = (difficulty: number, s = seed()) => new World(s, { difficulty, meta: loadRecord().meta });
+let world = newWorld(1, Number(params.get("seed")) || seed());
 const view = new GameView(canvas);
 const hud = new Hud(
   () => world,
-  () => { world = new World(Date.now() % 100000); world.start(); hud.bagOpen = false; },
-  () => { world = new World(Date.now() % 100000); },
+  () => { world = newWorld(world.opts.difficulty); world.start(); hud.bagOpen = false; },
+  () => { world = newWorld(1); },
+  (difficulty) => { world = newWorld(difficulty, Number(params.get("seed")) || seed()); world.start(); },
 );
 const controls = new Controls(canvas, document.getElementById("stick")!, document.getElementById("atkBtn")!, document.getElementById("dashBtn")!);
 controls.onToggleBag = () => hud.toggleBag();

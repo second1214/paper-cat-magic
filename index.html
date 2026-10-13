@@ -127,6 +127,24 @@
       #result .menu { flex-direction: row; justify-content: center; width: auto; margin-top: 8px; }
       #result .menu button { font-size: 15px; padding: 8px 18px; }
 
+      /* 難易度・ねこの成長・レアリティ */
+      .diffPanel, .growPanel { width: min(560px, 100%); }
+      .diffs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 8px 0; }
+      .diff { display: flex; flex-direction: column; gap: 2px; padding: 10px; text-align: left; }
+      .diff b { font-size: 16px; } .diff small { font-size: 11px; opacity: .85; }
+      .diff:disabled { opacity: .45; cursor: not-allowed; }
+      .grows { display: grid; gap: 6px; margin: 8px 0; text-align: left; }
+      .grow { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #fff; border: 2px solid var(--line); border-radius: 12px; padding: 6px 10px; }
+      .grow b { margin-right: 8px; } .grow small { display: block; font-size: 11px; color: var(--muted); }
+      .grow .lv { color: var(--accent); letter-spacing: 2px; font-size: 12px; }
+      .grow button { white-space: nowrap; font-weight: 700; } .grow button:disabled { opacity: .5; }
+      .nib, .nibline b { color: #e8590c; }
+      .nibline { font-size: 13px; margin: 2px 0 6px; }
+      .card.rar1, .card.rar2, .card.rar3 { border-color: var(--r); box-shadow: 0 0 0 2px color-mix(in srgb, var(--r) 30%, transparent); }
+      .card.rar3 { background: linear-gradient(160deg, #fff9db, #fff 40%); }
+      .fxline { font-size: 11.5px; font-weight: 800; color: #ae3ec9; }
+      .card .head .tag + .tag { margin-left: 4px; }
+
       /* ずかん */
       .zgroups { display: flex; flex-wrap: wrap; gap: 6px 14px; overflow-y: auto; max-height: calc(100dvh - 110px); padding: 8px 4px 4px; touch-action: pan-y; }
       .zgroup { margin-bottom: 2px; }
@@ -189,6 +207,8 @@
         .hero { height: 52vh; } .menu { width: 220px; } .menu button { padding: 7px; font-size: 15px; }
         .record { width: 100%; max-width: max-content; }
         .zgroup { margin-bottom: 3px; } .ztitle { font-size: 11px; }
+        .diffs { gap: 5px; margin: 4px 0; } .diff { padding: 6px 8px; } .grows { gap: 4px; margin: 4px 0; grid-template-columns: 1fr 1fr; } .grow { padding: 3px 8px; }
+        .growPanel { width: min(760px, 100%); } .growPanel .back { margin-top: 2px; }
         .tabs { margin-bottom: 4px; } .tab { padding: 2px 8px 2px 2px; font-size: 11px; } .tab img { width: 22px; height: 22px; }
       }
       @media (max-width: 460px) {
