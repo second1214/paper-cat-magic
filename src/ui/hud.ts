@@ -153,7 +153,7 @@ export class Hud {
     }
     const base = import.meta.env.BASE_URL, rec = loadRecord();
     el.innerHTML = `<div class="title">
-      <div class="logo"><small>ママを虫から守れ！</small>ねこのおもちゃ大作戦</div>
+      <div class="logo"><small>ママを虫から守れ！</small>My Cat Is <br>So Cute</div>
       <div class="hero"><img class="cat" src="${base}cat/P03_sit_happy.png" alt="猫"><img class="mom" src="${base}mama/scared.png" alt="ママ"></div>
       <div class="menu">
         <button class="go start">はじめる</button>
