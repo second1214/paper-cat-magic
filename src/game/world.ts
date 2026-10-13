@@ -4,7 +4,7 @@
 // 構成（Magicraft 風）: 季節ごとの「章」= 部屋4つ＋ボス。部屋を片付けると出口が2〜3個開き、
 // 扉の上のアイコンで「次の部屋をクリアしたときのごほうび」を選んで進む。
 import { planCast, starterToy, TOYS, type Shot, type ToyDef } from "../core/wand";
-import { SPELL_IDS, type Element, type Motion, type TechFx } from "../core/spells";
+import { SPELL_IDS, SPELLS, type Element, type Motion, type TechFx } from "../core/spells";
 import { makeRng, type Rng } from "../core/rng";
 import {
   BOSS_TEMPLATE, buildLayout, Cell, cellAt, cellCenter, cellValue, SEASON_NAME, SEASONS, TEMPLATES, THEME_NAME, THEMES,
@@ -371,6 +371,14 @@ export class World {
       const ahead = { x: from.x + d.x * 0.6, z: from.z + d.z * 0.6 }, c = cellAt(L, ahead.x, ahead.z);
       pr.pos = cellValue(L, c.c, c.r) === Cell.Floor ? ahead : { ...from };
       if (s.tech !== "roomba") pr.vel = { x: 0, z: 0 };
+      // 上限で呼ぶと一番古い仲間が帰る（Magicraft の召喚上限）
+      const mine = this.projectiles.filter((q) => q.motion === "summon" && q.tech === s.tech);
+      const limit = SUMMON_LIMIT[s.tech] ?? 1;
+      if (mine.length >= limit) {
+        const old = mine[0];
+        this.fx.push({ kind: "puff", pos: { ...old.pos }, radius: 0.6, color: "#ffffff", t: 0, life: 0.4 });
+        this.projectiles = this.projectiles.filter((q) => q !== old);
+      }
     }
     if (s.motion === "trap") {
       pr.vel = { x: 0, z: 0 };
@@ -758,6 +766,11 @@ export class World {
 }
 
 const ZERO: Vec = { x: 0, z: 0 };
+
+/** 召喚の同時に出せる数（技の定義から）。 */
+const SUMMON_LIMIT: Partial<Record<TechFx, number>> = Object.fromEntries(
+  Object.values(SPELLS).filter((d) => d.projectile?.motion === "summon").map((d) => [d.projectile!.tech, d.limit ?? 1]),
+);
 
 /** 点 q と線分 (ax,az)-b の距離。 */
 function segDist(q: Vec, ax: number, az: number, b: Vec) {

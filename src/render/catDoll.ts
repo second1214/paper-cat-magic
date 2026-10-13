@@ -2,6 +2,7 @@
 import * as THREE from "three";
 
 const STAND = 1.45; // 立ち姿の高さ（ワールド単位）。カメラを引いたので大きめ
+const STEP = 0.38;  // 歩き1コマで進む距離
 
 /** 画像名と、1ピクセルあたりのワールド長。素材ごとに描かれた縮尺が違うので個別に揃える。 */
 const FRAMES: Record<string, number> = {
@@ -63,10 +64,11 @@ export class CatDoll {
     let name: string, bob = 0, sy = 1, tilt = 0;
     switch (state) {
       case "walk": {
-        // 4コマ = 2歩（そろう→右足→そろう→左足）。紙人形らしく、歩みに合わせてわずかに弾ませて傾ける
-        this.stride += dt * (1.2 + speed * 0.35);           // 1歩 = stride 1（速さ5.2で約3歩/秒）
-        const ph = this.stride * Math.PI;
-        name = `A01_walk_${(Math.floor(this.stride * 2) % 4) + 1}`;
+        // 歩いた距離でコマを送る（時間で送ると、速く動くほど足が床を滑って見える）。
+        // 4コマで体1つ分（約1.5マス）進む。速さ5.2なら約14コマ/秒
+        this.stride += (dt * speed) / STEP;
+        const ph = this.stride * Math.PI / 2;
+        name = `A01_walk_${(Math.floor(this.stride) % 4) + 1}`;
         bob = Math.abs(Math.sin(ph)) * 0.05;
         tilt = Math.sin(ph) * 0.035;
         break;
@@ -75,7 +77,7 @@ export class CatDoll {
         name = `A05_jump_${Math.min(4, Math.floor(jump * 4) + 1)}`;
         bob = Math.sin(Math.min(1, jump / 0.8) * Math.PI) * 0.7; break;
       }
-      case "dash": this.stride += dt * 16; name = `A02_run_${(Math.floor(this.stride) % 4) + 1}`; bob = 0.06; break;
+      case "dash": this.stride += (dt * speed) / 0.8; name = `A02_run_${(Math.floor(this.stride) % 4) + 1}`; bob = 0.06; break;
       case "hurt": name = "P14_hiss"; break;
       case "happy": name = "P03_sit_happy"; sy = 1 + 0.015 * Math.sin(t * 3); break;
       case "down": name = "P09_belly_up"; break;
