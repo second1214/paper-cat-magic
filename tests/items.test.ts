@@ -8,19 +8,19 @@ const reward = (w: World, kind: "relic" | "gear" | "toy", id: string) => { w.pha
 
 describe("装備セット", () => {
   it("同じセットを2つ・3つそろえるとボーナスが増える", () => {
-    const one = totalBonus([], { hat: "knightHat", body: null, collar: null });
-    const two = totalBonus([], { hat: "knightHat", body: "knightBody", collar: null });
-    const three = totalBonus([], { hat: "knightHat", body: "knightBody", collar: "knightCollar" });
+    const one = totalBonus([], { hat: "mikan", body: null, collar: null });
+    const two = totalBonus([], { hat: "mikan", body: "suika", collar: null });
+    const three = totalBonus([], { hat: "mikan", body: "suika", collar: "cherry" });
     expect(one.maxHp).toBe(2);
-    expect(two.maxHp).toBe(4);            // 帽子＋2つセット
-    expect(three.guard).toBeCloseTo(0.3); // よろい0.1＋3つセット0.2
-    expect(totalBonus([], { hat: "ninjaHat", body: "wizBody", collar: "knightCollar" }).dashPower).toBe(0);
+    expect(two.maxHp).toBe(4);              // みかん＋2つセット
+    expect(three.iframes).toBeCloseTo(0.5); // 3つセット
+    expect(totalBonus([], { hat: "halo", body: "aloha", collar: "nametag" }).dashPower).toBe(0);
   });
   it("同じ場所の装備は交換される", () => {
     const w = play();
-    reward(w, "gear", "wizHat"); reward(w, "gear", "ninjaHat");
-    expect(w.gear.hat).toBe("ninjaHat");
-    expect(w.bonus.manaMax).toBe(0);
+    reward(w, "gear", "mikan"); reward(w, "gear", "beanie");
+    expect(w.gear.hat).toBe("beanie");
+    expect(w.bonus.maxHp).toBe(0);
   });
 });
 

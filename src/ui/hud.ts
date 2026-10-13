@@ -75,7 +75,7 @@ function gearCard(id: string, gear: Gear | null, attrs = "") {
     `<div class="setline ${gear && have >= n ? "on" : ""}"><b>${n}つ</b>${bonusRows(b).map(([k, v]) => `${k} ${v}`).join("・")}</div>`;
   return `<div class="card" ${attrs}>
     <div class="head"><img src="${urlOf(gearCanvas(id))}" alt=""><div><b>${g.name}</b><span class="tag gear" style="background:${set.color}">装備・${SLOT_NAME[g.slot]}</span></div></div>
-    ${statsTable(bonusRows(g.bonus))}
+    ${statsTable(bonusRows(g.bonus))}<p class="desc">${g.desc}</p>
     <div class="setbox" style="--c:${set.color}"><div class="setname">${set.name}${gear ? `（着けると ${have}/3）` : ""}</div>${line(2, set.two)}${line(3, set.three)}</div></div>`;
 }
 
@@ -97,7 +97,9 @@ const ZUKAN: { title: string; ids: string[]; kind?: "toy" | "relic" | "gear" }[]
   { title: "飛ぶ技", ids: ["claw", "bite", "hairball", "hiss", "yarn", "laser"] },
   { title: "近く・置く技", ids: ["swing", "pounce", "punch", "post"] },
   { title: "召喚", ids: ["friend", "roomba"] },
+  { title: "買ってきた物の技", ids: ["mizudeppo", "ahiru", "shabon", "kabocha", "korokoro", "hammer", "flash", "danbo"] },
   { title: "修飾", ids: ["matatabi", "kajikaji", "big", "small", "quick", "stare", "bouncy", "pushy", "double", "chain"] },
+  { title: "買ってきた物の修飾", ids: ["rame", "suzu", "kenko", "jidori"] },
   { title: "属性", ids: ["static", "water", "tape", "spray"] },
   { title: "おもちゃ", ids: Object.keys(TOYS), kind: "toy" },
   { title: "レリック", ids: RELIC_IDS, kind: "relic" },

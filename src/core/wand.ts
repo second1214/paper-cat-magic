@@ -52,6 +52,8 @@ function applyMods(p: ProjectileStats, mods: Modifier[]): ProjectileStats {
     if (m.sizeMul) { s.radius *= m.sizeMul; s.reach *= Math.max(0.7, m.sizeMul); s.explode *= m.sizeMul; }
     if (m.speedMul) s.hitEvery /= m.speedMul;
     if (m.element) s.element = m.element;
+    if (m.slowAdd) s.slow += m.slowAdd;
+    if (m.lifeMul && s.motion !== "melee" && s.motion !== "ring" && !(s.motion === "beam" && s.speed === 0)) s.life *= m.lifeMul;
   }
   return s;
 }
