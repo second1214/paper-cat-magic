@@ -4,6 +4,8 @@
 
 ママは虫が大の苦手。おうちに入りこんだ虫を、猫がおもちゃで追い払う見下ろし型アクション（ブラウザ / three.js）。
 
+**遊ぶ**: https://my-cat-is-so-cute.pages.dev/ （Cloudflare Pages。main に入ると自動で公開）
+
 ## 遊び方
 
 | 操作 | PC | スマホ（横持ち推奨） |
