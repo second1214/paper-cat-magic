@@ -6,11 +6,11 @@
 export type SpellKind = "attack" | "modifier" | "multicast" | "trigger";
 
 /** 技が当たったときに出す絵（描画側で使う）。 */
-export type TechFx = "claw" | "bite" | "hairball" | "hiss" | "swing" | "yarn" | "laser" | "pounce" | "punch" | "post" | "enemy";
+export type TechFx = "claw" | "bite" | "hairball" | "hiss" | "swing" | "yarn" | "laser" | "pounce" | "punch" | "post" | "friend" | "roomba" | "enemy";
 
 /** 技の動き。shot=飛ぶ / orbit=猫のまわりを回る / beam=猫から線で届く / ring=足元から広がる輪 / melee=目の前で連打 / trap=床に置く。 */
-export type Motion = "shot" | "orbit" | "beam" | "ring" | "melee" | "trap";
-export const MOTION_LABEL: Record<Motion, string> = { shot: "飛ぶ", orbit: "まわりを回る", beam: "ビーム", ring: "衝撃波", melee: "近くを連打", trap: "床に置く" };
+export type Motion = "shot" | "orbit" | "beam" | "ring" | "melee" | "trap" | "summon";
+export const MOTION_LABEL: Record<Motion, string> = { shot: "飛ぶ", orbit: "まわりを回る", beam: "ビーム", ring: "衝撃波", melee: "近くを連打", trap: "床に置く", summon: "召喚" };
 
 /**
  * おうちのもの属性（炎・雷の代わり）。組み合わせると強くなる:
@@ -50,6 +50,10 @@ export interface ProjectileStats {
   knock: number;
 }
 
+/**
+ * 召喚（Magicraft と同じ仕様）: 仲間を呼び出し、出ている間ずっと戦わせる。数の上限はない。
+ * 左に置いた修飾・属性は、仲間の攻撃にそのままかかる（攻撃力・多段・属性・大きさ・速さ）。
+ */
 /** 次（右隣）の技へ足し込む修飾。 */
 export interface Modifier {
   damageMul?: number;
@@ -143,6 +147,16 @@ export const SPELLS: Record<string, SpellDef> = {
     desc: "段ボールの爪とぎを前に置く。上を通る虫を7秒間ガリガリ削る（4つまで）",
     projectile: base({ damage: 4, speed: 0, radius: 0.7, life: 7, motion: "trap", reach: 1.3, hits: 99, hitEvery: 0.6, color: "#d9a066", tech: "post" }),
   },
+  friend: {
+    id: "friend", name: "友達猫", kind: "attack", mana: 30, glyph: "猫", color: "#868e96",
+    desc: "友達の猫を呼ぶ。近くの虫を追いかけてひっかく。修飾・属性は友達猫の攻撃にかかる",
+    projectile: base({ damage: 5, speed: 5, radius: 0.34, life: 10, motion: "summon", reach: 0.85, hitEvery: 0.5, spread: 0, color: "#ced4da", tech: "friend" }),
+  },
+  roomba: {
+    id: "roomba", name: "ルンバ", kind: "attack", mana: 26, glyph: "掃", color: "#495057",
+    desc: "お掃除ロボを呼ぶ。部屋を走り回って壁ではね返り、ぶつかった虫を吸いこむ",
+    projectile: base({ damage: 4, speed: 3.4, radius: 0.55, life: 12, motion: "summon", hits: 99, hitEvery: 0.45, knock: 2, spread: 0.6, color: "#adb5bd", tech: "roomba" }),
+  },
   matatabi: {
     id: "matatabi", name: "またたび", kind: "modifier", mana: 8, glyph: "強", color: "#2f9e44",
     desc: "右の技のダメージ1.5倍＋3", modifier: { damageMul: 1.5, damageAdd: 3 },
@@ -208,7 +222,7 @@ export function spellStats(def: SpellDef): [string, string][] {
   const out: [string, string][] = [];
   if (def.kind === "attack" && def.projectile) {
     const p = def.projectile;
-    out.push(["攻撃力", p.hits > 1 && p.hits < 99 ? `${p.damage} ×${p.hits}回` : p.hits >= 99 ? `${p.damage}（${p.hitEvery}秒ごと）` : `${p.damage}`]);
+    out.push(["攻撃力", p.hits > 1 && p.hits < 99 ? `${p.damage} ×${p.hits}回` : p.hits >= 99 || p.motion === "summon" ? `${p.damage}（${p.hitEvery}秒ごと）` : `${p.damage}`]);
     out.push(["やる気", `${def.mana}`]);
     out.push(["動き", MOTION_LABEL[p.motion]]);
     if (p.motion === "shot" || (p.motion === "beam" && p.speed > 0)) out.push(["とどく距離", `${Math.round(p.speed * p.life)}マス`]);
@@ -217,6 +231,7 @@ export function spellStats(def: SpellDef): [string, string][] {
     if (p.motion === "ring") out.push(["輪の広さ", `半径${p.reach}`]);
     if (p.motion === "melee") out.push(["とどく距離", `${p.reach}マス`]);
     if (p.motion === "trap") out.push(["置いておく", `${p.life}秒`]);
+    if (p.motion === "summon") { out.push(["出ている時間", `${p.life}秒`]); out.push(["攻撃の間隔", `${p.hitEvery}秒`]); out.push(["呼べる数", "上限なし"]); }
     if (p.explode) out.push(["範囲", `半径${p.explode}`]);
     if (p.slow) out.push(["すくみ", `${p.slow}秒`]);
     if (p.pierce) out.push(["貫通", `${p.pierce}匹`]);

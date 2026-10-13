@@ -24,6 +24,21 @@ function particleTexture(season: Season) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
+/** 主人公の絵をグレーの猫にしたテクスチャ（友達猫）。 */
+async function grayCat(url: string) {
+  const img = await new THREE.ImageLoader().loadAsync(url);
+  const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+  const g = c.getContext("2d")!; g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height), a = d.data;
+  for (let i = 0; i < a.length; i += 4) {
+    const r = a[i], gg = a[i + 1], b = a[i + 2], l = 0.3 * r + 0.55 * gg + 0.15 * b;
+    const warm = r - b > 60;   // 茶色い毛だけグレーに、白い毛はそのまま
+    if (warm) { const v = l * 0.62 + 40; a[i] = v; a[i + 1] = v + 4; a[i + 2] = v + 14; }
+  }
+  g.putImageData(d, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
 export class GameView {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
@@ -44,6 +59,8 @@ export class GameView {
   private flats: Record<string, THREE.Mesh[]> = {};
   private ringGeo = new THREE.RingGeometry(0.86, 1, 48);
   private planeGeo = new THREE.PlaneGeometry(1, 1);
+  /** 友達猫の歩きコマ（主人公の絵をグレーにしたもの）。 */
+  private friendTex: THREE.Texture[] = [];
   private doorIcons: THREE.Sprite[] = [];
   private particles: { s: THREE.Sprite; v: THREE.Vector3; ph: number }[] = [];
   private targetMark: THREE.Mesh;
@@ -71,7 +88,8 @@ export class GameView {
     this.cat.group.traverse((o) => { o.castShadow = true; });
     this.scene.add(this.cat.group);
     for (const t of ["roach", "mosquito", "spider", "hornet"] as EnemyType[]) this.enemyTex.set(t, enemyTexture(t));
-    for (const t of ["claw", "bite", "hairball", "hiss", "swing", "yarn", "laser", "pounce", "punch", "post"] as const) this.techTex.set(t, canvasTexture(techCanvas(t)));
+    for (const t of ["claw", "bite", "hairball", "hiss", "swing", "yarn", "laser", "pounce", "punch", "post", "friend", "roomba"] as const) this.techTex.set(t, canvasTexture(techCanvas(t)));
+    this.friendTex = await Promise.all([1, 2, 3, 4].map((i) => grayCat(`${base}cat/A01_walk_${i}.png`)));
     for (const e of ["static", "wet", "sticky", "repel"] as const) this.elemTex.set(e, canvasTexture(elementCanvas(e)));
   }
 
@@ -226,7 +244,7 @@ export class GameView {
     for (const [id, g] of this.enemyMeshes) if (!alive.has(id)) { this.scene.remove(g); this.enemyMeshes.delete(id); }
 
     // 弾: 猫の技はその絵（爪・牙・毛糸玉など）が、技ごとの動きで出る。虫の攻撃は縁取りのある玉。
-    let nGlow = 0, nTech = 0, nOrb = 0, nRib = 0, nRing = 0, nPost = 0;
+    let nGlow = 0, nTech = 0, nOrb = 0, nRib = 0, nRing = 0, nPost = 0, nRoomba = 0, nFriend = 0;
     const techSprite = (tech: TechFx, x: number, y: number, z: number, size: number, rot: number, opacity = 1) => {
       const tex = this.techTex.get(tech);
       if (!tex) return;
@@ -242,7 +260,7 @@ export class GameView {
       }
       const fade = Math.min(1, pr.life / 0.15);
       const elColor = { none: null, static: "#ffe066", wet: "#74c0fc", sticky: "#e0b552", repel: "#8ce99a" }[pr.element];
-      if (pr.motion !== "trap" && pr.motion !== "ring") {
+      if (pr.motion !== "trap" && pr.motion !== "ring" && (pr.motion !== "summon" || elColor)) {
         const glow = this.sprite("glow", nGlow++, () => new THREE.SpriteMaterial({ map: this.glow, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
         glow.position.set(pr.pos.x, 0.42, pr.pos.z); const k = pr.radius * 3.2 + (elColor ? 0.35 : 0); glow.scale.set(k, k, k);
         glow.material.color.set(elColor ?? pr.color); glow.material.opacity = 0.6 * fade;
@@ -275,6 +293,26 @@ export class GameView {
           const ph = Math.floor(pr.t / 0.07);
           const side = { x: -pr.dir.z, z: pr.dir.x }, off = Math.sin(ph * 2.3) * pr.reach * 0.35, fwd = 0.5 + (ph % 3) * 0.15 * pr.reach;
           techSprite(pr.tech, p.pos.x + pr.dir.x * fwd + side.x * off, 0.6, p.pos.z + pr.dir.z * fwd + side.z * off, 0.55 + pr.radius * 0.6, Math.atan2(-pr.dir.z, pr.dir.x), fade);
+          break;
+        }
+        case "summon": {
+          const leave = Math.min(1, pr.life / 0.6);   // 消えるときは小さくなる
+          if (pr.tech === "roomba") {
+            const m = this.flat("roomba", nRoomba++, () => new THREE.Mesh(this.planeGeo, new THREE.MeshBasicMaterial({ map: this.techTex.get("roomba"), transparent: true, alphaTest: 0.1 })));
+            const k = pr.radius * 2.8 * leave;
+            m.position.set(pr.pos.x, 0.12, pr.pos.z); m.rotation.set(-Math.PI / 2, Math.atan2(-pr.vel.z, pr.vel.x), 0); m.scale.set(k, k, 1);
+            (m.material as THREE.MeshBasicMaterial).color.set(elColor ? new THREE.Color(elColor).lerp(new THREE.Color("#ffffff"), 0.5) : "#ffffff");
+          } else {
+            const sp = this.sprite("friend", nFriend++, () => { const m = new THREE.SpriteMaterial({ transparent: true, alphaTest: 0.4 }); return m; });
+            sp.center.set(0.5, 0);
+            const moving = Math.hypot(pr.vel.x, pr.vel.z) > 0.3, ph = (world.time * 3.5 + pr.id) % 4;
+            const tex = this.friendTex[moving ? Math.floor(ph) : 0];
+            if (tex && sp.material.map !== tex) { sp.material.map = tex; sp.material.needsUpdate = true; }
+            const h = 1.05 * (0.66 + pr.radius) * leave, face = (moving ? pr.vel.x : pr.dir.x) < 0 ? -1 : 1;
+            sp.position.set(pr.pos.x, moving ? Math.abs(Math.sin(ph * Math.PI)) * 0.06 : 0, pr.pos.z);
+            sp.scale.set(face * h * 1.04, h, 1);
+            sp.material.color.set(elColor ? new THREE.Color(elColor).lerp(new THREE.Color("#ffffff"), 0.55) : "#ffffff");
+          }
           break;
         }
         case "trap": {   // 床に置いた爪とぎ
@@ -324,6 +362,7 @@ export class GameView {
     }
     this.hideRest("orb", nOrb); this.hideRest("glow", nGlow); this.hideRest("tech", nTech);
     this.hideRest("rib", nRib); this.hideRest("ring", nRing); this.hideRest("post", nPost);
+    this.hideRest("roomba", nRoomba); this.hideRest("friend", nFriend);
     this.hideRest("num", nNum); this.hideRest("hit", nHit); this.hideRest("fx", nFx);
 
     // 季節の舞うもの

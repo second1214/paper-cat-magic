@@ -76,6 +76,8 @@ export interface Projectile {
   /** 虫ごとの当たった回数と、次に当たれる時刻（多段）。 */
   hitLog: Map<number, { n: number; next: number }>;
   payloadDone: boolean;
+  /** 召喚した仲間の次の攻撃までの秒数。 */
+  cd: number;
 }
 
 /** 当たったときの性質（遅れて当たる多段にも使う）。 */
@@ -353,7 +355,7 @@ export class World {
       damage: s.damage, radius: s.radius, life: s.life, pierce: s.pierce, bounce: s.bounce, homing: s.homing,
       explode: s.explode, slow: s.slow, color: s.color, tech: s.tech, payload: shot.payload,
       motion: s.motion, hits: s.hits, hitEvery: s.hitEvery, reach: s.reach, element: s.element, knock: s.knock,
-      t: 0, life0: s.life, origin: { ...from }, ang: a + angleOffset, angVel: s.speed, dir: d, hitLog: new Map(), payloadDone: false,
+      t: 0, life0: s.life, origin: { ...from }, ang: a + angleOffset, angVel: s.speed, dir: d, hitLog: new Map(), payloadDone: false, cd: 0,
     };
     if (s.motion === "orbit") { pr.vel = { x: 0, z: 0 }; pr.pos = { x: from.x + Math.cos(pr.ang) * s.reach, z: from.z + Math.sin(pr.ang) * s.reach }; }
     if (s.motion === "ring" || s.motion === "melee") pr.vel = { x: 0, z: 0 };
@@ -363,6 +365,12 @@ export class World {
       let t = 0;
       while (t < s.reach) { const c = cellAt(L, from.x + d.x * (t + 0.1), from.z + d.z * (t + 0.1)); if (cellValue(L, c.c, c.r) !== Cell.Floor) break; t += 0.1; }
       pr.pos = { x: from.x + d.x * t, z: from.z + d.z * t };
+    }
+    if (s.motion === "summon") {
+      // 仲間は猫の少し前に出てくる。ルンバは狙った向きへ走り出す
+      const ahead = { x: from.x + d.x * 0.6, z: from.z + d.z * 0.6 }, c = cellAt(L, ahead.x, ahead.z);
+      pr.pos = cellValue(L, c.c, c.r) === Cell.Floor ? ahead : { ...from };
+      if (s.tech !== "roomba") pr.vel = { x: 0, z: 0 };
     }
     if (s.motion === "trap") {
       pr.vel = { x: 0, z: 0 };
@@ -509,6 +517,8 @@ export class World {
         pr.pos = { x: p.pos.x + Math.cos(pr.ang) * pr.reach, z: p.pos.z + Math.sin(pr.ang) * pr.reach };
       } else if (pr.motion === "melee") {
         pr.pos = { x: p.pos.x + pr.dir.x * pr.reach * 0.55, z: p.pos.z + pr.dir.z * pr.reach * 0.55 };
+      } else if (pr.motion === "summon") {
+        this.updateSummon(pr, dt, spawned);
       } else if (pr.motion === "shot" || pr.motion === "beam") {
         if (pr.homing > 0 && pr.owner === "player" && pr.motion === "shot") {
           const t = this.nearestEnemy(pr.pos, 7);
@@ -529,7 +539,7 @@ export class World {
         const info: HitInfo = { slow: pr.slow, element: pr.element, tech: pr.tech, color: pr.color, knock: pr.knock };
         const R = pr.motion === "ring" ? pr.reach * Math.min(1, pr.t / (pr.life0 * 0.75)) : 0;
         for (const e of this.enemies) {
-          if (e.spawn > 0 || e.hp <= 0) continue;
+          if (e.spawn > 0 || e.hp <= 0 || (pr.motion === "summon" && pr.tech !== "roomba")) continue; // 友達猫は自分で狙ってひっかく
           const rec = pr.hitLog.get(e.id);
           if (rec && (rec.n >= pr.hits || pr.t < rec.next || pr.motion === "shot")) continue;
           let touch = false, push: Vec = pr.dir;
@@ -540,6 +550,7 @@ export class World {
             case "ring": { const d = dist(e.pos, pr.origin); touch = d <= R + e.radius && d >= R - e.radius - 0.6; push = norm({ x: e.pos.x - pr.origin.x, z: e.pos.z - pr.origin.z }); break; }
             case "melee": touch = dist(e.pos, pr.pos) <= pr.reach * 0.55 + e.radius; break;
             case "trap": touch = dist(e.pos, pr.pos) <= pr.radius + e.radius; push = { x: 0, z: 0 }; break;
+            case "summon": touch = dist(e.pos, pr.pos) <= pr.radius + e.radius; push = norm({ x: e.pos.x - pr.pos.x, z: e.pos.z - pr.pos.z }); break;
           }
           if (!touch) continue;
           pr.hitLog.set(e.id, { n: (rec?.n ?? 0) + (pr.motion === "shot" ? pr.hits : 1), next: pr.t + pr.hitEvery });
@@ -548,7 +559,7 @@ export class World {
             for (let k = 1; k < pr.hits; k++) this.later.push({ t: k * pr.hitEvery, eid: e.id, dmg: pr.damage, info, dir: push }); // かじかじ: 食い込んで削る
             if (pr.payload.length) for (const s of pr.payload) spawned.push({ shot: s, pos: { ...pr.pos }, dir: norm(pr.vel) });
             if (pr.pierce > 0) pr.pierce--; else { dead = true; break; }
-          } else if (!pr.payloadDone && pr.payload.length) {
+          } else if ((pr.motion === "summon" || !pr.payloadDone) && pr.payload.length) {
             pr.payloadDone = true;
             for (const s of pr.payload) spawned.push({ shot: s, pos: { ...e.pos }, dir: pr.dir });
           }
@@ -582,6 +593,31 @@ export class World {
       return false;
     });
     if (this.enemies.length < before) this.events.push("kill");
+  }
+
+  /** 召喚した仲間の動き。ルンバは壁ではね返りながら走る。友達猫は近くの虫を追ってひっかく（いなければ猫のそばへ）。 */
+  private updateSummon(pr: Projectile, dt: number, spawned: { shot: Shot; pos: Vec; dir: Vec }[]) {
+    const before = { ...pr.pos };
+    if (pr.tech === "roomba") {
+      this.moveCircle(pr.pos, pr.vel, pr.radius, dt, false, false);
+      if (Math.abs(pr.pos.x - before.x) < Math.abs(pr.vel.x * dt) * 0.5) pr.vel.x *= -1;
+      if (Math.abs(pr.pos.z - before.z) < Math.abs(pr.vel.z * dt) * 0.5) pr.vel.z *= -1;
+      return;
+    }
+    pr.cd -= dt;
+    const t = this.nearestEnemy(pr.pos, 14), goal = t ? t.pos : this.player.pos;
+    const d = dist(pr.pos, goal), dir = norm({ x: goal.x - pr.pos.x, z: goal.z - pr.pos.z });
+    const stop = t ? pr.reach * 0.6 + t.radius : 1.3;
+    const sp = d > stop ? pr.angVel : 0;
+    pr.vel = { x: dir.x * sp, z: dir.z * sp };
+    this.moveCircle(pr.pos, pr.vel, pr.radius, dt, false, false);
+    if (!t || pr.cd > 0 || d > pr.reach + t.radius) return;
+    pr.cd = pr.hitEvery;
+    pr.dir = dir;
+    const info: HitInfo = { slow: pr.slow, element: pr.element, tech: "claw", color: pr.color, knock: pr.knock };
+    this.hitEnemy(t, pr.damage, info, dir);
+    for (let k = 1; k < pr.hits; k++) this.later.push({ t: k * 0.12, eid: t.id, dmg: pr.damage, info, dir });
+    for (const s of pr.payload) spawned.push({ shot: s, pos: { ...pr.pos }, dir });
   }
 
   private explode(pr: Projectile) {

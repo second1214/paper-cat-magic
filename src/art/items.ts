@@ -126,6 +126,24 @@ const TECH_DRAW: Record<Exclude<TechFx, "enemy">, (g: CanvasRenderingContext2D) 
     g.strokeStyle = "#7a3e12"; g.lineWidth = 6;
     for (const k of [0, 1, 2]) { g.beginPath(); g.moveTo(70 + k * 22, 75); g.lineTo(90 + k * 22, 125); g.stroke(); }
   },
+  friend: (g) => {   // 友達猫（グレーの猫の顔）
+    g.fillStyle = "#adb5bd"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.moveTo(40, 85); g.lineTo(48, 20); g.lineTo(88, 55); g.lineTo(112, 55); g.lineTo(152, 20); g.lineTo(160, 85);
+    g.bezierCurveTo(175, 160, 25, 160, 40, 85); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "#f1f3f5"; g.beginPath(); g.ellipse(100, 128, 34, 24, 0, 0, 7); g.fill();
+    g.strokeStyle = "#6c757d"; g.lineWidth = 5; for (const x of [80, 100, 120]) { g.beginPath(); g.moveTo(x, 50); g.lineTo(x, 70); g.stroke(); }
+    g.fillStyle = "#94d82d"; g.strokeStyle = INK; g.lineWidth = 4;
+    for (const x of [72, 128]) { g.beginPath(); g.ellipse(x, 100, 13, 15, 0, 0, 7); g.fill(); g.stroke(); g.fillStyle = INK; g.beginPath(); g.ellipse(x, 100, 4, 11, 0, 0, 7); g.fill(); g.fillStyle = "#94d82d"; }
+    g.fillStyle = "#ff8fa3"; g.beginPath(); g.moveTo(92, 120); g.lineTo(108, 120); g.lineTo(100, 129); g.closePath(); g.fill();
+  },
+  roomba: (g) => {   // お掃除ロボ（上から見た円盤）
+    g.fillStyle = "#495057"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.arc(100, 100, 82, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#adb5bd"; g.beginPath(); g.arc(100, 100, 62, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#212529"; g.beginPath(); g.arc(100, 100, 22, 0, 7); g.fill();
+    g.fillStyle = "#51cf66"; g.beginPath(); g.arc(100, 100, 8, 0, 7); g.fill();
+    g.fillStyle = "#343a40"; g.beginPath(); g.roundRect(150, 70, 22, 60, 8); g.fill();   // 前のバンパー（右が前）
+  },
 };
 
 /** 修飾の絵。 */
