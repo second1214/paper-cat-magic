@@ -2,13 +2,11 @@
 import * as THREE from "three";
 
 const STAND = 1.45; // 立ち姿の高さ（ワールド単位）。カメラを引いたので大きめ
-const STEP = 0.38;      // 歩き1コマで進む距離
 const STEP_RUN = 0.55;  // 走り1コマで進む距離（速さ5.2で約9.5コマ/秒）
 
 /** 画像名と、1ピクセルあたりのワールド長。素材ごとに描かれた縮尺が違うので個別に揃える。 */
 const FRAMES: Record<string, number> = {
   A04_blink_1: STAND / 365, A04_blink_2: STAND / 365, A04_blink_3: STAND / 365,
-  A01_walk_1: STAND / 300, A01_walk_2: STAND / 300, A01_walk_3: STAND / 300, A01_walk_4: STAND / 300,
   A02_run_1: STAND / 297, A02_run_2: STAND / 297, A02_run_3: STAND / 297, A02_run_4: STAND / 297,
   A05_jump_1: STAND / 297, A05_jump_2: STAND / 297, A05_jump_3: STAND / 297, A05_jump_4: STAND / 297,
   A03_turn_4: STAND / 322,
@@ -66,13 +64,12 @@ export class CatDoll {
     switch (state) {
       case "walk": {
         // 歩いた距離でコマを送る（時間で送ると、速く動くほど足が床を滑って見える）。
-        // 歩きの絵は前足しか動かないので、ゆっくり（スティック半分以下）のときだけ使い、
-        // ふつうの速さ（本物の猫なら小走り）は脚がはっきり動く走りの4コマで見せる。
-        const run = speed > 3.2;
-        this.stride += (dt * speed) / (run ? STEP_RUN : STEP);
+        // 歩きの4コマは後ろ足が全コマ同じで前足も2ポーズしかなく、2コマに見えてしまうため、
+        // 移動は速さに関係なく、脚がはっきり動く走りの4コマで見せる（速さで絵を切り替えるとちらつく）。
+        this.stride += dt * Math.max(7, speed / STEP_RUN);   // ゆっくりでもスローモーションに見えないよう最低7コマ/秒
         const f = Math.floor(this.stride) % 4, ph = this.stride * Math.PI / 2;
-        name = run ? `A02_run_${f + 1}` : `A01_walk_${f + 1}`;
-        bob = Math.abs(Math.sin(ph)) * (run ? 0.06 : 0.04);
+        name = `A02_run_${f + 1}`;
+        bob = Math.abs(Math.sin(ph)) * 0.06;
         tilt = Math.sin(ph) * 0.03;
         break;
       }
