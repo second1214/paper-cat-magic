@@ -8,7 +8,7 @@ export const CURSES: Record<string, CurseDef> = {
   sekkachi: { id: "sekkachi", name: "虫がせっかち", desc: "虫の速さ ＋12%" },
   tsuyoi: { id: "tsuyoi", name: "強い虫がよく出る", desc: "強い虫（光っている虫）が出やすい" },
   mure: { id: "mure", name: "虫の群れ", desc: "1回に出てくる虫 ＋1匹" },
-  neage: { id: "neage", name: "お店の値上げ", desc: "お店の値段 ×1.5" },
+  neage: { id: "neage", name: "ママがきびしい", desc: "ママのところでカリカリが1.5倍いる" },
   nemui: { id: "nemui", name: "ねむい", desc: "やる気の回復 −15%", bonus: { regenMul: 0.85 } },
   kaze: { id: "kaze", name: "かぜぎみ", desc: "最大HP −♥1", bonus: { maxHp: -2 } },
 };

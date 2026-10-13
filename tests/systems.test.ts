@@ -167,3 +167,40 @@ describe("解放（負けても積み上がる）", () => {
     expect(lockedKeys(after).length).toBe(UNLOCKS.length - got.length);
   });
 });
+
+describe("リビングに来る子どもたち", () => {
+  const kid = (w: World, type: "boy" | "girl", dx: number) => {
+    const e = { ...dummy(w.player.pos.x + dx, w.player.pos.z, 500 + dx), type, speed: type === "boy" ? 2.7 : 1.6, radius: 0.5, hp: 1e9, maxHp: 1e9 } as Enemy;
+    w.enemies.push(e); return e;
+  };
+  it("攻撃は効かず、弾は通りぬけて後ろの虫に当たる", () => {
+    const w = arena({ dx: 4, dz: 0 });
+    const k = kid(w, "girl", 2); k.phase = 99;   // 遊びに夢中で追いかけてこない
+    w.toy.slots = ["claw", null, null, null, null, null];
+    run(w, 1 / 60, { fire: true }); run(w, 0.6);
+    expect(k.hp).toBe(1e9);
+    expect(w.enemies.find((e) => e.type === "roach")!.hp).toBeLessThan(1000);
+  });
+  it("つかまると数秒動けず♥が減り、そのあと抜け出せる", () => {
+    const w = arena({ dx: 6, dz: 0 });   // 虫が残っている部屋（片付くと子どもは帰ってしまう）
+    const k = kid(w, "boy", 0.6);
+    const hp = w.player.hp;
+    w.update(1 / 60, { move: { x: 0, z: 0 }, aim: null, fire: false, dash: false });
+    expect(w.player.held).toBeGreaterThan(0);
+    expect(w.player.hp).toBeLessThan(hp);
+    w.update(1 / 60, { move: { x: 1, z: 0 }, aim: null, fire: false, dash: false });
+    const at = { ...w.player.pos };
+    for (let t = 0; t < 1; t += 1 / 60) w.update(1 / 60, { move: { x: 1, z: 0 }, aim: null, fire: false, dash: false });
+    expect(Math.hypot(w.player.pos.x - k.pos.x, w.player.pos.z - k.pos.z)).toBeLessThan(0.5);
+    expect(Math.abs(w.player.pos.x - at.x)).toBeLessThan(0.1);   // 歩こうとしても動けない
+    for (let t = 0; t < 2; t += 1 / 60) w.update(1 / 60, { move: { x: 1, z: 0 }, aim: null, fire: false, dash: false });
+    expect(w.player.held).toBe(0);
+  });
+  it("虫がいなくなれば、子どもがいても部屋は片付く（子どもは帰る）", () => {
+    const w = arena(null);
+    kid(w, "girl", 6).phase = 99;
+    run(w, 0.1);
+    expect(w.room.cleared).toBe(true);
+    expect(w.enemies).toHaveLength(0);
+  });
+});

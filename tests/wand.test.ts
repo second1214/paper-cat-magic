@@ -83,7 +83,7 @@ describe("planCast", () => {
     expect(passiveCost(t)).toBe(SPELLS.maigofuda.mana);
   });
 
-  it("いっしょには左の技を右の技に合体させる", () => {
+  it("ふたつ持ちは左の技と右の技を1つにまとめる", () => {
     const a = planCast(toy(["water", "claw", "issho", "hairball"]), 0, 999);
     expect(a.shots).toHaveLength(1);
     const s = a.shots[0].stats;

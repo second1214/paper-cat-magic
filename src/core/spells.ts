@@ -120,7 +120,7 @@ export const KIND_LABEL: Record<SpellKind, string> = {
   modifier: "修飾",
   multicast: "修飾",
   trigger: "修飾",
-  duet: "合体",
+  duet: "2つ持ち",
 };
 
 export const SPELLS: Record<string, SpellDef> = {
@@ -302,8 +302,8 @@ export const SPELLS: Record<string, SpellDef> = {
     desc: "左の技が飛んで0.45秒たった所から、右の技を出す（当たらなくても出る）",
   },
   issho: {
-    id: "issho", name: "いっしょに", kind: "duet", mana: 10, glyph: "合", color: "#e8590c",
-    desc: "合体。左の技を右の技に混ぜて1つにする（左の攻撃力・多段・貫通・はね返り・範囲・属性を右の技に足す）",
+    id: "issho", name: "ふたつ持ち", kind: "duet", mana: 10, glyph: "両", color: "#e8590c",
+    desc: "前足でおもちゃを2つ同時に扱う。左の技と右の技を1つの技にまとめて出す（左の攻撃力・多段・貫通・はね返り・範囲・属性を右の技に足す）",
   },
   // ---- 左・両側・全体の修飾 ----
   okawari: {
@@ -396,14 +396,14 @@ export function spellStats(def: SpellDef): [string, string][] {
   if (m?.lifeMul) out.push(["とどく距離", `×${m.lifeMul}`]);
   if (def.kind === "multicast") out.push(["同時に出す", `右の${def.count}つ`]);
   if (def.kind === "trigger") out.push(def.timer ? ["出てから", `${def.timer}秒で右の技`] : ["左の技が当たると", "そこから右の技"]);
-  if (def.kind === "duet") out.push(["合体", "左の技＋右の技 → 1つ"]);
+  if (def.kind === "duet") out.push(["ふたつ持ち", "左の技＋右の技を同時に → 1つの技"]);
   if (def.kind === "modifier") out.push(["かかる向き", `${DIR_INFO[def.dir ?? "right"].arrow} ${DIR_INFO[def.dir ?? "right"].label}`]);
   if (def.dir === "all") out[0] = ["やる気の最大", `−${def.mana}`];
   out.push(["レア度", SPELL_RAR_NAME[def.rar ?? 0]]);
   return out;
 }
 
-// ---------- 合成（Magicraft の鍛冶: 同じ技3つで★の技に） ----------
+// ---------- ママのお直し（Magicraft の鍛冶: 同じ物3つで★の物に） ----------
 /** id の末尾の「+」の数が★の数（"claw+" = ひっかき★）。 */
 export const baseId = (id: string) => id.replace(/\+*$/, "");
 export const starsOf = (id: string) => id.length - baseId(id).length;

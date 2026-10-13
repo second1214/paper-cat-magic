@@ -210,7 +210,7 @@ export const OUTDOOR_TEMPLATES: Record<string, string[]> = Object.fromEntries(Ob
 /** ボス部屋（出口は倒した後に開く1つだけ）。 */
 export const BOSS_TEMPLATE = stretch(BASE_BOSS, ROOM_W, ROOM_H);
 
-/** お店（近所のボス猫のお店。虫は出ない）。 */
+/** ママのところ・特別な部屋（虫は出ない）。 */
 export const SHOP_TEMPLATE = T([
   "########3#########",
   "#................#",
