@@ -13,7 +13,7 @@ const LEAN = 0.42;
 const ENEMY_H: Record<EnemyType, number> = {
   roach: 0.95, mosquito: 0.95, spider: 1.0, hornet: 2.4, stinkbug: 0.95, camel: 1.0, ant: 0.7, caterpillar: 0.95,
   stinkKing: 3.4, camelKing: 3.4, queen: 3.2,   // 王冠のぶん絵が縦長なので大きめ
-  mama: 3.8, boy: 2.3, girl: 1.8,
+  mama: 3.8, boy: 2.7, girl: 2.2,
 };
 const FLY: Partial<Record<EnemyType, number>> = { mosquito: 0.55, hornet: 0.35 };
 
@@ -101,7 +101,8 @@ export class GameView {
     // 子どもの絵（public/kids にあればそれを、なければ仮の絵）。hug は猫をだっこしている絵
     const load = async (url: string) => { try { const t = await new THREE.TextureLoader().loadAsync(url); t.colorSpace = THREE.SRGBColorSpace; return t; } catch { return null; } };
     for (const k of ["boy", "girl"] as const) {
-      const walk = await load(`${base}kids/${k}_walk.png`); if (walk) this.enemyTex.set(k, walk);
+      const walk = await load(`${base}kids/${k}_walk.png`); if (walk) this.enemyTex.set(k, walk);   // 両手をのばして追いかける
+      const run = await load(`${base}kids/${k}_run.png`); if (run) this.runTex.set(k, run);          // ひと息ついて走り回る
       const hug = await load(`${base}kids/${k}_hug.png`);
       this.hugTex.set(k, hug ? { tex: hug, drawsCat: true } : { tex: canvasTexture(kidCanvas(k, true)), drawsCat: false });
     }
@@ -149,6 +150,8 @@ export class GameView {
   private hugTex = new Map<"boy" | "girl", { tex: THREE.Texture; drawsCat: boolean }>();
   /** お店のママ（mama/shop.png があればそれ、なければ歩くママ）。 */
   private mamaShopTex: THREE.Texture | null = null;
+  /** 子どもが追いかけていないとき（ひと息中）の絵。 */
+  private runTex = new Map<"boy" | "girl", THREE.Texture>();
   private altarTex(k: AltarKind) {
     let t = this.altarTexs.get(k);
     if (!t) { t = canvasTexture(rewardCanvas(k)); this.altarTexs.set(k, t); }
@@ -266,10 +269,10 @@ export class GameView {
       let wide = 1;
       if (e.type === "boy" || e.type === "girl") {   // だっこ中は、だっこの絵に差し替える
         const base = this.enemyTex.get(e.type)!, h = this.hugTex.get(e.type)!, holding = p.holder === e.id && p.held > 0;
-        const tex = holding ? h.tex : base, mat = (g.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
+        const tex = holding ? h.tex : e.phase > 0 ? this.runTex.get(e.type) ?? base : base, mat = (g.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
         if (mat.map !== tex) { mat.map = tex; mat.needsUpdate = true; }
         const ar = (t: THREE.Texture) => { const im = t.image as { width: number; height: number }; return im.width / im.height; };
-        if (holding) wide = ar(h.tex) / ar(base);
+        wide = ar(tex) / ar(base);
       }
       const appear = e.spawn > 0 ? Math.max(0.05, 1 - e.spawn / 1.0) : 1;
       const squash = e.hurt > 0 ? 0.88 : 1, big = e.elite ? 1.3 : 1;   // 強い虫は大きく、足元が光る
