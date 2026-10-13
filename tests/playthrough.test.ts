@@ -1,7 +1,7 @@
 // 自動プレイで1年分（全季節・ボス）を通し、詰み（虫に届かない・扉に行けない）がないことを確かめる。
 import { describe, expect, it } from "vitest";
 import { Cell, cellAt, cellCenter, reach } from "../src/game/stage";
-import { World } from "../src/game/world";
+import { ROOMS_PER_ACT, World } from "../src/game/world";
 import { NO_META } from "../src/core/meta";
 
 /** 目標のマスへ向かう1歩の方向（壁・家具を避けた最短路）。 */
@@ -32,6 +32,7 @@ describe("playthrough", () => {
       if (w.title !== lastRoom) { lastRoom = w.title; rooms++; roomSteps = 0; }
       if (++roomSteps > 30 * 240) throw new Error(`stuck in ${w.title} ${JSON.stringify({ p: w.player.pos, e: w.enemies.map((e) => [e.type, e.pos, e.hp, e.spawn]), m: w.player.mana, cur: w.player.cursor })}`);
       if (w.phase === "reward") { w.takeReward(w.choices[0]); continue; }
+      if (w.phase === "shop") { w.shop!.items.forEach((_, i) => w.buy(i)); w.closeShop(); continue; }
       expect(w.phase).toBe("play");
       const foe = w.nearestEnemy(w.player.pos);
       const door = w.room.doors[rooms % w.room.doors.length];
@@ -41,6 +42,7 @@ describe("playthrough", () => {
       const L = w.room.layout;
       for (const e of w.enemies) expect(Math.abs(e.pos.x) < L.cols / 2 && Math.abs(e.pos.z) < L.rows / 2, `${e.type} が部屋の外`).toBe(true);
     }
-    expect(rooms).toBe(4 * 5);
+    expect(rooms).toBe(4 * (ROOMS_PER_ACT + 1) + 1);   // ＋さいごのママ
+    expect(w.room.kind).toBe("final");
   });
 });

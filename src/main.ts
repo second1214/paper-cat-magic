@@ -3,6 +3,7 @@ import { GameView } from "./render/view";
 import { Controls } from "./input";
 import { Hud } from "./ui/hud";
 import { loadRecord } from "./ui/record";
+import { Sound } from "./audio";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
@@ -11,6 +12,9 @@ const seed = () => Date.now() % 100000;
 const newWorld = (difficulty: number, s = seed()) => new World(s, { difficulty, meta: loadRecord().meta });
 let world = newWorld(1, Number(params.get("seed")) || seed());
 const view = new GameView(canvas);
+const sound = new Sound();
+// スマホは触れるまで音を出せないので、最初の操作で音を使えるようにする
+for (const ev of ["pointerdown", "keydown", "touchstart"]) addEventListener(ev, () => sound.unlock(), { passive: true });
 const hud = new Hud(
   () => world,
   () => { world = newWorld(world.opts.difficulty); world.start(); hud.bagOpen = false; },
@@ -32,7 +36,13 @@ let last = performance.now();
 function frame(now: number) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   const input = controls.read(view.camera, world.player.pos);
+  const wasOpen = world.doorOpen;
   if (!hud.bagOpen && !hud.paused) world.update(dt, input);
+  // 効果音と曲
+  for (const e of world.events) sound.sfx(e);
+  if (!wasOpen && world.doorOpen && world.room.kind !== "shop") sound.sfx("door");
+  const r = world.room;
+  sound.play(world.phase === "intro" ? "title" : r.kind === "final" ? "final" : r.kind === "shop" ? "shop" : r.kind === "boss" ? "boss" : r.season);
   view.render(world, dt);
   hud.update();
   requestAnimationFrame(frame);
@@ -40,4 +50,6 @@ function frame(now: number) {
 requestAnimationFrame(frame);
 
 // 自動テスト・撮影用のフック
-(window as unknown as { __game: unknown }).__game = { get world() { return world; }, view };
+(window as unknown as { __game: unknown }).__game = { get world() { return world; }, view, sound };
+hud.onMute = () => { sound.unlock(); sound.toggleMute(); return sound.muted; };
+hud.muted = () => sound.muted;

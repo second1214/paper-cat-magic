@@ -4,12 +4,13 @@
 // 構成（Magicraft 風）: 季節ごとの「章」= 部屋4つ＋ボス。部屋を片付けると出口が2〜3個開き、
 // 扉の上のアイコンで「次の部屋をクリアしたときのごほうび」を選んで進む。
 import { planCast, starterToy, TOYS, type Shot, type ToyDef } from "../core/wand";
-import { SPELL_IDS, SPELLS, type Element, type Motion, type TechFx } from "../core/spells";
+import { baseId, MAX_STARS, SPELL_IDS, SPELLS, spellDef, starsOf, type Element, type Motion, type TechFx } from "../core/spells";
 import { makeRng, type Rng } from "../core/rng";
 import { GEAR, GEAR_IDS, NO_BONUS, RELIC_IDS, RELICS, rollGear, totalBonus, type Bonus, type Gear, type GearItem } from "../core/items";
 import { DEFAULT_RUN, DIFFS, metaBonus, type RunOptions } from "../core/meta";
 import {
-  BOSS_TEMPLATE, buildLayout, Cell, cellAt, cellCenter, cellValue, SEASON_NAME, SEASONS, TEMPLATES, THEME_NAME, THEMES,
+  BOSS_TEMPLATE, buildLayout, Cell, cellAt, cellCenter, cellValue, FINAL_TEMPLATE, OUTDOOR, OUTDOOR_TEMPLATES, SEASON_NAME, SEASONS,
+  SHOP_TEMPLATE, TEMPLATES, THEME_NAME, THEMES,
   type Layout, type Season, type Theme,
 } from "./stage";
 
@@ -19,7 +20,7 @@ export interface Vec { x: number; z: number }
  * 季節ごとの虫。秋: カメムシ・蚊・クモ／冬: カマドウマ・クモ・ゴキブリ／春: アリ・毛虫・クモ／夏: ゴキブリ・蚊・クモ・アリ。
  * ボスは 秋: カメムシ大王・冬: カマドウマ親分・春: 毛虫の女王・夏: スズメバチ。
  */
-export type EnemyType = "roach" | "mosquito" | "spider" | "hornet" | "stinkbug" | "camel" | "ant" | "caterpillar" | "stinkKing" | "camelKing" | "queen";
+export type EnemyType = "roach" | "mosquito" | "spider" | "hornet" | "stinkbug" | "camel" | "ant" | "caterpillar" | "stinkKing" | "camelKing" | "queen" | "mama";
 
 /** 体力・半径・速さ・飛ぶか・ボスか・名前。 */
 export const ENEMY: Record<EnemyType, { hp: number; r: number; speed: number; fly?: boolean; boss?: boolean; name: string }> = {
@@ -34,6 +35,7 @@ export const ENEMY: Record<EnemyType, { hp: number; r: number; speed: number; fl
   stinkKing: { hp: 330, r: 1.05, speed: 1.0, boss: true, name: "カメムシ大王" },
   camelKing: { hp: 340, r: 1.0, speed: 1.0, boss: true, name: "カマドウマ親分" },
   queen: { hp: 320, r: 1.05, speed: 0.9, boss: true, name: "毛虫の女王" },
+  mama: { hp: 1e9, r: 0.7, speed: 1.6, boss: true, name: "ママ" },   // さいご: 倒せない。猫を病院へ連れて行こうと近づいてくる
 };
 const isBoss = (t: EnemyType) => !!ENEMY[t].boss;
 const isFly = (t: EnemyType) => !!ENEMY[t].fly;
@@ -145,7 +147,7 @@ export interface HeldToy { def: ToyDef; mana: number; cursor: number }
 export const MAX_TOYS = 3;
 
 /** 扉のごほうび。部屋をクリアすると受け取れる。 */
-export type RewardKind = "hp" | "mp" | "spell" | "toy" | "relic" | "gear" | "boss" | "next";
+export type RewardKind = "hp" | "mp" | "spell" | "toy" | "relic" | "gear" | "shop" | "boss" | "next";
 export const REWARD_INFO: Record<RewardKind, { icon: string; label: string; color: string }> = {
   hp: { icon: "♥", label: "最大HP アップ", color: "#ff5f7e" },
   mp: { icon: "⚡", label: "やる気 アップ", color: "#3fa7ff" },
@@ -153,6 +155,7 @@ export const REWARD_INFO: Record<RewardKind, { icon: string; label: string; colo
   toy: { icon: "🧸", label: "おもちゃをもらう", color: "#c77dff" },
   relic: { icon: "◆", label: "レリックをもらう", color: "#20c997" },
   gear: { icon: "👒", label: "装備をもらう", color: "#f783ac" },
+  shop: { icon: "🐱", label: "お店（ボス猫）", color: "#fab005" },
   boss: { icon: "☠", label: "ボス", color: "#e03131" },
   next: { icon: "➜", label: "次の季節へ", color: "#2f9e44" },
 };
@@ -164,7 +167,7 @@ export interface Room {
   index: number; // 章の中で 0..ROOMS_PER_ACT（最後がボス）
   season: Season;
   theme: Theme;
-  kind: "combat" | "boss";
+  kind: "combat" | "boss" | "shop" | "final";
   layout: Layout;
   w: number; // 半幅（カメラ用）
   d: number;
@@ -176,7 +179,18 @@ export interface Room {
   doors: Door[];
 }
 
-export type Phase = "intro" | "play" | "reward" | "dead" | "win";
+export type Phase = "intro" | "play" | "reward" | "shop" | "dead" | "win";
+
+/** 落ちているカリカリ（お金）。 */
+export interface Pickup { id: number; pos: Vec; value: number; t: number }
+
+/** お店の品物（Magicraft のお店: 技とポーションを買い、お金で品ぞろえを入れ替える。売れない）。 */
+export interface ShopItem { kind: "spell" | "potion"; id: string; price: number; sold: boolean }
+export const POTIONS: Record<string, { name: string; desc: string; price: number }> = {
+  milk: { name: "猫用ミルク", desc: "♥1 回復", price: 6 },
+  churu: { name: "ちゅ〜る", desc: "♥ぜんぶ回復", price: 16 },
+  goldNiboshi: { name: "金のにぼし", desc: "持っているカリカリが1.25倍（最低＋3）", price: 6 },
+};
 
 export type Choice = { kind: "spell" | "toy" | "relic" | "gear"; id: string; gear?: GearItem };
 
@@ -188,7 +202,7 @@ export interface Input {
   dash: boolean;
 }
 
-export const ROOMS_PER_ACT = 4; // ＋ボス
+export const ROOMS_PER_ACT = 5; // ＋ボス
 export const ACTS = SEASONS.length;
 
 export class World {
@@ -213,6 +227,13 @@ export class World {
   cleared = 0;
   bosses = 0;
   enemies: Enemy[] = [];
+  /** カリカリ（この冒険のお金）と、落ちているもの。 */
+  coins = 0;
+  pickups: Pickup[] = [];
+  /** お店の品ぞろえ。 */
+  shop: { items: ShopItem[]; rerollCost: number; pos: Vec; away: boolean } | null = null;
+  /** さいごの部屋の経過秒（ママがだんだん速くなる）。 */
+  finalT = 0;
   projectiles: Projectile[] = [];
   fx: Fx[] = [];
   room!: Room;
@@ -275,6 +296,8 @@ export class World {
 
   get title() {
     const r = this.room;
+    if (r.kind === "final") return "さいご・ママ";
+    if (r.kind === "shop") return `${SEASON_NAME[r.season]}・ボス猫のお店`;
     return `${SEASON_NAME[r.season]}・${r.kind === "boss" ? "ボス" : `${THEME_NAME[r.theme]} ${r.index + 1}/${ROOMS_PER_ACT}`}`;
   }
 
@@ -284,22 +307,27 @@ export class World {
     const season = SEASONS[act];
     if (index === 0) this.usedThemes = [];
     let theme: Theme;
-    if (boss) theme = "garden";
+    const shop = reward === "shop";
+    if (boss || shop) theme = "garden";
     else {
-      const left = THEMES.filter((t) => !this.usedThemes.includes(t));
-      theme = this.rng.pick(left.length ? left : THEMES);
+      // 毎章どこかでお庭（外）を通る。それ以外は家の中も外もまぜて、同じ部屋は続けない
+      const pool = index === 2 ? OUTDOOR : THEMES;
+      const left = pool.filter((t) => !this.usedThemes.includes(t));
+      theme = this.rng.pick(left.length ? left : pool);
       this.usedThemes.push(theme);
     }
     // 出口の数: 2〜3（ボス直前は1つ＝ボス）
     const slots = [1, 2, 3].sort(() => this.rng.next() - 0.5);
     const doorSlots = boss ? [1] : index === ROOMS_PER_ACT - 1 ? [slots[0]] : slots.slice(0, this.rng.next() < 0.5 ? 2 : 3);
-    const tpl = boss ? BOSS_TEMPLATE : TEMPLATES[this.rng.pick(Object.keys(TEMPLATES))];
+    const outside = OUTDOOR.includes(theme) && !boss && !shop && this.rng.next() < 0.6;
+    const tplSet = outside ? OUTDOOR_TEMPLATES : TEMPLATES;
+    const tpl = shop ? SHOP_TEMPLATE : boss ? BOSS_TEMPLATE : tplSet[this.rng.pick(Object.keys(tplSet))];
     const layout = buildLayout(tpl, theme, this.rng, { flipX: false, flipY: !boss && this.rng.next() < 0.5, doors: doorSlots });
 
     // 敵の組み合わせ（章が進むほど多く・強く）
     const bugs = SEASON_BUGS[season], D = DIFFS[this.opts.difficulty];
     const pool = bugs.pool.slice(0, index === 0 ? (act === 0 ? 1 : 2) : index === 1 ? 2 : bugs.pool.length);
-    const waveCount = boss ? 1 : index < 2 && act === 0 ? 1 : 2;
+    const waveCount = shop ? 0 : boss ? 1 : index < 2 && act === 0 ? 1 : 2;
     const waves: EnemyType[][] = boss
       ? [[bugs.boss]]
       : Array.from({ length: waveCount }, () => {
@@ -308,7 +336,7 @@ export class World {
       });
 
     // 次の扉のごほうび（重ならないように）
-    const kinds: RewardKind[] = ["hp", "mp", "spell", "spell", "toy", "relic", "gear"];
+    const kinds: RewardKind[] = shop ? ["hp", "mp", "spell", "toy", "relic", "gear"] : ["hp", "mp", "spell", "spell", "toy", "relic", "gear", "shop"];
     const used = new Set<RewardKind>();
     const doors: Door[] = layout.exits.map((e) => {
       let k: RewardKind;
@@ -320,8 +348,13 @@ export class World {
 
     this.room = {
       act, index, season, theme, kind: boss ? "boss" : "combat", layout,
-      w: layout.cols / 2, d: layout.rows / 2, waves, wave: 0, cleared: false, reward, doors,
+      w: layout.cols / 2, d: layout.rows / 2, waves, wave: 0, cleared: false, reward: shop ? null : reward, doors,
     };
+    if (shop) {
+      this.room.kind = "shop";
+      this.shop = { items: this.stock(), rerollCost: 3, pos: cellCenter(layout, layout.cols >> 1, layout.rows >> 1), away: true };
+    } else this.shop = null;
+    this.pickups = [];
     this.enemies = []; this.projectiles = []; this.doorOpen = false; this.flow = null;
     this.player.pos = cellCenter(layout, layout.entry.c, layout.entry.r);
     this.player.shield = this.bonus.shield;
@@ -331,6 +364,7 @@ export class World {
 
   private spawnWave() {
     const r = this.room, L = r.layout;
+    if (!r.waves[r.wave]) return;
     const floors: Vec[] = [];
     for (let rr = 1; rr < L.rows - 1; rr++) for (let c = 1; c < L.cols - 1; c++) if (cellValue(L, c, rr) === Cell.Floor) floors.push(cellCenter(L, c, rr));
     const far = floors.filter((p) => dist(p, this.player.pos) > 7);
@@ -353,7 +387,28 @@ export class World {
     this.updateEnemies(dt);
     this.updateProjectiles(dt);
     this.updateFx(dt);
+    this.updatePickups(dt);
+    if (this.room.kind === "final") this.finalT += dt;
+    // お店: ボス猫に近づくとお店が開く（離れてからまた近づくと再び開く）
+    const sh = this.shop;
+    if (sh && this.phase === "play") {
+      const d = dist(this.player.pos, sh.pos);
+      if (d < 1.4 && sh.away) { sh.away = false; this.phase = "shop"; this.events.push("shop"); }
+      else if (d > 2.2) sh.away = true;
+    }
     this.checkRoom();
+  }
+
+  /** カリカリ: 近くにあると猫に吸い寄せられる。 */
+  private updatePickups(dt: number) {
+    const p = this.player;
+    this.pickups = this.pickups.filter((c) => {
+      c.t += dt;
+      const d = dist(c.pos, p.pos);
+      if (d < 0.5) { this.coins += c.value; this.events.push("coin"); return false; }
+      if (d < 2.8 && c.t > 0.3) { const k = Math.min(1, (9 * dt) / d); c.pos.x += (p.pos.x - c.pos.x) * k; c.pos.z += (p.pos.z - c.pos.z) * k; }
+      return true;
+    });
   }
 
   /** 一番近い（出現済みの）虫。 */
@@ -407,7 +462,9 @@ export class World {
     // おもちゃを振る
     p.castCd -= dt;
     if (p.castCd <= 0 && p.recharging) p.recharging = false;
-    if (input.fire && p.castCd <= 0) {
+    if (this.room.kind === "final") {   // さいごは肉球ペシペシだけ
+      if (input.fire && p.castCd <= 0) { this.fire({ stats: { ...SPELLS.punch.projectile!, damage: 0 }, payload: [] }, p.pos, p.aim, "player"); p.castCd = 0.3; this.events.push("cast"); }
+    } else if (input.fire && p.castCd <= 0) {
       const res = planCast(toy, p.cursor, p.mana);
       if (res.shots.length) {
         p.mana -= res.manaUsed;
@@ -439,10 +496,78 @@ export class World {
     if (this.doorOpen) for (const d of this.room.doors) if (dist(p.pos, d.pos) < 0.7) { this.goThrough(d); break; }
   }
 
+  // ---------- お店（Magicraft のお店と鍛冶） ----------
+  /** 技の値段（修飾は少し安い。★は高い）。 */
+  static price(id: string) { const d = spellDef(id); return Math.round((d.kind === "attack" ? 8 : d.kind === "modifier" ? 6 : 10) * (1 + starsOf(id) * 1.5)); }
+
+  private stock(): ShopItem[] {
+    const spells = pickN(this.rng, SPELL_IDS, 4).map((id): ShopItem => ({ kind: "spell", id, price: World.price(id), sold: false }));
+    const pots = pickN(this.rng, Object.keys(POTIONS), 2).map((id): ShopItem => ({ kind: "potion", id, price: POTIONS[id].price, sold: false }));
+    return [...spells, ...pots];
+  }
+
+  /** 品物を買う（カリカリが足りなければ false）。 */
+  buy(i: number): boolean {
+    const it = this.shop?.items[i];
+    if (!it || it.sold || this.coins < it.price) return false;
+    this.coins -= it.price; it.sold = true;
+    const p = this.player;
+    if (it.kind === "spell") this.bag.push(it.id);
+    else if (it.id === "milk") p.hp = Math.min(p.maxHp, p.hp + 2);
+    else if (it.id === "churu") p.hp = p.maxHp;
+    else if (it.id === "goldNiboshi") this.coins = Math.max(this.coins + 3, Math.floor(this.coins * 1.25));
+    this.events.push("buy");
+    return true;
+  }
+
+  /** 技の品ぞろえを入れ替える（だんだん高くなる）。 */
+  reroll(): boolean {
+    const sh = this.shop;
+    if (!sh || this.coins < sh.rerollCost) return false;
+    this.coins -= sh.rerollCost; sh.rerollCost += 2;
+    const pots = sh.items.filter((x) => x.kind === "potion");
+    sh.items = [...this.stock().filter((x) => x.kind === "spell"), ...pots];
+    this.events.push("buy");
+    return true;
+  }
+
+  /** 合成できる技（手持ちに同じものが3つ以上・★2まで）。 */
+  forgeable(): string[] {
+    const n = new Map<string, number>();
+    for (const id of this.bag) n.set(id, (n.get(id) ?? 0) + 1);
+    return [...n].filter(([id, k]) => k >= 3 && starsOf(id) < MAX_STARS).map(([id]) => id);
+  }
+
+  /** 鍛冶: 同じ技3つを★1つ上の技1つにする。 */
+  forge(id: string): boolean {
+    if (!this.forgeable().includes(id)) return false;
+    let left = 3;
+    this.bag = this.bag.filter((x) => !(x === id && left-- > 0));
+    this.bag.push(id + "+");
+    this.events.push("forge");
+    return true;
+  }
+
+  closeShop() { if (this.phase === "shop") this.phase = "play"; }
+
+  /** さいごの部屋: ママが猫を病院へ連れて行こうと近づいてくる。猫は肉球ペシペシしかできない。つかまったらクリア。 */
+  private enterFinal() {
+    const layout = buildLayout(FINAL_TEMPLATE, "living", this.rng, { doors: [] });
+    this.room = {
+      act: ACTS - 1, index: ROOMS_PER_ACT + 1, season: "summer", theme: "living", kind: "final", layout,
+      w: layout.cols / 2, d: layout.rows / 2, waves: [["mama"]], wave: 0, cleared: false, reward: null, doors: [],
+    };
+    this.enemies = []; this.projectiles = []; this.pickups = []; this.shop = null; this.doorOpen = false; this.flow = null; this.finalT = 0;
+    this.player.pos = cellCenter(layout, layout.entry.c, layout.entry.r); this.player.vel = { x: 0, z: 0 };
+    this.spawnWave();
+    this.notify("ママ「病院いこうね〜♪」");
+    this.events.push("final");
+  }
+
   private goThrough(d: Door) {
     const r = this.room;
     if (r.kind === "boss") {
-      if (r.act + 1 >= ACTS) { this.phase = "win"; this.events.push("win"); return; }
+      if (r.act + 1 >= ACTS) { this.enterFinal(); return; }
       this.enterRoom(r.act + 1, 0, null);
     } else this.enterRoom(r.act, r.index + 1, d.reward === "boss" ? null : d.reward);
   }
@@ -603,6 +728,10 @@ export class World {
             m.spawn = 0.6; spawnLater.push(m);
           } else for (let k = -3; k <= 3; k++) this.fire({ stats: enemyShot("#a9e34b", 5.5), payload: [] }, e.pos, direct, "enemy", k * 0.18);
         }
+      } else if (e.type === "mama") {   // ニコニコしながら近づいてくる。肉球でたたくと少し止まる。だんだん速くなる
+        const v = e.slow > 0 ? 0 : Math.min(4.6, 1.6 + this.finalT * 0.07);
+        e.vel = { x: to.x * v, z: to.z * v };
+        if (dist(e.pos, p.pos) < e.radius + p.radius) { this.phase = "win"; this.events.push("caught"); this.events.push("win"); }
       } else if (e.type === "hornet") {
         e.vel = { x: to.x * sp, z: to.z * sp };
         const hpRate = e.hp / e.maxHp, period = (hpRate < 0.5 ? 1.5 : 2.1) - this.room.act * 0.12;
@@ -622,7 +751,7 @@ export class World {
       const k = Math.exp(-7 * dt);
       this.moveCircle(e.pos, { x: e.vel.x + e.push.x, z: e.vel.z + e.push.z }, e.radius, dt, flying, false);
       e.push.x *= k; e.push.z *= k;
-      if (dist(e.pos, p.pos) < e.radius + p.radius) this.hurtPlayer(1, e.pos);
+      if (e.type !== "mama" && dist(e.pos, p.pos) < e.radius + p.radius) this.hurtPlayer(1, e.pos);
     }
     this.enemies.push(...spawnLater);
     for (let a = 0; a < this.enemies.length; a++) for (let b = a + 1; b < this.enemies.length; b++) {
@@ -761,6 +890,9 @@ export class World {
       return false;
     });
     for (const e of dead) {
+      // カリカリを落とす（ボスはたくさん）
+      const n = isBoss(e.type) ? 8 : e.type === "ant" ? (this.rng.next() < 0.5 ? 1 : 0) : 1 + (this.rng.next() < 0.4 ? 1 : 0);
+      for (let k = 0; k < n; k++) this.pickups.push({ id: this.nextId++, pos: { x: e.pos.x + (this.rng.next() - 0.5) * 1.2, z: e.pos.z + (this.rng.next() - 0.5) * 1.2 }, value: isBoss(e.type) ? 2 : 1, t: 0 });
       if (e.type === "stinkbug") this.gas(e.pos, 0.9);   // カメムシは倒すとくさい
       if (this.bonus.killHeal && this.rng.next() < this.bonus.killHeal) this.player.hp = Math.min(this.player.maxHp, this.player.hp + 1);
       if (this.bonus.killBoom) {   // 倒した虫がはじける
@@ -816,6 +948,12 @@ export class World {
 
   /** 技が虫に当たった: ダメージ・属性・はじき飛ばし。 */
   private hitEnemy(e: Enemy, dmg: number, h: HitInfo, dir: Vec, mark = true) {
+    if (e.type === "mama") {   // ペシッ。ママは「あらあら」と少し止まるだけ
+      e.slow = Math.max(e.slow, 0.45); e.hurt = 0.2; e.push.x += dir.x * 2; e.push.z += dir.z * 2;
+      if (mark) this.fx.push({ kind: "tech", tech: "punch", pos: { ...e.pos }, radius: 0.6, color: "#ffa8a8", t: 0, life: 0.3 });
+      this.events.push("pesi");
+      return;
+    }
     if (h.element === "static" && e.wet > 0) dmg *= 2;
     const crit = this.bonus.crit > 0 && this.rng.next() < this.bonus.crit;
     if (crit) dmg *= 2;
@@ -854,6 +992,8 @@ export class World {
   // ---------- クリアとごほうび ----------
   private checkRoom() {
     const r = this.room;
+    if (r.kind === "final") return;   // ママは倒せない
+    if (r.kind === "shop") { if (!r.cleared) { r.cleared = true; this.doorOpen = true; } return; }
     if (r.cleared || this.enemies.length) return;
     if (r.wave + 1 < r.waves.length) { r.wave++; this.spawnWave(); return; }
     r.cleared = true;

@@ -5,14 +5,19 @@
 import type { Rng } from "../core/rng";
 
 export type Season = "spring" | "summer" | "autumn" | "winter";
-export type Theme = "garden" | "living" | "bedroom" | "study" | "washitsu" | "western";
+export type Theme =
+  | "garden" | "pond" | "veggie"   // 外（お庭）
+  | "living" | "bedroom" | "study" | "washitsu" | "western" | "kitchen" | "bath" | "entrance";
 
 export const SEASON_NAME: Record<Season, string> = { spring: "春", summer: "夏", autumn: "秋", winter: "冬" };
 export const THEME_NAME: Record<Theme, string> = {
-  garden: "お庭", living: "リビング", bedroom: "寝室", study: "書斎", washitsu: "和室", western: "洋室",
+  garden: "お庭", pond: "池のあるお庭", veggie: "家庭菜園", living: "リビング", bedroom: "寝室", study: "書斎", washitsu: "和室",
+  western: "洋室", kitchen: "キッチン", bath: "お風呂場", entrance: "玄関",
 };
+/** 外のステージ（芝生の床・生け垣の壁）。 */
+export const OUTDOOR: Theme[] = ["garden", "pond", "veggie"];
 export const SEASONS: Season[] = ["autumn", "winter", "spring", "summer"]; // 虫が一番多い夏が最終章
-export const THEMES: Theme[] = ["garden", "living", "bedroom", "study", "washitsu", "western"];
+export const THEMES: Theme[] = ["garden", "pond", "veggie", "living", "bedroom", "study", "washitsu", "western", "kitchen", "bath", "entrance"];
 
 export const enum Cell { Floor = 0, Wall = 1, Prop = 2, Door = 3 }
 
@@ -22,7 +27,9 @@ export type PropKind =
   | "bed" | "dresser" | "nightstand"
   | "bookshelf" | "desk" | "boxes"
   | "chabudai" | "kotatsu" | "tansu"
-  | "piano" | "armchair" | "chest";
+  | "piano" | "armchair" | "chest"
+  | "fridge" | "counter" | "dining" | "tub" | "washer" | "shoerack" | "umbrella"
+  | "pond" | "lantern" | "vegrow" | "scarecrow" | "shed";
 
 export interface Prop { kind: PropKind; c: number; r: number; w: number; d: number }
 export interface Exit { slot: number; c: number; r: number; dir: "up" | "down" | "right" | "left" }
@@ -38,8 +45,33 @@ export interface Layout {
 
 const T = (rows: string[]) => rows;
 
-/** 通常の部屋の形。 */
-export const TEMPLATES: Record<string, string[]> = {
+/** 部屋の広さ（テンプレートはこの大きさに引きのばす）。 */
+export const ROOM_W = 28, ROOM_H = 16;
+
+/**
+ * テンプレートを広げる: 内側の行・列をところどころ2倍にして W×H にする。
+ * 扉・入口の記号は複製しない（複製した側は壁か床にする）。
+ */
+export function stretch(tpl: string[], W: number, H: number): string[] {
+  const dupIdx = (n: number, want: number) => {   // 1..n-2 のうち、均等に want 個
+    const out = new Set<number>();
+    for (let k = 0; k < want; k++) out.add(1 + Math.floor(((k + 0.5) * (n - 2)) / want));
+    return out;
+  };
+  const strip = (ch: string, border: boolean) => (/[1-3E]/.test(ch) ? (border ? "#" : ".") : ch);
+  const cols = dupIdx(tpl[0].length, Math.max(0, W - tpl[0].length));
+  let rows = tpl.map((row, r) => {
+    let out = "";
+    for (let c = 0; c < row.length; c++) { out += row[c]; if (cols.has(c)) out += strip(row[c], r === 0 || r === tpl.length - 1); }
+    return out;
+  });
+  const rowsDup = dupIdx(rows.length, Math.max(0, H - rows.length));
+  rows = rows.flatMap((row, r) => (rowsDup.has(r) ? [row, row.split("").map((ch, c) => strip(ch, c === 0 || c === row.length - 1)).join("")] : [row]));
+  return rows;
+}
+
+/** 通常の部屋の形（20×12 で描いて、ROOM_W×ROOM_H に広げる）。 */
+const BASE_TEMPLATES: Record<string, string[]> = {
   rect: T([
     "####################",
     "#..................#",
@@ -126,8 +158,39 @@ export const TEMPLATES: Record<string, string[]> = {
   ]),
 };
 
-/** ボス部屋（出口は倒した後に開く1つだけ）。 */
-export const BOSS_TEMPLATE = T([
+/** お庭向けの形（池や生け垣のあいだを抜ける）。 */
+const GARDEN_TEMPLATES: Record<string, string[]> = {
+  meadow: T([
+    "####################",
+    "#..................#",
+    "#..oo.......o......1",
+    "#..oo..............#",
+    "#.........oo.......#",
+    "#E........oo....o..#",
+    "#..o...............2",
+    "#.......o....oo....#",
+    "#............oo....#",
+    "#..oo..............#",
+    "#..oo.....o........#",
+    "#######3############",
+  ]),
+  hedge: T([
+    "####################",
+    "#.......#..........#",
+    "#.......#....oo....1",
+    "#..o....#....oo....#",
+    "#E......#..........#",
+    "#.......####...#####",
+    "#..................2",
+    "#####...####.......#",
+    "#..........#...o...#",
+    "#...oo.....#.......#",
+    "#...oo.............#",
+    "##########3#########",
+  ]),
+};
+
+const BASE_BOSS = T([
   "####################",
   "#..................#",
   "#..oo..........oo..#",
@@ -142,6 +205,40 @@ export const BOSS_TEMPLATE = T([
   "####################",
 ]);
 
+export const TEMPLATES: Record<string, string[]> = Object.fromEntries(Object.entries(BASE_TEMPLATES).map(([k, t]) => [k, stretch(t, ROOM_W, ROOM_H)]));
+export const OUTDOOR_TEMPLATES: Record<string, string[]> = Object.fromEntries(Object.entries(GARDEN_TEMPLATES).map(([k, t]) => [k, stretch(t, ROOM_W, ROOM_H)]));
+/** ボス部屋（出口は倒した後に開く1つだけ）。 */
+export const BOSS_TEMPLATE = stretch(BASE_BOSS, ROOM_W, ROOM_H);
+
+/** お店（近所のボス猫のお店。虫は出ない）。 */
+export const SHOP_TEMPLATE = T([
+  "########3#########",
+  "#................#",
+  "#..oo........oo..#",
+  "#................#",
+  "#E...............1",
+  "#................#",
+  "#..oo........oo..#",
+  "#................#",
+  "#########2########",
+]);
+
+/** さいごの部屋（ママがやってくる広いリビング）。 */
+export const FINAL_TEMPLATE = stretch(T([
+  "####################",
+  "#..................#",
+  "#..oo..........oo..#",
+  "#..................#",
+  "#E.................#",
+  "#........oo........#",
+  "#........oo........#",
+  "#..................#",
+  "#..oo..........oo..#",
+  "#..................#",
+  "#..................#",
+  "####################",
+]), ROOM_W, ROOM_H);
+
 /** テーマごとの家具。まとまりの大きさ（マス数）で選ぶ。 */
 const PROPS: Record<Theme, { small: PropKind[]; mid: PropKind[]; big: PropKind[] }> = {
   garden: { small: ["rock", "bush"], mid: ["flowerbed", "bush", "tree"], big: ["tree", "flowerbed"] },
@@ -150,6 +247,11 @@ const PROPS: Record<Theme, { small: PropKind[]; mid: PropKind[]; big: PropKind[]
   study: { small: ["boxes", "plant"], mid: ["desk", "bookshelf"], big: ["bookshelf", "desk"] },
   washitsu: { small: ["chabudai", "tansu"], mid: ["kotatsu", "tansu"], big: ["kotatsu"] },
   western: { small: ["armchair", "plant"], mid: ["chest", "piano", "armchair"], big: ["piano"] },
+  kitchen: { small: ["plant", "boxes"], mid: ["fridge", "counter", "dining"], big: ["counter", "dining"] },
+  bath: { small: ["washer", "plant"], mid: ["washer", "tub"], big: ["tub"] },
+  entrance: { small: ["umbrella", "plant"], mid: ["shoerack", "boxes"], big: ["shoerack"] },
+  pond: { small: ["lantern", "rock"], mid: ["pond", "bush", "lantern"], big: ["pond"] },
+  veggie: { small: ["scarecrow", "rock"], mid: ["vegrow", "shed"], big: ["vegrow", "shed"] },
 };
 
 /** テンプレートを（必要なら反転して）升目に変換する。 */

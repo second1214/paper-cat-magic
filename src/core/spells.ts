@@ -318,3 +318,38 @@ export function spellStats(def: SpellDef): [string, string][] {
   if (def.kind === "trigger") out.push(["命中で", "さらに右の技"]);
   return out;
 }
+
+// ---------- 合成（Magicraft の鍛冶: 同じ技3つで★の技に） ----------
+/** id の末尾の「+」の数が★の数（"claw+" = ひっかき★）。 */
+export const baseId = (id: string) => id.replace(/\+*$/, "");
+export const starsOf = (id: string) => id.length - baseId(id).length;
+export const MAX_STARS = 2;
+const starred = new Map<string, SpellDef>();
+
+/** 技の定義（★なら強くしたもの）。 */
+export function spellDef(id: string): SpellDef {
+  const n = starsOf(id);
+  if (!n) return SPELLS[id];
+  let d = starred.get(id);
+  if (d) return d;
+  const b = SPELLS[baseId(id)], k = 1 + 0.5 * n;
+  d = { ...b, id, name: `${b.name}${"★".repeat(n)}`, desc: `${b.desc}（★合成で強化）` };
+  if (b.projectile) d.projectile = { ...b.projectile, damage: +(b.projectile.damage * 1.6 ** n).toFixed(1) };
+  if (b.modifier) {
+    const m = { ...b.modifier };
+    if (m.damageMul) m.damageMul = 1 + (m.damageMul - 1) * k;
+    if (m.damageAdd) m.damageAdd *= k;
+    if (m.sizeMul) m.sizeMul = 1 + (m.sizeMul - 1) * k;
+    if (m.speedMul) m.speedMul = 1 + (m.speedMul - 1) * k;
+    if (m.lifeMul) m.lifeMul = 1 + (m.lifeMul - 1) * k;
+    if (m.slowAdd) m.slowAdd *= k;
+    if (m.homing) m.homing = Math.min(1, m.homing * k);
+    if (m.hitsAdd) m.hitsAdd += n;
+    if (m.bounce) m.bounce += n;
+    if (m.pierce) m.pierce += n;
+    d.modifier = m;
+  }
+  if (b.kind !== "attack") d.mana = Math.max(1, Math.round(b.mana * 0.7 ** n));
+  starred.set(id, d);
+  return d;
+}

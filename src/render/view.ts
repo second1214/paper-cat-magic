@@ -4,7 +4,7 @@ import { ENEMY, type World, type EnemyType, type Room } from "../game/world";
 import { CatDoll, type CatState } from "./catDoll";
 import { canvasTexture, enemyTexture, glowTexture, orbTexture } from "./stickers";
 import { buildRoom, type BuiltRoom } from "./roomBuilder";
-import { elementCanvas, rewardCanvas, techCanvas } from "../art/items";
+import { elementCanvas, INK, kibbleCanvas, rewardCanvas, stickerCanvas, techCanvas } from "../art/items";
 import type { Element, TechFx } from "../core/spells";
 import type { Season } from "../game/stage";
 
@@ -13,6 +13,7 @@ const LEAN = 0.42;
 const ENEMY_H: Record<EnemyType, number> = {
   roach: 0.95, mosquito: 0.95, spider: 1.0, hornet: 2.4, stinkbug: 0.95, camel: 1.0, ant: 0.7, caterpillar: 0.95,
   stinkKing: 3.4, camelKing: 3.4, queen: 3.2,   // 王冠のぶん絵が縦長なので大きめ
+  mama: 3.8,
 };
 const FLY: Partial<Record<EnemyType, number>> = { mosquito: 0.55, hornet: 0.35 };
 
@@ -25,6 +26,28 @@ function particleTexture(season: Season) {
   else if (season === "autumn") { g.fillStyle = "#e8772b"; g.beginPath(); g.moveTo(32, 4); g.lineTo(46, 30); g.lineTo(60, 26); g.lineTo(44, 44); g.lineTo(32, 60); g.lineTo(20, 44); g.lineTo(4, 26); g.lineTo(18, 30); g.closePath(); g.fill(); }
   else { g.fillStyle = "#ffffff"; g.beginPath(); g.arc(32, 32, 16, 0, 7); g.fill(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+/** さいごのママ: ニコニコの上半身の絵に、足と猫用キャリーを描き足した紙人形。 */
+async function mamaTexture(url: string) {
+  const img = await new THREE.ImageLoader().loadAsync(url);
+  const W = img.width + 150, H = img.height + 150;
+  const c = stickerCanvas(W, H, (g) => {
+    g.strokeStyle = INK; g.lineWidth = 7;
+    for (const x of [img.width * 0.36, img.width * 0.58]) {   // ズボンとブーツ
+      g.fillStyle = "#868e96"; g.beginPath(); g.roundRect(x, img.height - 30, 52, 130, 14); g.fill(); g.stroke();
+      g.fillStyle = "#343a40"; g.beginPath(); g.roundRect(x - 6, img.height + 92, 68, 40, 12); g.fill(); g.stroke();
+    }
+    g.drawImage(img, 0, 0);
+    // 猫用キャリー（病院へ行く気まんまん）
+    const cx = img.width - 20, cy = img.height - 60;
+    g.fillStyle = "#74c0fc"; g.beginPath(); g.roundRect(cx, cy, 150, 110, 18); g.fill(); g.stroke();
+    g.fillStyle = "#e7f5ff"; g.beginPath(); g.roundRect(cx + 18, cy + 22, 70, 66, 10); g.fill(); g.stroke();
+    g.lineWidth = 4; for (let x = cx + 30; x < cx + 88; x += 14) { g.beginPath(); g.moveTo(x, cy + 24); g.lineTo(x, cy + 86); g.stroke(); }
+    g.lineWidth = 9; g.beginPath(); g.arc(cx + 75, cy, 40, Math.PI, 0); g.stroke();
+    g.fillStyle = "#ff8fa3"; g.font = "bold 28px sans-serif"; g.fillText("♡", cx + 105, cy + 70);
+  }, 0.02);
+  return canvasTexture(c);
 }
 
 /** 主人公の絵をグレーの猫にしたテクスチャ（友達猫）。 */
@@ -62,6 +85,7 @@ export class GameView {
   private flats: Record<string, THREE.Mesh[]> = {};
   private ringGeo = new THREE.RingGeometry(0.86, 1, 48);
   private planeGeo = new THREE.PlaneGeometry(1, 1);
+  private kibble!: THREE.Texture;
   /** 友達猫の歩きコマ（主人公の絵をグレーにしたもの）。 */
   private friendTex: THREE.Texture[] = [];
   private doorIcons: THREE.Sprite[] = [];
@@ -69,6 +93,9 @@ export class GameView {
   private targetMark: THREE.Mesh;
   private aimMark: THREE.Mesh;
   private shake = 0;
+  private camX = 0;
+  private camZ = 0;
+  private camRoom: Room | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
@@ -78,7 +105,7 @@ export class GameView {
     this.sun = new THREE.DirectionalLight(0xffffff, 2.0);
     this.sun.position.set(-4, 12, 6); this.sun.castShadow = true; this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.radius = 4; this.sun.shadow.bias = -0.0005;
-    Object.assign(this.sun.shadow.camera, { left: -13, right: 13, top: 10, bottom: -10, far: 40 });
+    Object.assign(this.sun.shadow.camera, { left: -16, right: 16, top: 11, bottom: -11, far: 40 });
     this.scene.add(this.sun, new THREE.AmbientLight(0xffffff, 1.1));
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.12, 0.2, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; this.aimMark = ring; this.scene.add(ring);
@@ -90,7 +117,9 @@ export class GameView {
     this.cat = await CatDoll.load(base);
     this.cat.group.traverse((o) => { o.castShadow = true; });
     this.scene.add(this.cat.group);
-    for (const t of Object.keys(ENEMY) as EnemyType[]) this.enemyTex.set(t, enemyTexture(t));
+    for (const t of Object.keys(ENEMY) as EnemyType[]) if (t !== "mama") this.enemyTex.set(t, enemyTexture(t));
+    this.enemyTex.set("mama", await mamaTexture(`${base}mama/relief.png`));
+    this.kibble = canvasTexture(kibbleCanvas());
     for (const t of ["claw", "bite", "hairball", "hiss", "swing", "yarn", "laser", "pounce", "punch", "post", "friend", "roomba", "squirt", "duck", "hammer", "bubble", "flash", "pumpkin", "box", "roller"] as const) this.techTex.set(t, canvasTexture(techCanvas(t)));
     this.friendTex = await Promise.all([1, 2, 3, 4].map((i) => grayCat(`${base}cat/A01_walk_${i}.png`)));
     for (const e of ["static", "wet", "sticky", "repel"] as const) this.elemTex.set(e, canvasTexture(elementCanvas(e)));
@@ -231,7 +260,7 @@ export class GameView {
       const squash = e.hurt > 0 ? 0.88 : 1;
       g.scale.set(face * (2 - squash) * appear, squash * appear, 1);
       const mat = (g.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
-      mat.color.set(e.spawn > 0 ? 0x888888 : e.hurt > 0 ? 0xff9999 : e.sticky > 0 ? 0xe6cf8a : e.wet > 0 ? 0xa8dcff : e.repel > 0 ? 0xc4f0b4 : e.slow > 0 ? 0xc9b6ff : 0xffffff);
+      mat.color.set(e.type === "mama" ? (e.hurt > 0 ? 0xffe0e6 : 0xffffff) : e.spawn > 0 ? 0x888888 : e.hurt > 0 ? 0xff9999 : e.sticky > 0 ? 0xe6cf8a : e.wet > 0 ? 0xa8dcff : e.repel > 0 ? 0xc4f0b4 : e.slow > 0 ? 0xc9b6ff : 0xffffff);
       // 属性のしるし（頭の上に並べる）
       const marks: Element[] = [];
       if (e.wet > 0) marks.push("wet");
@@ -336,6 +365,23 @@ export class GameView {
       }
     }
 
+    // カリカリ（お金）とお店のボス猫
+    let nKib = 0;
+    for (const c of world.pickups) {
+      const s = this.sprite("kib", nKib++, () => new THREE.SpriteMaterial({ map: this.kibble, transparent: true, depthWrite: false, alphaTest: 0.1 }));
+      s.position.set(c.pos.x, 0.25 + Math.abs(Math.sin(world.time * 5 + c.id)) * 0.12, c.pos.z); s.scale.set(0.42, 0.42, 1);
+    }
+    this.hideRest("kib", nKib);
+    const shop = world.shop;
+    const boss = this.sprite("merchant", 0, () => new THREE.SpriteMaterial({ transparent: true, alphaTest: 0.4 }));
+    boss.visible = !!shop && !!this.friendTex[0];
+    if (shop && this.friendTex[0]) {
+      if (boss.material.map !== this.friendTex[0]) { boss.material.map = this.friendTex[0]; boss.material.needsUpdate = true; }
+      boss.center.set(0.5, 0); boss.position.set(shop.pos.x, 0, shop.pos.z); boss.scale.set(-1.9, 1.6, 1);
+      const sign = this.sprite("sign", 0, () => new THREE.SpriteMaterial({ map: canvasTexture(signCanvas()), transparent: true, depthWrite: false }));
+      sign.position.set(shop.pos.x, 2.0 + Math.sin(world.time * 2) * 0.05, shop.pos.z); sign.scale.set(1.9, 0.6, 1);
+    } else this.hideRest("sign", 0);
+
     // エフェクト: 当たった技の絵・ダメージの数字・光
     let nHit = 0, nNum = 0, nFx = 0;
     for (const f of world.fx) {
@@ -385,15 +431,28 @@ export class GameView {
       q.s.material.rotation = q.ph;
     }
 
-    // カメラ: 部屋全体が見える距離から見下ろす（縦持ちでは主人公を追う）
+    // カメラ: 見える広さを決めて（横持ちは約22マス、縦持ちは約12マス）、猫を追う。部屋の端より外は映しすぎない
     const aspect = this.camera.aspect, tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    const halfW = aspect >= 1 ? room.w + 0.3 : Math.min(room.w + 0.3, 6.5);
-    const distance = Math.max(halfW / (tanV * aspect), (room.d + 1.0) / tanV / 0.92);
+    const halfW = Math.min(room.w + 0.3, aspect >= 1 ? 11 : 6.5);
+    const halfD = Math.min(room.d + 1.0, aspect >= 1 ? 7.2 : 9);
+    const distance = Math.max(halfW / (tanV * aspect), halfD / tanV / 0.92);
     const pitch = THREE.MathUtils.degToRad(56);
-    const cx = aspect >= 1 ? 0 : Math.max(-room.w + halfW - 0.3, Math.min(room.w - halfW + 0.3, p.pos.x));
+    const clamp = (v: number, lim: number) => Math.max(-lim, Math.min(lim, v));
+    const tx = clamp(p.pos.x, Math.max(0, room.w + 0.3 - halfW)), tz = clamp(p.pos.z, Math.max(0, room.d + 1.0 - halfD));
+    // なめらかに追う
+    this.camX += (tx - this.camX) * Math.min(1, dt * 6); this.camZ += (tz - this.camZ) * Math.min(1, dt * 6);
+    if (room !== this.camRoom) { this.camRoom = room; this.camX = tx; this.camZ = tz; }
     const sh = this.shake > 0 ? (Math.random() - 0.5) * this.shake * 0.6 : 0;
-    this.camera.position.set(cx + sh, Math.sin(pitch) * distance, 0.5 + Math.cos(pitch) * distance);
-    this.camera.lookAt(cx, 0, 0.5);
+    this.camera.position.set(this.camX + sh, Math.sin(pitch) * distance, this.camZ + 0.5 + Math.cos(pitch) * distance);
+    this.camera.lookAt(this.camX, 0, this.camZ + 0.5);
     this.renderer.render(this.scene, this.camera);
   }
+}
+
+/** お店の看板。 */
+function signCanvas() {
+  return stickerCanvas(320, 100, (g) => {
+    g.fillStyle = "#fab005"; g.strokeStyle = INK; g.lineWidth = 6; g.beginPath(); g.roundRect(10, 10, 300, 80, 16); g.fill(); g.stroke();
+    g.fillStyle = INK; g.font = "bold 38px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("ボス猫のお店", 160, 52);
+  }, 0.03);
 }

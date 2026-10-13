@@ -1,5 +1,5 @@
 // おもちゃ（装備）と発射計画。スロットを左から読み、1回で出す技の一覧を決める（純粋関数）。
-import { SPELLS, type Modifier, type ProjectileStats } from "./spells";
+import { spellDef, type Modifier, type ProjectileStats } from "./spells";
 
 /** おもちゃの先（飛んでいくもの）の見た目。 */
 export type Lure = "feather" | "dragonfly" | "tissue";
@@ -77,7 +77,7 @@ export function planCast(toy: ToyDef, cursor: number, mana: number): CastResult 
   const take = () => {
     while (i < slots.length && !slots[i]) i++;
     if (i >= slots.length) { wrapped = true; return null; }
-    const def = SPELLS[slots[i]!];
+    const def = spellDef(slots[i]!);
     if (!def) { i++; return null; }
     if (used + def.mana > mana) { fizzled = true; return null; }
     used += def.mana;

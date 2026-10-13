@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { gearBonus, NO_BONUS, RARITY, RELICS, rollGear, totalBonus, type GearItem } from "../src/core/items";
 import { DIFFS, metaBonus, NO_META, runReward } from "../src/core/meta";
-import { World } from "../src/game/world";
+import { ROOMS_PER_ACT, World } from "../src/game/world";
 
 const G = (id: string, rar: GearItem["rar"] = 0): GearItem => ({ id, rar, fx: [] });
 const play = (seed = 2) => { const w = new World(seed); w.start(); w.enemies = []; return w; };
@@ -105,7 +105,7 @@ describe("難易度・季節・ねこの成長", () => {
   it("季節ごとに出る虫とボスが違う", () => {
     const w = new World(5);
     const seen = new Set<string>();
-    for (let act = 0; act < 4; act++) for (let i = 0; i <= 4; i++) { w.enterRoom(act, i, null); w.room.waves.flat().forEach((t) => seen.add(`${act}:${t}`)); }
+    for (let act = 0; act < 4; act++) for (let i = 0; i <= ROOMS_PER_ACT; i++) { w.enterRoom(act, i, null); w.room.waves.flat().forEach((t) => seen.add(`${act}:${t}`)); }
     expect(seen.has("0:stinkbug") && seen.has("1:camel") && seen.has("2:ant") && seen.has("3:roach")).toBe(true);
     expect([...seen].filter((x) => /King|queen|hornet/.test(x)).sort()).toEqual(["0:stinkKing", "1:camelKing", "2:queen", "3:hornet"]);
   });

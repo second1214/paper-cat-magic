@@ -597,6 +597,13 @@ const REWARD_DRAW: Record<RewardKind, (g: CanvasRenderingContext2D) => void> = {
     g.fillStyle = "#fff"; g.beginPath(); g.ellipse(80, 62, 10, 6, -0.6, 0, 7); g.fill();
   },
   gear: (g) => GEAR_DRAW.mikan(g),
+  shop: (g) => {   // お店（ボス猫の顔と小銭袋）
+    g.fillStyle = "#adb5bd"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.moveTo(40, 90); g.lineTo(50, 30); g.lineTo(85, 60); g.lineTo(115, 60); g.lineTo(150, 30); g.lineTo(160, 90); g.bezierCurveTo(175, 165, 25, 165, 40, 90); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = INK; g.beginPath(); g.moveTo(68, 100); g.lineTo(92, 100); g.moveTo(108, 100); g.lineTo(132, 100); g.lineWidth = 6; g.stroke();
+    g.fillStyle = "#fab005"; g.beginPath(); g.arc(145, 150, 30, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = INK; g.font = "bold 30px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("¥", 145, 152);
+  },
   boss: (g) => {
     g.fillStyle = "#ffcf3a"; g.strokeStyle = INK; g.lineWidth = 8;
     g.beginPath(); g.arc(100, 105, 70, 0, 7); g.fill(); g.stroke();
@@ -623,6 +630,12 @@ export function spellCanvas(id: string, tech?: TechFx): HTMLCanvasElement {
   if (tech && tech !== "enemy" && tech !== "gas") return techCanvas(tech);
   return once(`mod:${id}`, () => stickerCanvas(S, S, MOD_DRAW[id] ?? ((g) => { g.fillStyle = "#ccc"; g.fillRect(50, 50, 100, 100); }), 0.05));
 }
+/** カリカリ（お金）の粒。 */
+export const kibbleCanvas = () => once("kibble", () => stickerCanvas(120, 120, (g) => {
+  g.fillStyle = "#c8873a"; g.strokeStyle = INK; g.lineWidth = 6;
+  for (const [x, y, a] of [[45, 60, 0.3], [75, 50, -0.4], [62, 82, 1.2]] as const) { g.save(); g.translate(x, y); g.rotate(a); g.beginPath(); g.ellipse(0, 0, 22, 15, 0, 0, 7); g.fill(); g.stroke(); g.fillStyle = "#e0a85a"; g.beginPath(); g.ellipse(-5, -4, 8, 4, 0, 0, 7); g.fill(); g.fillStyle = "#c8873a"; g.restore(); }
+}, 0.06));
+
 export const relicCanvas = (id: string) => once(`relic:${id}`, () => stickerCanvas(S, S, RELIC_DRAW[id], 0.05));
 export const gearCanvas = (id: string) => once(`gear:${id}`, () => stickerCanvas(S, S, GEAR_DRAW[id], 0.05));
 export const toyCanvas = (id: string) => once(`toy:${id}`, () => stickerCanvas(S, S, TOY_DRAW[id] ?? TOY_DRAW.jarashi, 0.05));
