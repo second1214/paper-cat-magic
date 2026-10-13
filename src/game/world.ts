@@ -6,7 +6,8 @@
 import { planCast, starterToy, TOYS, type Shot, type ToyDef } from "../core/wand";
 import { SPELL_IDS, SPELLS, type Element, type Motion, type TechFx } from "../core/spells";
 import { makeRng, type Rng } from "../core/rng";
-import { GEAR, GEAR_IDS, NO_BONUS, RELIC_IDS, RELICS, totalBonus, type Bonus, type Gear } from "../core/items";
+import { GEAR, GEAR_IDS, NO_BONUS, RELIC_IDS, RELICS, rollGear, totalBonus, type Bonus, type Gear, type GearItem } from "../core/items";
+import { DEFAULT_RUN, DIFFS, metaBonus, type RunOptions } from "../core/meta";
 import {
   BOSS_TEMPLATE, buildLayout, Cell, cellAt, cellCenter, cellValue, SEASON_NAME, SEASONS, TEMPLATES, THEME_NAME, THEMES,
   type Layout, type Season, type Theme,
@@ -14,8 +15,36 @@ import {
 
 export interface Vec { x: number; z: number }
 
-/** ゴキブリ（立ち止まっては走る）・蚊（ふらふら飛ぶ）・クモ（離れて糸を飛ばす）・スズメバチ（ボス）。 */
-export type EnemyType = "roach" | "mosquito" | "spider" | "hornet";
+/**
+ * 季節ごとの虫。秋: カメムシ・蚊・クモ／冬: カマドウマ・クモ・ゴキブリ／春: アリ・毛虫・クモ／夏: ゴキブリ・蚊・クモ・アリ。
+ * ボスは 秋: カメムシ大王・冬: カマドウマ親分・春: 毛虫の女王・夏: スズメバチ。
+ */
+export type EnemyType = "roach" | "mosquito" | "spider" | "hornet" | "stinkbug" | "camel" | "ant" | "caterpillar" | "stinkKing" | "camelKing" | "queen";
+
+/** 体力・半径・速さ・飛ぶか・ボスか・名前。 */
+export const ENEMY: Record<EnemyType, { hp: number; r: number; speed: number; fly?: boolean; boss?: boolean; name: string }> = {
+  roach: { hp: 16, r: 0.4, speed: 3.0, name: "ゴキブリ" },
+  mosquito: { hp: 9, r: 0.3, speed: 2.8, fly: true, name: "蚊" },
+  spider: { hp: 14, r: 0.42, speed: 2.2, name: "クモ" },
+  stinkbug: { hp: 18, r: 0.42, speed: 1.6, name: "カメムシ" },
+  camel: { hp: 14, r: 0.4, speed: 1.0, name: "カマドウマ" },
+  ant: { hp: 6, r: 0.28, speed: 3.4, name: "アリ" },
+  caterpillar: { hp: 26, r: 0.45, speed: 1.1, name: "毛虫" },
+  hornet: { hp: 380, r: 1.0, speed: 1.2, fly: true, boss: true, name: "スズメバチ" },
+  stinkKing: { hp: 330, r: 1.05, speed: 1.0, boss: true, name: "カメムシ大王" },
+  camelKing: { hp: 340, r: 1.0, speed: 1.0, boss: true, name: "カマドウマ親分" },
+  queen: { hp: 320, r: 1.05, speed: 0.9, boss: true, name: "毛虫の女王" },
+};
+const isBoss = (t: EnemyType) => !!ENEMY[t].boss;
+const isFly = (t: EnemyType) => !!ENEMY[t].fly;
+
+/** 季節ごとの虫（前ほど序盤から出る）とボス。 */
+const SEASON_BUGS: Record<string, { pool: EnemyType[]; boss: EnemyType }> = {
+  autumn: { pool: ["stinkbug", "mosquito", "spider"], boss: "stinkKing" },
+  winter: { pool: ["camel", "spider", "roach"], boss: "camelKing" },
+  spring: { pool: ["ant", "caterpillar", "spider"], boss: "queen" },
+  summer: { pool: ["roach", "mosquito", "spider", "ant"], boss: "hornet" },
+};
 
 export interface Enemy {
   id: number;
@@ -105,8 +134,10 @@ export interface Player {
   target: number | null;
   /** ねこジャンプの残り秒（見た目用）。 */
   pounce: number;
-  /** ダッシュのあと攻撃力が上がっている残り秒（忍者猫セット）。 */
+  /** ダッシュのあと攻撃力が上がっている残り秒。 */
   power: number;
+  /** 部屋ごとのバリアの残り回数。 */
+  shield: number;
 }
 
 /** 持っているおもちゃ。やる気と、次に使うスロットはおもちゃごと（Magicraft の杖と同じ）。 */
@@ -147,7 +178,7 @@ export interface Room {
 
 export type Phase = "intro" | "play" | "reward" | "dead" | "win";
 
-export type Choice = { kind: "spell" | "toy" | "relic" | "gear"; id: string };
+export type Choice = { kind: "spell" | "toy" | "relic" | "gear"; id: string; gear?: GearItem };
 
 export interface Input {
   move: Vec;
@@ -176,6 +207,11 @@ export class World {
   /** ごほうびで上がった分（新しいおもちゃにも引き継ぐ）。 */
   private manaUp = { max: 0, regen: 0 };
   private baseMaxHp = 6;
+  /** 難易度・ねこの成長。 */
+  opts: RunOptions;
+  /** この冒険で片付けた部屋・倒したボスの数（にぼしの計算）。 */
+  cleared = 0;
+  bosses = 0;
   enemies: Enemy[] = [];
   projectiles: Projectile[] = [];
   fx: Fx[] = [];
@@ -190,16 +226,22 @@ export class World {
   /** 虫が猫へ向かう道順（地面用・飛ぶ虫用）。猫のいるマスが変わったら作り直す。 */
   private flow: { ground: Int16Array; air: Int16Array; key: number } | null = null;
 
-  constructor(seed = 1) {
+  constructor(seed = 1, opts: RunOptions = DEFAULT_RUN) {
     this.rng = makeRng(seed);
+    this.opts = opts;
     const first = starterToy();
     this.toys = [{ def: first, mana: first.manaMax, cursor: 0 }];
     this.bag = ["swing", "water", "static"];
     this.player = {
       pos: { x: 0, z: 0 }, vel: { x: 0, z: 0 }, hp: 6, maxHp: 6, radius: 0.32,
       aim: { x: 1, z: 0 }, facing: 1, iframes: 0, dash: 0, dashCd: 0, hurt: 0,
-      mana: first.manaMax, cursor: 0, castCd: 0, recharging: false, target: null, pounce: 0, power: 0,
+      mana: first.manaMax, cursor: 0, castCd: 0, recharging: false, target: null, pounce: 0, power: 0, shield: 0,
     };
+    // 難易度と、ねこの成長（にぼしで買った永続強化）
+    this.baseMaxHp = DIFFS[opts.difficulty].startHp;
+    if (opts.meta.gift) this.relics.push(this.rng.pick(RELIC_IDS));
+    this.recalc();
+    this.player.hp = this.player.maxHp; this.player.mana = this.manaMax;
     this.enterRoom(0, 0, null);
   }
 
@@ -224,7 +266,7 @@ export class World {
 
   /** レリック・装備を変えたら効果を計算し直す。 */
   private recalc() {
-    this.bonus = totalBonus(this.relics, this.gear);
+    this.bonus = totalBonus(this.relics, this.gear, metaBonus(this.opts.meta));
     const p = this.player, before = p.maxHp;
     p.maxHp = this.baseMaxHp + this.bonus.maxHp;
     p.hp = Math.min(p.maxHp, p.hp + Math.max(0, p.maxHp - before));
@@ -255,11 +297,15 @@ export class World {
     const layout = buildLayout(tpl, theme, this.rng, { flipX: false, flipY: !boss && this.rng.next() < 0.5, doors: doorSlots });
 
     // 敵の組み合わせ（章が進むほど多く・強く）
-    const pool: EnemyType[] = act === 0 && index === 0 ? ["roach"] : act === 0 && index === 1 ? ["roach", "mosquito"] : ["roach", "mosquito", "spider"];
+    const bugs = SEASON_BUGS[season], D = DIFFS[this.opts.difficulty];
+    const pool = bugs.pool.slice(0, index === 0 ? (act === 0 ? 1 : 2) : index === 1 ? 2 : bugs.pool.length);
     const waveCount = boss ? 1 : index < 2 && act === 0 ? 1 : 2;
     const waves: EnemyType[][] = boss
-      ? [["hornet"]]
-      : Array.from({ length: waveCount }, () => Array.from({ length: 3 + index + act }, () => this.rng.pick(pool)));
+      ? [[bugs.boss]]
+      : Array.from({ length: waveCount }, () => {
+        const w: EnemyType[] = Array.from({ length: Math.max(2, 3 + index + act + D.extra) }, () => this.rng.pick(pool));
+        return w.flatMap((t) => (t === "ant" ? [t, t] : [t]));   // アリは群れで来る
+      });
 
     // 次の扉のごほうび（重ならないように）
     const kinds: RewardKind[] = ["hp", "mp", "spell", "spell", "toy", "relic", "gear"];
@@ -278,6 +324,7 @@ export class World {
     };
     this.enemies = []; this.projectiles = []; this.doorOpen = false; this.flow = null;
     this.player.pos = cellCenter(layout, layout.entry.c, layout.entry.r);
+    this.player.shield = this.bonus.shield;
     this.player.vel = { x: 0, z: 0 };
     this.spawnWave();
   }
@@ -288,8 +335,8 @@ export class World {
     for (let rr = 1; rr < L.rows - 1; rr++) for (let c = 1; c < L.cols - 1; c++) if (cellValue(L, c, rr) === Cell.Floor) floors.push(cellCenter(L, c, rr));
     const far = floors.filter((p) => dist(p, this.player.pos) > 7);
     r.waves[r.wave].forEach((type, k) => {
-      const pos = type === "hornet" ? cellCenter(L, L.cols - 5, L.rows >> 1) : this.rng.pick(far.length ? far : floors);
-      const e = makeEnemy(this.nextId++, type, pos, r.act);
+      const pos = isBoss(type) ? cellCenter(L, L.cols - 5, L.rows >> 1) : this.rng.pick(far.length ? far : floors);
+      const e = makeEnemy(this.nextId++, type, pos, r.act, this.opts.difficulty);
       e.spawn = 1.0 + k * 0.25;
       this.enemies.push(e);
     });
@@ -324,7 +371,8 @@ export class World {
     p.pounce = Math.max(0, p.pounce - dt);
     p.power = Math.max(0, p.power - dt);
     const B = this.bonus, still = Math.hypot(input.move.x, input.move.z) < 0.1 ? 1 + B.stillRegen : 1;
-    p.mana = Math.min(this.manaMax, p.mana + toy.manaRegen * B.regenMul * still * dt);
+    const moving = Math.hypot(input.move.x, input.move.z) >= 0.1 ? B.moveMana : 0;
+    p.mana = Math.min(this.manaMax, p.mana + (toy.manaRegen * B.regenMul * still + moving) * dt);
     // 持っているだけのおもちゃも、やる気は戻る
     this.toys.forEach((h, i) => { if (i !== this.cur) h.mana = Math.min(this.manaMaxOf(h.def), h.mana + h.def.manaRegen * B.regenMul * dt); });
 
@@ -365,11 +413,14 @@ export class World {
         p.mana -= res.manaUsed;
         const L = this.room.layout, front = { x: p.pos.x + p.aim.x * 0.5, z: p.pos.z + p.aim.z * 0.5 }, fc = cellAt(L, front.x, front.z);
         const muzzle = cellValue(L, fc.c, fc.r) === Cell.Floor ? front : { ...p.pos }; // 家具にくっついていても撃てる
-        res.shots.forEach((s, n) => {
-          const k = res.shots.length;
+        const extra = this.bonus.extraShot > 0 && this.rng.next() < this.bonus.extraShot;
+        const shots = extra ? [...res.shots, ...res.shots] : res.shots;   // もう1発（少しずらして）
+        shots.forEach((s, n) => {
+          const k = shots.length;
           // 回る技は円周に等間隔、ほかは扇状に少しずらす
           const off = s.stats.motion === "orbit" ? (n / k) * Math.PI * 2 : (n - (k - 1) / 2) * 0.16;
           this.fire(s, s.stats.motion === "shot" ? muzzle : p.pos, p.aim, "player", off);
+          if (s.stats.motion === "shot") this.projectiles[this.projectiles.length - 1].origin = { ...p.pos };   // 最初の当たり判定は猫の位置から（すぐ横の小さい虫も外さない）
           if (s.stats.motion === "ring") p.pounce = 0.4;
         });
         this.fx.push({ kind: "cast", pos: muzzle, radius: 0.35, color: res.shots[0].stats.color, t: 0, life: 0.15 });
@@ -486,7 +537,7 @@ export class World {
   }
 
   private updateEnemies(dt: number) {
-    const p = this.player;
+    const p = this.player, spawnLater: Enemy[] = [];
     for (const e of this.enemies) {
       if (e.spawn > 0) { e.spawn = Math.max(0, e.spawn - dt); continue; }
       e.t += dt;
@@ -498,8 +549,8 @@ export class World {
         e.repel -= dt; e.repelTick -= dt;
         if (e.repelTick <= 0) { e.repelTick = 0.5; this.damageEnemy(e, e.repelDps * 0.5 * (e.sticky > 0 ? 2 : 1), 0, "#7bd96a"); }
       }
-      const sp = e.speed * (e.slow > 0 ? 0.45 : 1) * (e.wet > 0 ? 0.7 : 1) * (e.sticky > 0 ? (e.type === "hornet" ? 0.35 : 0) : 1);
-      const flying = e.type === "mosquito" || e.type === "hornet";
+      const sp = e.speed * (e.slow > 0 ? 0.45 : 1) * (e.wet > 0 ? 0.7 : 1) * (e.sticky > 0 ? (isBoss(e.type) ? 0.35 : 0) : 1);
+      const flying = isFly(e.type);
       const to = this.chase(e, flying);
       const direct = norm({ x: p.pos.x - e.pos.x, z: p.pos.z - e.pos.z });
       if (e.type === "roach") {
@@ -514,6 +565,44 @@ export class World {
         const mv = want > 0 ? to : { x: direct.x * want, z: direct.z * want };
         e.vel = { x: (mv.x + side.x * 0.4) * sp, z: (mv.z + side.z * 0.4) * sp };
         if (e.t > 2.0) { e.t = 0; this.fire({ stats: enemyShot("#d8d8e8", 5.5), payload: [] }, e.pos, direct, "enemy"); }
+      } else if (e.type === "stinkbug") {   // ゆっくり歩き、ときどきくさいガスを出す
+        e.vel = { x: to.x * sp, z: to.z * sp };
+        if (e.t > 3.5) { e.t = 0; this.gas(e.pos, 0.8); }
+      } else if (e.type === "camel") {   // じっとしてから、猫めがけて跳ぶ
+        if (e.phase > 0) { e.phase -= dt; if (e.phase <= 0) e.vel = { x: 0, z: 0 }; }
+        else { e.vel = { x: e.vel.x * 0.85, z: e.vel.z * 0.85 }; if (e.t > 1.6) { e.t = 0; e.phase = 0.35; e.vel = { x: direct.x * sp * 8, z: direct.z * sp * 8 }; } }
+      } else if (e.type === "ant") {   // 速く、まっすぐ
+        e.vel = { x: to.x * sp, z: to.z * sp };
+      } else if (e.type === "caterpillar") {   // のろのろ進み、近づくと毛を飛ばす
+        e.vel = { x: to.x * sp, z: to.z * sp };
+        if (e.t > 2.6 && dist(e.pos, p.pos) < 6) { e.t = 0; for (let k = -2; k <= 2; k++) this.fire({ stats: { ...enemyShot("#c0eb75", 5), life: 0.9 }, payload: [] }, e.pos, direct, "enemy", k * 0.25); }
+      } else if (e.type === "stinkKing") {   // ガスを置きながら、輪の弾
+        e.vel = { x: to.x * sp, z: to.z * sp };
+        const fast = e.hp / e.maxHp < 0.5;
+        if (e.t > (fast ? 1.6 : 2.2)) {
+          e.t = 0; e.phase++;
+          if (e.phase % 2) for (let k = 0; k < 3; k++) this.gas({ x: p.pos.x + (this.rng.next() - 0.5) * 5, z: p.pos.z + (this.rng.next() - 0.5) * 4 }, 1.0);
+          else { const n = 8 + this.room.act * 2; for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2; this.fire({ stats: enemyShot("#94d82d", 3.6), payload: [] }, e.pos, { x: Math.cos(a), z: Math.sin(a) }, "enemy"); } }
+        }
+      } else if (e.type === "camelKing") {   // 大ジャンプして、着地で輪の弾
+        if (e.phase > 0) {
+          e.phase -= dt;
+          if (e.phase <= 0) {
+            e.vel = { x: 0, z: 0 }; this.events.push("land");
+            const n = (e.hp / e.maxHp < 0.5 ? 14 : 10) + this.room.act * 2;
+            for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2; this.fire({ stats: enemyShot("#c58a4a", 4.5), payload: [] }, e.pos, { x: Math.cos(a), z: Math.sin(a) }, "enemy"); }
+          }
+        } else if (e.t > 2.2) { e.t = 0; e.phase = 0.6; const d = Math.min(7, dist(e.pos, p.pos)); e.vel = { x: direct.x * d / 0.6, z: direct.z * d / 0.6 }; }
+        else e.vel = { x: 0, z: 0 };
+      } else if (e.type === "queen") {   // 子分（アリ・毛虫）を呼び、毛を扇に飛ばす
+        e.vel = { x: to.x * sp, z: to.z * sp };
+        if (e.t > 2.8) {
+          e.t = 0; e.phase++;
+          if (e.phase % 2 && this.enemies.length < 9) for (const t of ["ant", "ant", "caterpillar"] as EnemyType[]) {
+            const m = makeEnemy(this.nextId++, t, { x: e.pos.x + (this.rng.next() - 0.5) * 2, z: e.pos.z + (this.rng.next() - 0.5) * 2 }, this.room.act, this.opts.difficulty);
+            m.spawn = 0.6; spawnLater.push(m);
+          } else for (let k = -3; k <= 3; k++) this.fire({ stats: enemyShot("#a9e34b", 5.5), payload: [] }, e.pos, direct, "enemy", k * 0.18);
+        }
       } else if (e.type === "hornet") {
         e.vel = { x: to.x * sp, z: to.z * sp };
         const hpRate = e.hp / e.maxHp, period = (hpRate < 0.5 ? 1.5 : 2.1) - this.room.act * 0.12;
@@ -535,12 +624,13 @@ export class World {
       e.push.x *= k; e.push.z *= k;
       if (dist(e.pos, p.pos) < e.radius + p.radius) this.hurtPlayer(1, e.pos);
     }
+    this.enemies.push(...spawnLater);
     for (let a = 0; a < this.enemies.length; a++) for (let b = a + 1; b < this.enemies.length; b++) {
       const A = this.enemies[a], B = this.enemies[b];
       const dx = B.pos.x - A.pos.x, dz = B.pos.z - A.pos.z, d = Math.hypot(dx, dz), m = A.radius + B.radius;
       if (d > 0 && d < m) {
         const k = (m - d) / d / 2; A.pos.x -= dx * k; A.pos.z -= dz * k; B.pos.x += dx * k; B.pos.z += dz * k;
-        for (const E of [A, B]) this.moveCircle(E.pos, ZERO, E.radius, 0, E.type === "mosquito" || E.type === "hornet", false);
+        for (const E of [A, B]) this.moveCircle(E.pos, ZERO, E.radius, 0, isFly(E.type), false);
       }
     }
   }
@@ -548,11 +638,19 @@ export class World {
   private hurtPlayer(n: number, from: Vec) {
     const p = this.player;
     if (p.iframes > 0) return;
+    if (p.shield > 0) {   // バリア（部屋ごと）
+      p.shield--; p.iframes = 0.6; this.fx.push({ kind: "puff", pos: { ...p.pos }, radius: 0.8, color: "#a5d8ff", t: 0, life: 0.4 });
+      this.notify("バリア！"); return;
+    }
     if (this.bonus.guard && this.rng.next() < this.bonus.guard) {   // 騎士猫: 当たりを防ぐ
       p.iframes = 0.5; this.fx.push({ kind: "puff", pos: { ...p.pos }, radius: 0.6, color: "#dee2e6", t: 0, life: 0.35 });
       this.notify("ふせいだ！"); return;
     }
-    p.hp -= n; p.iframes = 1.0 + this.bonus.iframes; p.hurt = 0.45;
+    p.hp -= n * DIFFS[this.opts.difficulty].dmg; p.iframes = 1.0 + this.bonus.iframes; p.hurt = 0.45;
+    if (this.bonus.thorns) {   // 反撃: まわりの虫にダメージ
+      this.fx.push({ kind: "puff", pos: { ...p.pos }, radius: 1.6, color: "#ffd43b", t: 0, life: 0.35 });
+      for (const e of this.enemies) if (e.spawn <= 0 && dist(e.pos, p.pos) < 2.4 + e.radius) this.damageEnemy(e, this.bonus.thorns * this.bonus.dmgMul, 0, "#ffd43b");
+    }
     const away = norm({ x: p.pos.x - from.x, z: p.pos.z - from.z });
     p.vel = { x: away.x * 9, z: away.z * 9 };
     this.events.push("hurt");
@@ -577,8 +675,9 @@ export class World {
     });
 
     for (const pr of this.projectiles) {
+      const first = pr.t === 0 && pr.motion === "shot" && pr.owner === "player";
       pr.life -= dt; pr.t += dt;
-      const ox = pr.pos.x, oz = pr.pos.z;
+      const ox = first ? pr.origin.x : pr.pos.x, oz = first ? pr.origin.z : pr.pos.z;
       // 動き
       if (pr.motion === "orbit") {
         pr.ang += pr.angVel * dt;
@@ -654,12 +753,21 @@ export class World {
     }
     this.projectiles = keep;
     for (const s of spawned) this.fire(s.shot, s.pos, s.dir, "player");
-    const before = this.enemies.length;
+    const before = this.enemies.length, dead: Enemy[] = [];
     this.enemies = this.enemies.filter((e) => {
       if (e.hp > 0) return true;
       this.fx.push({ kind: "puff", pos: { ...e.pos }, radius: e.radius * 2, color: "#ffffff", t: 0, life: 0.5 });
+      dead.push(e);
       return false;
     });
+    for (const e of dead) {
+      if (e.type === "stinkbug") this.gas(e.pos, 0.9);   // カメムシは倒すとくさい
+      if (this.bonus.killHeal && this.rng.next() < this.bonus.killHeal) this.player.hp = Math.min(this.player.maxHp, this.player.hp + 1);
+      if (this.bonus.killBoom) {   // 倒した虫がはじける
+        this.fx.push({ kind: "tech", tech: "hairball", pos: { ...e.pos }, radius: 1.4, color: "#ffa94d", t: 0, life: 0.35 });
+        for (const q of this.enemies) if (q.spawn <= 0 && dist(q.pos, e.pos) < 1.6 + q.radius) this.damageEnemy(q, this.bonus.killBoom * this.bonus.dmgMul, 0, "#ffa94d");
+      }
+    }
     if (this.enemies.length < before) {
       this.events.push("kill");
       if (this.bonus.killMana) this.player.mana = Math.min(this.manaMax, this.player.mana + this.bonus.killMana * (before - this.enemies.length));
@@ -691,6 +799,11 @@ export class World {
     for (const s of pr.payload) spawned.push({ shot: s, pos: { ...pr.pos }, dir });
   }
 
+  /** カメムシのくさいガス（その場にしばらく残り、猫が触れるとダメージ）。 */
+  private gas(pos: Vec, r: number) {
+    this.fire({ stats: { ...enemyShot("#a9e34b", 0), radius: r, life: 2.6, tech: "gas" as TechFx }, payload: [] }, pos, { x: 1, z: 0 }, "enemy");
+  }
+
   private explode(pr: Projectile) {
     this.fx.push({ kind: "tech", tech: pr.tech, pos: { ...pr.pos }, radius: pr.explode, color: pr.color, t: 0, life: 0.45 });
     const info: HitInfo = { slow: pr.slow, element: pr.element, tech: pr.tech, color: pr.color, knock: pr.knock };
@@ -704,12 +817,14 @@ export class World {
   /** 技が虫に当たった: ダメージ・属性・はじき飛ばし。 */
   private hitEnemy(e: Enemy, dmg: number, h: HitInfo, dir: Vec, mark = true) {
     if (h.element === "static" && e.wet > 0) dmg *= 2;
-    this.damageEnemy(e, dmg, h.slow);
+    const crit = this.bonus.crit > 0 && this.rng.next() < this.bonus.crit;
+    if (crit) dmg *= 2;
+    this.damageEnemy(e, dmg, h.slow, crit ? "#ffd43b" : "#ffffff");
     if (mark) this.fx.push({ kind: "tech", tech: h.tech, pos: { ...e.pos }, radius: 0.55, color: h.color, t: 0, life: 0.3 });
-    if (h.knock) { const k = h.knock * (e.type === "hornet" ? 0.15 : 1); e.push.x += dir.x * k; e.push.z += dir.z * k; }
+    if (h.knock) { const k = h.knock * (isBoss(e.type) ? 0.15 : 1); e.push.x += dir.x * k; e.push.z += dir.z * k; }
     switch (h.element) {
       case "wet": e.wet = 4 * this.bonus.elemMul; break;
-      case "sticky": e.sticky = (e.type === "hornet" ? 0.6 : 1.6) * this.bonus.elemMul; break;
+      case "sticky": e.sticky = (isBoss(e.type) ? 0.6 : 1.6) * this.bonus.elemMul; break;
       case "repel": e.repelDps = Math.max(e.repel > 0 ? e.repelDps : 0, 2 + dmg * 0.4); e.repel = 3 * this.bonus.elemMul; break;
       case "static": {
         // 近くの虫へ飛び移る（びしょぬれなら2倍・4匹）
@@ -745,6 +860,7 @@ export class World {
     this.projectiles = this.projectiles.filter((p) => p.owner === "player");
     this.events.push("clear");
     const p = this.player;
+    this.cleared++; if (r.kind === "boss") this.bosses++;
     if (this.bonus.clearHeal) p.hp = Math.min(p.maxHp, p.hp + this.bonus.clearHeal);
     if (r.kind === "boss") { p.hp = p.maxHp; this.offer("relic"); return; }
     const reward = r.reward;
@@ -769,8 +885,7 @@ export class World {
       if (!left.length) { this.offer("spell"); return; }
       this.choices = pickN(this.rng, left, n).map((id): Choice => ({ kind: "relic", id }));
     } else if (kind === "gear") {
-      const left = GEAR_IDS.filter((g) => this.gear[GEAR[g].slot] !== g);
-      this.choices = pickN(this.rng, left, n).map((id): Choice => ({ kind: "gear", id }));
+      this.choices = pickN(this.rng, GEAR_IDS, n).map((id): Choice => ({ kind: "gear", id, gear: rollGear(id, () => this.rng.next(), this.bonus.luck, this.room.act) }));
     } else this.choices = pickN(this.rng, SPELL_IDS, n).map((id): Choice => ({ kind: "spell", id }));
     this.phase = "reward";
   }
@@ -783,7 +898,10 @@ export class World {
     if (c?.kind === "spell") this.bag.push(c.id);
     if (c?.kind === "toy") this.addToy(c.id);
     if (c?.kind === "relic") { this.relics.push(c.id); this.recalc(); this.notify(`${RELICS[c.id].name} を手に入れた`); }
-    if (c?.kind === "gear") { this.gear[GEAR[c.id].slot] = c.id; this.recalc(); this.notify(`${GEAR[c.id].name} を装備した`); }
+    if (c?.kind === "gear") {
+      const g = c.gear ?? { id: c.id, rar: 0, fx: [] };
+      this.gear[GEAR[g.id].slot] = g; this.recalc(); this.notify(`${GEAR[g.id].name} を装備した`);
+    }
     this.choices = [];
     this.phase = "play";
     this.doorOpen = true;
@@ -863,11 +981,10 @@ function segDist(q: Vec, ax: number, az: number, b: Vec) {
   return Math.hypot(q.x - (ax + vx * t), q.z - (az + vz * t));
 }
 
-function makeEnemy(id: number, type: EnemyType, pos: Vec, act: number): Enemy {
-  const t: Record<EnemyType, [number, number, number]> = { roach: [16, 0.4, 3.0], mosquito: [9, 0.3, 2.8], spider: [14, 0.42, 2.2], hornet: [380, 1.0, 1.2] };
-  const [hp0, radius, speed] = t[type];
-  const hp = Math.round(hp0 * (1 + act * (type === "hornet" ? 0.8 : 0.6)));
-  return { id, type, pos: { ...pos }, vel: { x: 0, z: 0 }, hp, maxHp: hp, radius, speed: speed * (1 + act * 0.06), slow: 0, hurt: 0, t: (id * 0.37) % 1, phase: 0, spawn: 0,
+function makeEnemy(id: number, type: EnemyType, pos: Vec, act: number, difficulty = 1): Enemy {
+  const d = ENEMY[type], D = DIFFS[difficulty];
+  const hp = Math.round(d.hp * (1 + act * (d.boss ? 0.8 : 0.6)) * D.hp);
+  return { id, type, pos: { ...pos }, vel: { x: 0, z: 0 }, hp, maxHp: hp, radius: d.r, speed: d.speed * (1 + act * 0.06) * D.speed, slow: 0, hurt: 0, t: (id * 0.37) % 1, phase: 0, spawn: 0,
     wet: 0, sticky: 0, repel: 0, repelDps: 0, repelTick: 0, push: { x: 0, z: 0 } };
 }
 

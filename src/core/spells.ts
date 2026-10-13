@@ -7,7 +7,7 @@ export type SpellKind = "attack" | "modifier" | "multicast" | "trigger";
 
 /** 技が当たったときに出す絵（描画側で使う）。 */
 export type TechFx = "claw" | "bite" | "hairball" | "hiss" | "swing" | "yarn" | "laser" | "pounce" | "punch" | "post" | "friend" | "roomba"
-  | "squirt" | "duck" | "hammer" | "bubble" | "flash" | "pumpkin" | "box" | "roller" | "enemy";
+  | "squirt" | "duck" | "hammer" | "bubble" | "flash" | "pumpkin" | "box" | "roller" | "enemy" | "gas";
 
 /** 技の動き。shot=飛ぶ / orbit=猫のまわりを回る / beam=猫から線で届く / ring=足元から広がる輪 / melee=目の前で連打 / trap=床に置く。 */
 export type Motion = "shot" | "orbit" | "beam" | "ring" | "melee" | "trap" | "summon";

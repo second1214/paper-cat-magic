@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { Cell, cellAt, cellCenter, reach } from "../src/game/stage";
 import { World } from "../src/game/world";
+import { NO_META } from "../src/core/meta";
 
 /** 目標のマスへ向かう1歩の方向（壁・家具を避けた最短路）。 */
 function stepToward(w: World, target: { x: number; z: number }) {
@@ -20,8 +21,8 @@ function stepToward(w: World, target: { x: number; z: number }) {
 }
 
 describe("playthrough", () => {
-  for (const seed of [1, 2, 3]) it(`seed ${seed}: 全季節を最後まで進める`, () => {
-    const w = new World(seed);
+  for (const [seed, difficulty] of [[1, 1], [2, 1], [3, 1], [4, 3]]) it(`seed ${seed} 難易度${difficulty}: 全季節を最後まで進める`, () => {
+    const w = new World(seed, { difficulty, meta: NO_META });
     w.start();
     const dt = 1 / 30;
     let rooms = 0, steps = 0, roomSteps = 0, lastRoom = "";

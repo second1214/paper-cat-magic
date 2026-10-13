@@ -55,7 +55,7 @@ const ELEMENT_DRAW = {
 };
 
 /** 技の絵（右向き。飛ぶときは進む向きに回す）。 */
-const TECH_DRAW: Record<Exclude<TechFx, "enemy">, (g: CanvasRenderingContext2D) => void> = {
+const TECH_DRAW: Record<Exclude<TechFx, "enemy" | "gas">, (g: CanvasRenderingContext2D) => void> = {
   claw: (g) => {   // 三本の爪あと
     for (let k = 0; k < 3; k++) {
       g.strokeStyle = INK; g.lineWidth = 22; g.beginPath(); g.moveTo(40, 45 + k * 45); g.quadraticCurveTo(105, 25 + k * 45, 170, 55 + k * 45); g.stroke();
@@ -419,6 +419,40 @@ const RELIC_DRAW: Record<string, (g: CanvasRenderingContext2D) => void> = {
     g.fillStyle = "#e5dbff"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.roundRect(30, 60, 140, 100, 10); g.fill(); g.stroke();
     g.save(); g.translate(30, 0); g.scale(0.7, 0.7); ELEMENT_DRAW.static(g); g.restore();
   },
+  biidama: (g) => {   // ビー玉
+    for (const [x, y, c] of [[75, 110, "#74c0fc"], [130, 90, "#f783ac"], [115, 145, "#ffd43b"]] as const) {
+      g.fillStyle = c; g.strokeStyle = INK; g.lineWidth = 6; g.beginPath(); g.arc(x, y, 36, 0, 7); g.fill(); g.stroke();
+      g.fillStyle = "rgba(255,255,255,.8)"; g.beginPath(); g.ellipse(x - 12, y - 14, 10, 6, -0.6, 0, 7); g.fill();
+    }
+  },
+  kaitenguruma: (g) => {   // ハムスターの回し車
+    g.strokeStyle = INK; g.lineWidth = 8; g.fillStyle = "#e7f5ff"; g.beginPath(); g.arc(100, 95, 70, 0, 7); g.fill(); g.stroke();
+    g.strokeStyle = "#4dabf7"; g.lineWidth = 5; for (let k = 0; k < 8; k++) { const a = k * 0.785; g.beginPath(); g.moveTo(100, 95); g.lineTo(100 + Math.cos(a) * 66, 95 + Math.sin(a) * 66); g.stroke(); }
+    g.strokeStyle = INK; g.lineWidth = 8; g.beginPath(); g.moveTo(60, 185); g.lineTo(100, 95); g.lineTo(140, 185); g.stroke();
+  },
+  buzzer: (g) => {   // 防犯ブザー
+    g.fillStyle = "#fcc419"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.roundRect(55, 60, 90, 120, 30); g.fill(); g.stroke();
+    g.fillStyle = "#fa5252"; g.beginPath(); g.arc(100, 105, 22, 0, 7); g.fill(); g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 6; g.beginPath(); g.arc(100, 45, 18, Math.PI, 0); g.stroke();
+    g.strokeStyle = "#fa5252"; g.lineWidth = 5; for (const r of [70, 85]) { g.beginPath(); g.arc(100, 110, r, -0.5, 0.5); g.stroke(); }
+  },
+  omamori: (g) => {   // ペットのお守り
+    g.fillStyle = "#e64980"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.moveTo(60, 60); g.lineTo(140, 60); g.lineTo(140, 175); g.lineTo(60, 175); g.closePath(); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(60, 60); g.quadraticCurveTo(100, 35, 140, 60); g.stroke();
+    g.fillStyle = "#ffd43b"; g.beginPath(); g.ellipse(100, 115, 18, 22, 0, 0, 7); g.fill(); g.stroke();
+    g.strokeStyle = "#ffd43b"; g.lineWidth = 6; g.beginPath(); g.moveTo(100, 40); g.quadraticCurveTo(90, 20, 110, 15); g.stroke();
+  },
+  nekokan: (g) => {   // 高級猫缶
+    g.fillStyle = "#ced4da"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.ellipse(100, 70, 70, 22, 0, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#e64980"; g.beginPath(); g.rect(30, 70, 140, 80); g.fill(); g.stroke();
+    g.fillStyle = "#ced4da"; g.beginPath(); g.ellipse(100, 150, 70, 22, 0, 0, Math.PI); g.fill(); g.stroke();
+    g.fillStyle = "#ffd43b"; g.font = "bold 30px sans-serif"; g.textAlign = "center"; g.fillText("極上", 100, 122);
+  },
+  copy: (g) => {   // コピー用紙の束
+    g.fillStyle = "#fff"; g.strokeStyle = INK; g.lineWidth = 6;
+    for (const [x, y, a] of [[70, 70, -0.15], [95, 85, 0.05], [120, 100, 0.2]] as const) { g.save(); g.translate(x, y); g.rotate(a); g.beginPath(); g.rect(-40, -50, 80, 100); g.fill(); g.stroke(); g.restore(); }
+    g.strokeStyle = "#adb5bd"; g.lineWidth = 4; for (const y of [80, 95, 110]) { g.beginPath(); g.moveTo(98, y + 10); g.lineTo(142, y + 18); g.stroke(); }
+  },
 };
 
 /** 装備の絵（飼い主が買ってきた、よくわからない物）。 */
@@ -492,6 +526,39 @@ const GEAR_DRAW: Record<string, (g: CanvasRenderingContext2D) => void> = {
     g.fillStyle = INK; g.beginPath(); g.arc(90, 105, 4, 0, 7); g.arc(110, 105, 4, 0, 7); g.fill();
     g.strokeStyle = "#5c940d"; g.lineWidth = 4; for (const y of [150, 162]) { g.beginPath(); g.moveTo(62, y); g.lineTo(138, y); g.stroke(); }
   },
+  sunglass: (g) => {   // ハート形のおもちゃサングラス
+    g.strokeStyle = INK; g.lineWidth = 7; g.fillStyle = "#f06595";
+    for (const x of [62, 138]) { g.beginPath(); g.moveTo(x, 135); g.bezierCurveTo(x - 55, 100, x - 35, 55, x, 82); g.bezierCurveTo(x + 35, 55, x + 55, 100, x, 135); g.fill(); g.stroke(); }
+    g.beginPath(); g.moveTo(88, 88); g.quadraticCurveTo(100, 78, 112, 88); g.stroke();
+    g.fillStyle = "#fff"; for (const x of [50, 126]) { g.beginPath(); g.ellipse(x, 88, 8, 5, -0.5, 0, 7); g.fill(); }
+  },
+  haramaki: (g) => {   // 毛糸の腹巻き
+    g.fillStyle = "#e03131"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.roundRect(30, 60, 140, 85, 20); g.fill(); g.stroke();
+    g.strokeStyle = "#ffc9c9"; g.lineWidth = 5; for (let x = 45; x < 160; x += 16) { g.beginPath(); g.moveTo(x, 66); g.lineTo(x, 140); g.stroke(); }
+    g.fillStyle = "#ffd43b"; g.beginPath(); g.arc(100, 102, 18, 0, 7); g.fill(); g.strokeStyle = INK; g.lineWidth = 5; g.stroke();
+  },
+  bowtie: (g) => {   // 金の蝶ネクタイ
+    g.fillStyle = "#fcc419"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.moveTo(100, 100); g.lineTo(30, 55); g.lineTo(30, 145); g.closePath(); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(100, 100); g.lineTo(170, 55); g.lineTo(170, 145); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "#f08c00"; g.beginPath(); g.roundRect(84, 82, 32, 36, 8); g.fill(); g.stroke();
+  },
+  usamimi: (g) => {   // うさ耳フード
+    g.fillStyle = "#fff0f6"; g.strokeStyle = INK; g.lineWidth = 7;
+    for (const [x, a] of [[70, -0.25], [130, 0.25]] as const) { g.save(); g.translate(x, 95); g.rotate(a); g.beginPath(); g.ellipse(0, -45, 22, 55, 0, 0, 7); g.fill(); g.stroke(); g.fillStyle = "#ffc9c9"; g.beginPath(); g.ellipse(0, -45, 10, 38, 0, 0, 7); g.fill(); g.fillStyle = "#fff0f6"; g.restore(); }
+    g.beginPath(); g.arc(100, 140, 58, Math.PI, 0); g.lineTo(158, 175); g.lineTo(42, 175); g.closePath(); g.fill(); g.stroke();
+  },
+  raincoat: (g) => {   // 黄色いレインコート
+    g.fillStyle = "#ffd43b"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.moveTo(70, 40); g.quadraticCurveTo(100, 15, 130, 40); g.lineTo(175, 175); g.lineTo(25, 175); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "#fff"; for (const y of [80, 110, 140]) { g.beginPath(); g.arc(100, y, 7, 0, 7); g.fill(); g.stroke(); }
+    ELEMENT_DRAW.wet(g, 160, 50, 0.3);
+  },
+  gps: (g) => collar(g, "#4c6ef5", (gg) => {
+    gg.fillStyle = "#343a40"; gg.beginPath(); gg.roundRect(72, 132, 56, 40, 8); gg.fill(); gg.stroke();
+    gg.fillStyle = "#51cf66"; gg.beginPath(); gg.arc(100, 152, 7, 0, 7); gg.fill();
+    gg.strokeStyle = "#51cf66"; gg.lineWidth = 3; for (const r of [14, 22]) { gg.beginPath(); gg.arc(100, 152, r, -2.4, -0.7); gg.stroke(); }
+  }),
   nametag: (g) => collar(g, "#2f9e44", (gg) => {
     gg.fillStyle = "#fff"; gg.beginPath(); gg.roundRect(68, 135, 64, 46, 8); gg.fill(); gg.stroke();
     gg.fillStyle = INK; gg.font = "bold 18px sans-serif"; gg.textAlign = "center"; gg.fillText("かわいい", 100, 165);
@@ -547,13 +614,13 @@ const REWARD_DRAW: Record<RewardKind, (g: CanvasRenderingContext2D) => void> = {
 const cache = new Map<string, HTMLCanvasElement>();
 const once = (key: string, make: () => HTMLCanvasElement) => { let c = cache.get(key); if (!c) { c = make(); cache.set(key, c); } return c; };
 
-export const techCanvas = (t: Exclude<TechFx, "enemy">) => once(`tech:${t}`, () => stickerCanvas(S, S, TECH_DRAW[t], 0.05));
+export const techCanvas = (t: Exclude<TechFx, "enemy" | "gas">) => once(`tech:${t}`, () => stickerCanvas(S, S, TECH_DRAW[t], 0.05));
 export const elementCanvas = (e: keyof typeof ELEMENT_DRAW) => once(`el:${e}`, () => stickerCanvas(S, S, (g) => ELEMENT_DRAW[e](g), 0.05));
 export const rewardCanvas = (k: RewardKind) => once(`reward:${k}`, () => stickerCanvas(S, S, REWARD_DRAW[k], 0.05));
 
 /** 技・修飾のアイコン（技は飛ぶ絵と同じ）。 */
 export function spellCanvas(id: string, tech?: TechFx): HTMLCanvasElement {
-  if (tech && tech !== "enemy") return techCanvas(tech);
+  if (tech && tech !== "enemy" && tech !== "gas") return techCanvas(tech);
   return once(`mod:${id}`, () => stickerCanvas(S, S, MOD_DRAW[id] ?? ((g) => { g.fillStyle = "#ccc"; g.fillRect(50, 50, 100, 100); }), 0.05));
 }
 export const relicCanvas = (id: string) => once(`relic:${id}`, () => stickerCanvas(S, S, RELIC_DRAW[id], 0.05));

@@ -31,6 +31,61 @@ function stubs(g: CanvasRenderingContext2D, xs: number[], y: number, len: number
   for (const x of xs) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + len); g.stroke(); }
 }
 
+/** 王冠（ボスのしるし）。 */
+function crown(g: CanvasRenderingContext2D, cx: number, bottom: number, color: string) {
+  g.fillStyle = color; g.strokeStyle = INK; g.lineWidth = 7;
+  g.beginPath(); g.moveTo(cx - 55, bottom); g.lineTo(cx - 60, bottom - 55); g.lineTo(cx - 28, bottom - 28); g.lineTo(cx, bottom - 70); g.lineTo(cx + 28, bottom - 28); g.lineTo(cx + 60, bottom - 55); g.lineTo(cx + 55, bottom); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = "#ff6b6b"; for (const dx of [-30, 0, 30]) { g.beginPath(); g.arc(cx + dx, bottom - 14, 7, 0, 7); g.fill(); }
+}
+
+/** 季節の虫（右向き、ぬいぐるみ風）。[幅, 高さ, 描画] */
+const NEW_BUGS: Record<"stinkbug" | "camel" | "ant" | "caterpillar", [number, number, (g: CanvasRenderingContext2D) => void]> = {
+  stinkbug: [300, 250, (g) => {   // カメムシ: 盾形の緑の背中
+    stubs(g, [110, 150, 190], 185, 28, 11);
+    g.strokeStyle = INK; g.lineWidth = 6; g.beginPath(); g.moveTo(245, 110); g.quadraticCurveTo(270, 60, 292, 70); g.moveTo(250, 125); g.quadraticCurveTo(292, 110, 294, 135); g.stroke();
+    g.fillStyle = "#74b816"; g.strokeStyle = INK; g.lineWidth = 8;
+    g.beginPath(); g.moveTo(40, 120); g.quadraticCurveTo(60, 50, 150, 55); g.lineTo(230, 80); g.quadraticCurveTo(265, 130, 230, 175); g.quadraticCurveTo(140, 220, 60, 185); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "#94d82d"; g.beginPath(); g.moveTo(90, 75); g.lineTo(170, 75); g.lineTo(130, 150); g.closePath(); g.fill();
+    g.fillStyle = "rgba(255,255,255,.4)"; g.beginPath(); g.ellipse(95, 95, 22, 11, -0.4, 0, 7); g.fill();
+    cuteEyes(g, 190, 125, 15, 34, "grumpy"); blush(g, 200, 162, 11);
+    g.fillStyle = "rgba(169,227,75,.7)"; for (const [x, y, r] of [[25, 70, 14], [12, 100, 10], [30, 45, 9]] as const) { g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
+  }],
+  camel: [320, 260, (g) => {   // カマドウマ: こぶの背中と長い触角・大きな後ろ足
+    g.strokeStyle = INK; g.lineWidth = 5; g.beginPath(); g.moveTo(250, 120); g.quadraticCurveTo(290, 20, 315, 30); g.moveTo(255, 130); g.quadraticCurveTo(310, 60, 318, 80); g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 12; g.beginPath(); g.moveTo(90, 150); g.lineTo(40, 90); g.lineTo(30, 215); g.stroke();
+    g.strokeStyle = "#c58a4a"; g.lineWidth = 6; g.stroke();
+    stubs(g, [170, 215], 190, 34, 10);
+    const gr = g.createLinearGradient(0, 70, 0, 200); gr.addColorStop(0, "#d9a066"); gr.addColorStop(1, "#a0652e");
+    g.fillStyle = gr; g.strokeStyle = INK; g.lineWidth = 8;
+    g.beginPath(); g.moveTo(70, 170); g.quadraticCurveTo(80, 70, 170, 70); g.quadraticCurveTo(260, 80, 260, 150); g.quadraticCurveTo(250, 200, 170, 200); g.closePath(); g.fill(); g.stroke();
+    g.strokeStyle = "#8a5228"; g.lineWidth = 4; for (const x of [120, 150, 180]) { g.beginPath(); g.moveTo(x, 78); g.lineTo(x - 10, 195); g.stroke(); }
+    cuteEyes(g, 205, 130, 15, 32); blush(g, 220, 168, 11);
+  }],
+  ant: [240, 190, (g) => {   // アリ: 3つの丸
+    stubs(g, [90, 120, 150], 135, 30, 8);
+    g.strokeStyle = INK; g.lineWidth = 5; g.beginPath(); g.moveTo(195, 70); g.quadraticCurveTo(215, 25, 235, 35); g.stroke();
+    g.fillStyle = "#e8590c"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.ellipse(60, 115, 50, 40, 0, 0, 7); g.fill(); g.stroke();
+    g.beginPath(); g.ellipse(120, 115, 25, 22, 0, 0, 7); g.fill(); g.stroke();
+    g.beginPath(); g.arc(180, 100, 40, 0, 7); g.fill(); g.stroke();
+    cuteEyes(g, 168, 95, 11, 24); blush(g, 192, 122, 8);
+  }],
+  caterpillar: [340, 220, (g) => {   // 毛虫: ふわふわの緑の連なり
+    stubs(g, [70, 120, 170, 220], 165, 22, 9);
+    for (const [x, r] of [[50, 42], [100, 46], [150, 48], [200, 48]] as const) {
+      g.fillStyle = "#8ce99a"; g.strokeStyle = INK; g.lineWidth = 7;
+      g.beginPath(); for (let k = 0; k <= 20; k++) { const a = (k / 20) * Math.PI * 2, rr = k % 2 ? r : r - 7; g.lineTo(x + Math.cos(a) * rr, 120 + Math.sin(a) * rr); } g.closePath(); g.fill(); g.stroke();
+    }
+    g.fillStyle = "#b2f2bb"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.arc(270, 110, 55, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#ff8787"; for (const x of [50, 100, 150, 200]) { g.beginPath(); g.arc(x, 85, 7, 0, 7); g.fill(); }
+    cuteEyes(g, 255, 100, 14, 32); blush(g, 270, 140, 11);
+    g.strokeStyle = INK; g.lineWidth = 4; g.beginPath(); g.arc(280, 135, 9, 0.2, Math.PI - 0.2); g.stroke();
+  }],
+};
+const KINGS: Record<"stinkKing" | "camelKing" | "queen", ["stinkbug" | "camel" | "caterpillar", string]> = {
+  stinkKing: ["stinkbug", "#ffd43b"], camelKing: ["camel", "#ffd43b"], queen: ["caterpillar", "#f783ac"],
+};
+
 export function enemyTexture(type: EnemyType): THREE.CanvasTexture {
   if (type === "roach") return sticker(300, 240, (g) => {   // まるいおまんじゅう型のゴキちゃん
     stubs(g, [95, 150, 205], 175, 30, 12);
@@ -72,6 +127,14 @@ export function enemyTexture(type: EnemyType): THREE.CanvasTexture {
     cuteEyes(g, 128, 135, 18, 44); blush(g, 116, 178, 12); blush(g, 186, 178, 12);
     g.strokeStyle = INK; g.lineWidth = 4; g.beginPath(); g.arc(150, 170, 10, 0.2, Math.PI - 0.2); g.stroke();
   });
+  if (type in NEW_BUGS) { const [w, h, d] = NEW_BUGS[type as keyof typeof NEW_BUGS]; return sticker(w, h, d); }
+  if (type in KINGS) {   // ボス: 子分の絵を大きくして王冠をかぶせる
+    const [base, color] = KINGS[type as keyof typeof KINGS], [w, h, d] = NEW_BUGS[base];
+    return sticker(w + 40, h + 90, (g) => {
+      g.save(); g.translate(20, 80); d(g); g.restore();
+      crown(g, w * 0.62 + 20, 80, color);
+    });
+  }
   return sticker(420, 360, (g) => {   // ボス: ぷっくりハチ（ちょっとむっとした顔）
     g.fillStyle = "rgba(230,240,255,.92)"; g.strokeStyle = INK; g.lineWidth = 7;
     g.beginPath(); g.ellipse(170, 80, 85, 50, -0.5, 0, 7); g.fill(); g.stroke();

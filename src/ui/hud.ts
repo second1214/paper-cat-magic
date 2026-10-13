@@ -2,9 +2,10 @@
 // Magicraft の説明欄のように、アイテムは「絵・名前・種類・数値・説明」をいつも同じ形で見せる。
 import { ELEMENT_INFO, KIND_LABEL, MOTION_LABEL, SPELLS, spellStats } from "../core/spells";
 import { groupSummary, TOYS, toyStats, type ToyDef } from "../core/wand";
-import { loadRecord, recordRun, recordText } from "./record";
+import { buyUpgrade, canPick, loadRecord, recordRun, recordText } from "./record";
+import { DIFFS, runReward, UPGRADES } from "../core/meta";
 import { enemyTexture } from "../render/stickers";
-import type { EnemyType } from "../game/world";
+import { ENEMY, type EnemyType } from "../game/world";
 
 const bugUrls = new Map<EnemyType, string>();
 /** タイトル用の虫の絵（ゲーム中と同じステッカー）。 */
@@ -15,7 +16,7 @@ const bugUrl = (t: EnemyType) => {
 };
 import { REWARD_INFO, type Choice, type World } from "../game/world";
 import { elementCanvas, gearCanvas, relicCanvas, rewardCanvas, spellCanvas, toyCanvas, urlOf } from "../art/items";
-import { bonusRows, GEAR, GEAR_IDS, GEAR_SLOTS, RELIC_IDS, RELICS, SETS, setCounts, SLOT_NAME, type Gear } from "../core/items";
+import { bonusRows, GEAR, GEAR_FX, GEAR_IDS, GEAR_SLOTS, gearBonus, RARITY, RELIC_IDS, RELICS, SETS, setCounts, SLOT_NAME, type Gear, type GearItem } from "../core/items";
 
 export const isTouch = () => matchMedia("(pointer: coarse)").matches;
 
@@ -35,10 +36,10 @@ const cell = (id: string | null, attrs = "", extra = "") => {
 };
 
 /** おもちゃ・レリック・装備のマス。 */
-const itemCell = (kind: "toy" | "relic" | "gear", id: string | null, attrs = "", extra = "") => {
+const itemCell = (kind: "toy" | "relic" | "gear", id: string | null, attrs = "", extra = "", rar = 0) => {
   if (!id) return `<button class="cell empty ${extra}" ${attrs}></button>`;
   const url = urlOf(kind === "toy" ? toyCanvas(id) : kind === "relic" ? relicCanvas(id) : gearCanvas(id));
-  const color = kind === "gear" ? SETS[GEAR[id].set].color : "";
+  const color = kind === "gear" ? RARITY[rar].color : "";
   return `<button class="cell ${kind} ${extra}" style="${color ? `--c:${color}` : ""}" ${attrs}><img src="${url}" alt=""></button>`;
 };
 
@@ -67,15 +68,17 @@ function relicCard(id: string, attrs = "") {
     ${statsTable(bonusRows(r.bonus))}<p class="desc">${r.desc}</p></div>`;
 }
 
-/** 装備の説明カード。セットのボーナスと、今そろっている数も見せる。 */
-function gearCard(id: string, gear: Gear | null, attrs = "") {
-  const g = GEAR[id], set = SETS[g.set];
-  const have = gear ? (setCounts(gear)[g.set] ?? 0) + (gear[g.slot] === id ? 0 : 1) : 0;   // これを着けたときの数
+/** 装備の説明カード。レアリティ・特殊効果・セットのボーナスと、今そろっている数も見せる。 */
+function gearCard(item: GearItem, gear: Gear | null, attrs = "") {
+  const g = GEAR[item.id], set = SETS[g.set], R = RARITY[item.rar];
+  const worn = gear?.[g.slot];
+  const have = gear ? (setCounts(gear)[g.set] ?? 0) + (worn && GEAR[worn.id].set === g.set ? 0 : 1) : 0;   // これを着けたときの数
   const line = (n: number, b: Parameters<typeof bonusRows>[0]) =>
     `<div class="setline ${gear && have >= n ? "on" : ""}"><b>${n}つ</b>${bonusRows(b).map(([k, v]) => `${k} ${v}`).join("・")}</div>`;
-  return `<div class="card" ${attrs}>
-    <div class="head"><img src="${urlOf(gearCanvas(id))}" alt=""><div><b>${g.name}</b><span class="tag gear" style="background:${set.color}">装備・${SLOT_NAME[g.slot]}</span></div></div>
-    ${statsTable(bonusRows(g.bonus))}<p class="desc">${g.desc}</p>
+  const fx = item.fx.length ? `<div class="fxline">特殊効果: ${item.fx.map((f) => GEAR_FX[f].name).join("・")}</div>` : "";
+  return `<div class="card rar${item.rar}" style="--r:${R.color}" ${attrs}>
+    <div class="head"><img src="${urlOf(gearCanvas(item.id))}" alt=""><div><b>${g.name}</b><span class="tag" style="background:${R.color}">${R.name}</span><span class="tag gear" style="background:${set.color}">${SLOT_NAME[g.slot]}</span></div></div>
+    ${statsTable(bonusRows(gearBonus(item)))}${fx}<p class="desc">${g.desc}</p>
     <div class="setbox" style="--c:${set.color}"><div class="setname">${set.name}${gear ? `（着けると ${have}/3）` : ""}</div>${line(2, set.two)}${line(3, set.three)}</div></div>`;
 }
 
@@ -107,7 +110,7 @@ const ZUKAN: { title: string; ids: string[]; kind?: "toy" | "relic" | "gear" }[]
 ];
 
 /** タイトルまわりの画面。null ならゲーム中。 */
-type Screen = "title" | "howto" | "zukan" | null;
+type Screen = "title" | "howto" | "zukan" | "diff" | "grow" | null;
 
 export class Hud {
   private el = (id: string) => document.getElementById(id)!;
@@ -117,13 +120,15 @@ export class Hud {
   private screen: Screen = "title";
   private zukanSel = "claw";
   private recorded = new WeakSet<World>();
+  /** 今回の冒険でもらったにぼし。 */
+  private earned = 0;
   private sel: { where: "slot" | "bag"; i: number } | null = null;
   /** 持ち物画面のタブ（おもちゃの番号、または装備・レリック）と、そこで選んでいるもの。 */
   private tab: number | "gear" = 0;
   private pick: string | null = null;
   private lastKey = "";
 
-  constructor(private world: () => World, private onRestart: () => void, private onTitle: () => void) {
+  constructor(private world: () => World, private onRestart: () => void, private onTitle: () => void, private onStart: (difficulty: number) => void) {
     this.el("bagBtn").addEventListener("click", () => this.toggleBag());
     this.el("pauseBtn").addEventListener("click", () => this.togglePause());
     document.body.classList.toggle("touch", isTouch());
@@ -155,7 +160,7 @@ export class Hud {
     toast.hidden = !w.toast; if (w.toast) toast.textContent = w.toast.text;
 
     // 記録（やられた・守りきったときに一度だけ）
-    if ((w.phase === "dead" || w.phase === "win") && !this.recorded.has(w)) { this.recorded.add(w); recordRun(w.room.act, w.room.index, w.phase === "win"); }
+    if ((w.phase === "dead" || w.phase === "win") && !this.recorded.has(w)) { this.recorded.add(w); this.earned = runReward(w.cleared, w.bosses, w.phase === "win", w.opts.difficulty); recordRun(w.room.act, w.room.index, w.phase === "win", w.opts.difficulty, this.earned); }
     const key = JSON.stringify([w.toys.map((h) => h.def), w.cur, w.relics, w.gear, this.tab, this.pick, w.bag, p.cursor, p.recharging, this.bagOpen, this.paused, this.screen, this.zukanSel, this.sel, w.phase, w.choices, w.doorOpen, w.room.act, w.room.index]);
     if (key === this.lastKey) return;
     this.lastKey = key;
@@ -194,6 +199,28 @@ export class Hud {
       el.querySelector<HTMLButtonElement>(".back")!.onclick = go("title");
       return;
     }
+    if (this.screen === "diff") {   // 難易度を選んではじめる
+      const rec = loadRecord();
+      el.innerHTML = `<div class="panel diffPanel"><h2>難易度をえらぶ</h2><div class="diffs">${DIFFS.map((d, i) => {
+        const ok = canPick(rec, i);
+        return `<button class="diff ${i === 1 ? "go" : ""}" data-d="${i}" ${ok ? "" : "disabled"}><b>${d.name}${rec.cleared.includes(i) ? " ★" : ""}</b><small>${ok ? d.desc : "むずかしいを守りきると選べる"}</small><small>にぼし ×${d.reward}</small></button>`;
+      }).join("")}</div><button class="back">もどる</button></div>`;
+      el.querySelectorAll<HTMLButtonElement>("[data-d]").forEach((b) => b.onclick = () => { this.screen = null; this.lastKey = ""; this.onStart(Number(b.dataset.d)); });
+      el.querySelector<HTMLButtonElement>(".back")!.onclick = go("title");
+      return;
+    }
+    if (this.screen === "grow") {   // ねこの成長（周回で強くなる）
+      const rec = loadRecord();
+      el.innerHTML = `<div class="panel growPanel"><h2>ねこの成長</h2><p class="muted">冒険でもらった にぼし で、ずっと強くなる。今のにぼし: <b class="nib">${rec.niboshi}</b></p>
+        <div class="grows">${UPGRADES.map((u) => {
+          const lv = rec.meta[u.id], max = lv >= u.max, cost = u.cost(lv);
+          return `<div class="grow"><div><b>${u.name}</b><span class="lv">${"●".repeat(lv)}${"○".repeat(u.max - lv)}</span><small>${u.desc}</small></div>
+            <button data-u="${u.id}" ${max || rec.niboshi < cost ? "disabled" : ""}>${max ? "最大" : `にぼし ${cost}`}</button></div>`;
+        }).join("")}</div><button class="back">もどる</button></div>`;
+      el.querySelectorAll<HTMLButtonElement>("[data-u]").forEach((b) => b.onclick = () => { buyUpgrade(b.dataset.u as keyof typeof rec.meta); this.lastKey = ""; });
+      el.querySelector<HTMLButtonElement>(".back")!.onclick = go("title");
+      return;
+    }
     if (this.screen === "zukan") {
       el.innerHTML = `<div class="panel zukan">${this.zukanHtml()}</div>`;
       el.querySelectorAll<HTMLButtonElement>("[data-z]").forEach((b) => b.onclick = () => { this.zukanSel = b.dataset.z!; this.lastKey = ""; });
@@ -207,12 +234,14 @@ export class Hud {
         <img class="bug b1" src="${bugUrl("roach")}" alt=""><img class="bug b2" src="${bugUrl("mosquito")}" alt=""></div>
       <div class="menu">
         <button class="go start">はじめる</button>
+        <button class="growBtn">ねこの成長</button>
         <button class="howtoBtn">あそびかた</button>
         <button class="zukanBtn">ずかん</button>
       </div>
       <div class="record">${recordText(rec)}</div>
     </div>`;
-    el.querySelector<HTMLButtonElement>(".start")!.onclick = () => { this.screen = null; w.start(); };
+    el.querySelector<HTMLButtonElement>(".start")!.onclick = go("diff");
+    el.querySelector<HTMLButtonElement>(".growBtn")!.onclick = go("grow");
     el.querySelector<HTMLButtonElement>(".howtoBtn")!.onclick = go("howto");
     el.querySelector<HTMLButtonElement>(".zukanBtn")!.onclick = go("zukan");
   }
@@ -242,7 +271,7 @@ export class Hud {
   /** ずかん: 左に選んだものの説明、右に種類ごとのアイコン一覧。 */
   private zukanHtml() {
     const sel = this.zukanSel;
-    const detail = TOYS[sel] ? toyCard(TOYS[sel]) : RELICS[sel] ? relicCard(sel) : GEAR[sel] ? gearCard(sel, null) : spellCard(sel);
+    const detail = TOYS[sel] ? toyCard(TOYS[sel]) : RELICS[sel] ? relicCard(sel) : GEAR[sel] ? gearCard({ id: sel, rar: 0, fx: [] }, null) : spellCard(sel);
     const groups = ZUKAN.map((g) => `<div class="zgroup"><div class="ztitle">${g.title}</div><div class="zcells">${g.ids.map((id) => g.kind
       ? itemCell(g.kind, id, `data-z="${id}"`, id === sel ? "sel" : "")
       : cell(id, `data-z="${id}"`, id === sel ? "sel" : "")).join("")}</div></div>`).join("");
@@ -308,7 +337,8 @@ export class Hud {
   /** 持ち物: 装備（帽子・服・首輪とセットの状態）とレリック。 */
   private gearHtml(w: World) {
     const pick = this.pick;
-    const detail = pick && GEAR[pick] ? gearCard(pick, w.gear) : pick && RELICS[pick] ? relicCard(pick)
+    const worn = GEAR_SLOTS.map((sl) => w.gear[sl]).find((g) => g && g.id === pick);
+    const detail = worn ? gearCard(worn, w.gear) : pick && RELICS[pick] ? relicCard(pick)
       : `<div class="card"><b>装備・レリック</b><p class="desc">装備は帽子・服・首輪の3か所。同じセットを2つ・3つそろえるとボーナス。レリックは持っているだけで効く。</p></div>`;
     const counts = setCounts(w.gear);
     const sets = Object.values(SETS).map((st) => {
@@ -319,7 +349,7 @@ export class Hud {
       <div class="detail">${detail}</div>
       <div class="board">
         <div class="bagTitle">装備</div>
-        <div class="gearRow">${GEAR_SLOTS.map((sl) => `<div class="gslot">${itemCell("gear", w.gear[sl], `data-pick="${w.gear[sl] ?? ""}"`, pick && pick === w.gear[sl] ? "sel" : "")}<span>${SLOT_NAME[sl]}</span></div>`).join("")}<div class="sets">${sets}</div></div>
+        <div class="gearRow">${GEAR_SLOTS.map((sl) => `<div class="gslot">${itemCell("gear", w.gear[sl]?.id ?? null, `data-pick="${w.gear[sl]?.id ?? ""}"`, pick && pick === w.gear[sl]?.id ? "sel" : "", w.gear[sl]?.rar ?? 0)}<span>${SLOT_NAME[sl]}</span></div>`).join("")}<div class="sets">${sets}</div></div>
         <div class="bagTitle">レリック（${w.relics.length}）</div>
         <div class="baggrid">${w.relics.length ? w.relics.map((r) => itemCell("relic", r, `data-pick="${r}"`, pick === r ? "sel" : "")).join("") : `<span class="muted">まだ持っていません（◆の扉・ボスでもらえる）</span>`}</div>
       </div></div>`;
@@ -330,10 +360,10 @@ export class Hud {
     el.hidden = w.phase !== "reward";
     if (el.hidden) return;
     const boss = w.room.kind === "boss";
-    const title = boss ? "スズメバチを追い払った！" : `${w.title.split("・")[1].replace(/ \d.*$/, "")}を片付けた！`;
+    const title = boss ? `${ENEMY[w.room.waves[0][0]].name}を追い払った！` : `${w.title.split("・")[1].replace(/ \d.*$/, "")}を片付けた！`;
     const card = (c: Choice, i: number) => {
       const a = `data-i="${i}" role="button" tabindex="0"`;
-      return c.kind === "toy" ? toyCard(TOYS[c.id], a) : c.kind === "relic" ? relicCard(c.id, a) : c.kind === "gear" ? gearCard(c.id, w.gear, a) : spellCard(c.id, a);
+      return c.kind === "toy" ? toyCard(TOYS[c.id], a) : c.kind === "relic" ? relicCard(c.id, a) : c.kind === "gear" ? gearCard(c.gear ?? { id: c.id, rar: 0, fx: [] }, w.gear, a) : spellCard(c.id, a);
     };
     const kind = w.choices[0]?.kind;
     const note = kind === "toy" ? (w.toys.length < 3 ? `おもちゃを1つ増やす（今 ${w.toys.length}/3。持ち替えはスロットの横のアイコン）` : "持てるのは3つまで。今使っているおもちゃと交換（技はそのまま移る）")
@@ -356,6 +386,7 @@ export class Hud {
     el.innerHTML = `<div class="panel"><h2>${w.phase === "win" ? "1年間、おうちを守りきった！" : "虫にやられた…"}</h2>
       ${w.phase === "win" ? mama("pet", "よくやったね、<br>えらいえらい！") : mama("scream", "いやぁぁぁ！<br>虫がーっ！")}
       <p class="muted">${w.phase === "win" ? "秋から夏まで、ぜんぶの虫を追い払った。" : `${w.title} で力尽きた。`}</p>
+      <p class="nibline">にぼし <b>+${this.earned}</b>（${DIFFS[w.opts.difficulty].name}・片付けた部屋 ${w.cleared}）　タイトルの「ねこの成長」で使える</p>
       <div class="menu"><button class="go again">もう一度</button><button class="toTitle">タイトルへ</button></div></div>`;
     el.querySelector<HTMLButtonElement>(".again")!.onclick = () => this.onRestart();
     el.querySelector<HTMLButtonElement>(".toTitle")!.onclick = () => this.toTitle();

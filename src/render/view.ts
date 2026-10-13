@@ -1,6 +1,6 @@
 // three.js での描画。World の状態を毎フレーム写すだけで、ゲームの判断はしない。
 import * as THREE from "three";
-import type { World, EnemyType, Room } from "../game/world";
+import { ENEMY, type World, type EnemyType, type Room } from "../game/world";
 import { CatDoll, type CatState } from "./catDoll";
 import { canvasTexture, enemyTexture, glowTexture, orbTexture } from "./stickers";
 import { buildRoom, type BuiltRoom } from "./roomBuilder";
@@ -10,7 +10,10 @@ import type { Season } from "../game/stage";
 
 /** 紙人形をカメラ側へ少し倒して、見下ろしでも潰れて見えないようにする。 */
 const LEAN = 0.42;
-const ENEMY_H: Record<EnemyType, number> = { roach: 0.95, mosquito: 0.95, spider: 1.0, hornet: 2.4 };
+const ENEMY_H: Record<EnemyType, number> = {
+  roach: 0.95, mosquito: 0.95, spider: 1.0, hornet: 2.4, stinkbug: 0.95, camel: 1.0, ant: 0.7, caterpillar: 0.95,
+  stinkKing: 3.4, camelKing: 3.4, queen: 3.2,   // 王冠のぶん絵が縦長なので大きめ
+};
 const FLY: Partial<Record<EnemyType, number>> = { mosquito: 0.55, hornet: 0.35 };
 
 /** 季節の舞うもの（花びら・ほたる・落ち葉・雪）。 */
@@ -87,7 +90,7 @@ export class GameView {
     this.cat = await CatDoll.load(base);
     this.cat.group.traverse((o) => { o.castShadow = true; });
     this.scene.add(this.cat.group);
-    for (const t of ["roach", "mosquito", "spider", "hornet"] as EnemyType[]) this.enemyTex.set(t, enemyTexture(t));
+    for (const t of Object.keys(ENEMY) as EnemyType[]) this.enemyTex.set(t, enemyTexture(t));
     for (const t of ["claw", "bite", "hairball", "hiss", "swing", "yarn", "laser", "pounce", "punch", "post", "friend", "roomba", "squirt", "duck", "hammer", "bubble", "flash", "pumpkin", "box", "roller"] as const) this.techTex.set(t, canvasTexture(techCanvas(t)));
     this.friendTex = await Promise.all([1, 2, 3, 4].map((i) => grayCat(`${base}cat/A01_walk_${i}.png`)));
     for (const e of ["static", "wet", "sticky", "repel"] as const) this.elemTex.set(e, canvasTexture(elementCanvas(e)));
@@ -219,7 +222,8 @@ export class GameView {
       let g = this.enemyMeshes.get(e.id);
       if (!g) { g = this.enemyCard(e.type); this.enemyMeshes.set(e.id, g); }
       const fly = FLY[e.type] ?? 0;
-      const bob = fly ? fly + Math.sin(e.t * 8 + e.id) * 0.08 : e.type === "roach" && Math.hypot(e.vel.x, e.vel.z) > 0.5 ? Math.abs(Math.sin(e.t * 30)) * 0.03 : 0;
+      const hop = (e.type === "camel" || e.type === "camelKing") && e.phase > 0 ? Math.sin((e.phase / (e.type === "camel" ? 0.35 : 0.6)) * Math.PI) * (e.type === "camel" ? 0.8 : 1.6) : 0;
+      const bob = hop || (fly ? fly + Math.sin(e.t * 8 + e.id) * 0.08 : e.type === "roach" && Math.hypot(e.vel.x, e.vel.z) > 0.5 ? Math.abs(Math.sin(e.t * 30)) * 0.03 : 0);
       g.position.set(e.pos.x, bob, e.pos.z);
       g.rotation.x = -LEAN;
       const face = e.vel.x < -0.1 ? -1 : 1;
@@ -255,7 +259,9 @@ export class GameView {
     for (const pr of world.projectiles) {
       if (pr.owner === "enemy") {
         const s = this.sprite("orb", nOrb++, () => new THREE.SpriteMaterial({ map: this.orb, transparent: true, depthWrite: false }));
-        s.position.set(pr.pos.x, 0.45, pr.pos.z); const k = pr.radius * 2.6; s.scale.set(k, k, k); s.material.color.set(pr.color);
+        const gas = pr.tech === "gas";
+        s.position.set(pr.pos.x, gas ? 0.3 : 0.45, pr.pos.z); const k = pr.radius * (gas ? 2.4 : 2.6) * (gas ? 0.9 + 0.1 * Math.sin(world.time * 4 + pr.id) : 1); s.scale.set(k, k, k); s.material.color.set(pr.color);
+        s.material.opacity = gas ? Math.min(0.75, pr.life) : 1;
         continue;
       }
       const fade = Math.min(1, pr.life / 0.15);
