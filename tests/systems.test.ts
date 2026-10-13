@@ -214,3 +214,28 @@ describe("リビングに来る子どもたち", () => {
     expect(w.enemies).toHaveLength(0);
   });
 });
+
+describe("途中セーブ（部屋に入るたびに自動）", () => {
+  it("再開すると、同じ部屋の入口から、持ち物・お金・HPそのままでやり直せる", () => {
+    const w = new World(11); w.start();
+    w.addToy("tombo"); w.addToy("denmouse"); w.bag.push("issho"); w.relics.push("tower"); w.coins = 23; w.curses = ["katai"];
+    w.enterRoom(1, 4, "spell");
+    w.player.hp = 3;
+    const save = JSON.parse(JSON.stringify(w.checkpoint));
+    const enemies = w.enemies.map((e) => [e.type, e.pos.x, e.pos.z, e.maxHp]);
+    const doors = w.room.doors.map((d) => d.reward);
+    // 部屋の中で進めても、セーブは部屋の入口のまま
+    w.coins = 999; w.update(1 / 30, { move: { x: 1, z: 0 }, aim: null, fire: true, dash: false });
+    const r = World.load(save);
+    expect(r.room.act).toBe(1); expect(r.room.index).toBe(4);
+    expect(r.enemies.map((e) => [e.type, e.pos.x, e.pos.z, e.maxHp])).toEqual(enemies);
+    expect(r.room.doors.map((d) => d.reward)).toEqual(doors);
+    expect(r.toys.map((h) => h.def.id)).toEqual(["jarashi", "tombo"]);
+    expect(r.batt.map((h) => h.def.id)).toEqual(["denmouse"]);
+    expect(r.bag).toContain("issho");
+    expect(r.relics).toContain("tower");
+    expect(r.coins).toBe(23);
+    expect(r.curses).toEqual(["katai"]);
+    expect(r.player.hp).toBe(w.checkpoint!.hp);
+  });
+});

@@ -13,6 +13,9 @@ export function makeRng(seed: number) {
     range: (lo: number, hi: number) => lo + (hi - lo) * next(),
     int: (lo: number, hi: number) => Math.floor(lo + (hi - lo + 1) * next()),
     pick: <T>(arr: readonly T[]) => arr[Math.floor(next() * arr.length)],
+    /** 途中セーブ用: 今の状態と、その状態へ戻す。 */
+    state: () => a,
+    setState: (s: number) => { a = s >>> 0; },
   };
 }
 export type Rng = ReturnType<typeof makeRng>;

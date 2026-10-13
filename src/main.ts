@@ -5,6 +5,7 @@ import { Hud } from "./ui/hud";
 import { loadRecord } from "./ui/record";
 import { Sound } from "./audio";
 import { lockedKeys } from "./core/unlock";
+import { clearRun, loadRun, saveRun } from "./ui/save";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
@@ -21,7 +22,10 @@ const hud = new Hud(
   () => { world = newWorld(world.opts.difficulty); world.start(); hud.bagOpen = false; },
   () => { world = newWorld(1); },
   (difficulty) => { world = newWorld(difficulty, Number(params.get("seed")) || seed()); world.start(); },
+  () => { const d = loadRun(); if (!d) return; world = World.load(d); world.start(); savedNo = world.saveNo; },
 );
+/** 途中セーブ: 部屋に入るたびに保存し、冒険が終わったら消す。 */
+let savedNo = -1;
 const controls = new Controls(canvas, document.getElementById("stick")!, document.getElementById("atkBtn")!, document.getElementById("dashBtn")!);
 controls.onToggleBag = () => hud.toggleBag();
 controls.onPause = () => hud.togglePause();
@@ -39,6 +43,8 @@ function frame(now: number) {
   const input = controls.read(view.camera, world.player.pos);
   const wasOpen = world.doorOpen;
   if (!hud.bagOpen && !hud.paused) world.update(dt, input);
+  if (world.phase === "dead" || world.phase === "win") { if (savedNo !== -2) { clearRun(); savedNo = -2; } }
+  else if (world.phase !== "intro" && world.checkpoint && world.saveNo !== savedNo) { saveRun(world.checkpoint); savedNo = world.saveNo; }
   // 効果音と曲
   for (const e of world.events) sound.sfx(e);
   if (!wasOpen && world.doorOpen && world.room.kind !== "shop" && world.room.kind !== "special") sound.sfx("door");

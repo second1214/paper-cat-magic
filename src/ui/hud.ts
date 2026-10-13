@@ -5,6 +5,7 @@ import { groupSummary, SUB_LABEL, TOYS, toyStats, type ToyDef } from "../core/wa
 import { CURSES } from "../core/curses";
 import { findUnlock, isOpen, UNLOCKS, unlockText, type Unlock, type UnlockKind } from "../core/unlock";
 import { buyUpgrade, canPick, loadRecord, recordRun, recordText } from "./record";
+import { loadRun, runLabel } from "./save";
 import { DIFFS, runReward, UPGRADES } from "../core/meta";
 import { enemyTexture } from "../render/stickers";
 import { ENEMY, POTIONS, type EnemyType } from "../game/world";
@@ -162,7 +163,7 @@ export class Hud {
   private pick: string | null = null;
   private lastKey = "";
 
-  constructor(private world: () => World, private onRestart: () => void, private onTitle: () => void, private onStart: (difficulty: number) => void) {
+  constructor(private world: () => World, private onRestart: () => void, private onTitle: () => void, private onStart: (difficulty: number) => void, private onContinue: () => void) {
     this.el("bagBtn").addEventListener("click", () => this.toggleBag());
     this.el("pauseBtn").addEventListener("click", () => this.togglePause());
     this.el("muteBtn").addEventListener("click", () => { this.onMute(); this.lastKey = ""; });
@@ -259,7 +260,8 @@ export class Hud {
     }
     if (this.screen === "diff") {   // 難易度を選んではじめる
       const rec = loadRecord();
-      el.innerHTML = `<div class="panel diffPanel"><h2>難易度をえらぶ</h2><div class="diffs">${DIFFS.map((d, i) => {
+      const saved = loadRun();
+      el.innerHTML = `<div class="panel diffPanel"><h2>難易度をえらぶ</h2>${saved ? `<p class="muted warn">はじめると、前の冒険のつづき（${runLabel(saved)}）は消えます</p>` : ""}<div class="diffs">${DIFFS.map((d, i) => {
         const ok = canPick(rec, i);
         return `<button class="diff ${i === 1 ? "go" : ""}" data-d="${i}" ${ok ? "" : "disabled"}><b>${d.name}${rec.cleared.includes(i) ? " ★" : ""}</b><small>${ok ? d.desc : "むずかしいを守りきると選べる"}</small><small>にぼし ×${d.reward}</small></button>`;
       }).join("")}</div><button class="back">もどる</button></div>`;
@@ -285,13 +287,14 @@ export class Hud {
       el.querySelector<HTMLButtonElement>(".back")!.onclick = go("title");
       return;
     }
-    const base = import.meta.env.BASE_URL, rec = loadRecord();
+    const base = import.meta.env.BASE_URL, rec = loadRecord(), saved = loadRun();
     el.innerHTML = `<div class="title">
       <div class="logo"><small>ママを虫から守れ！</small>My Cat Is <br>So Cute</div>
       <div class="hero"><img class="mom" src="${base}mama/scared.png" alt="ママ"><img class="cat" src="${base}cat/P03_sit_happy.png" alt="猫">
         <img class="bug b1" src="${bugUrl("roach")}" alt=""><img class="bug b2" src="${bugUrl("mosquito")}" alt=""></div>
       <div class="menu">
-        <button class="go start">はじめる</button>
+        ${saved ? `<button class="go cont">つづきから<small>${runLabel(saved)}</small></button>` : ""}
+        <button class="${saved ? "" : "go "}start">はじめる</button>
         <button class="growBtn">ねこの成長</button>
         <button class="howtoBtn">あそびかた</button>
         <button class="zukanBtn">ずかん</button>
@@ -299,6 +302,8 @@ export class Hud {
       <div class="record">${recordText(rec)}<br>解放: <b>${UNLOCKS.filter((u) => isOpen(u, rec.stats)).length}/${UNLOCKS.length}</b>（倒した虫 ${rec.stats.kills}・片付けた部屋 ${rec.stats.rooms}）</div>
     </div>`;
     el.querySelector<HTMLButtonElement>(".start")!.onclick = go("diff");
+    const cont = el.querySelector<HTMLButtonElement>(".cont");
+    if (cont) cont.onclick = () => { this.screen = null; this.lastKey = ""; this.onContinue(); };
     el.querySelector<HTMLButtonElement>(".growBtn")!.onclick = go("grow");
     el.querySelector<HTMLButtonElement>(".howtoBtn")!.onclick = go("howto");
     el.querySelector<HTMLButtonElement>(".zukanBtn")!.onclick = go("zukan");
@@ -349,7 +354,7 @@ export class Hud {
     if (el.hidden) return;
     el.innerHTML = `<div class="panel pausePanel"><h2>ひと休み</h2>
       <div class="menu"><button class="go resume">つづける</button><button class="toTitle">タイトルへ</button></div>
-      <p class="muted">タイトルへ戻ると、今の冒険は終わります。</p></div>`;
+      <p class="muted">冒険は部屋に入るたびに自動でセーブされています。タイトルの「つづきから」で、この部屋の入口から再開できます。</p></div>`;
     el.querySelector<HTMLButtonElement>(".resume")!.onclick = () => this.togglePause();
     el.querySelector<HTMLButtonElement>(".toTitle")!.onclick = () => this.toTitle();
   }
