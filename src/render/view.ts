@@ -88,7 +88,7 @@ export class GameView {
     this.cat.group.traverse((o) => { o.castShadow = true; });
     this.scene.add(this.cat.group);
     for (const t of ["roach", "mosquito", "spider", "hornet"] as EnemyType[]) this.enemyTex.set(t, enemyTexture(t));
-    for (const t of ["claw", "bite", "hairball", "hiss", "swing", "yarn", "laser", "pounce", "punch", "post", "friend", "roomba"] as const) this.techTex.set(t, canvasTexture(techCanvas(t)));
+    for (const t of ["claw", "bite", "hairball", "hiss", "swing", "yarn", "laser", "pounce", "punch", "post", "friend", "roomba", "squirt", "duck", "hammer", "bubble", "flash", "pumpkin", "box", "roller"] as const) this.techTex.set(t, canvasTexture(techCanvas(t)));
     this.friendTex = await Promise.all([1, 2, 3, 4].map((i) => grayCat(`${base}cat/A01_walk_${i}.png`)));
     for (const e of ["static", "wet", "sticky", "repel"] as const) this.elemTex.set(e, canvasTexture(elementCanvas(e)));
   }
@@ -316,7 +316,9 @@ export class GameView {
           break;
         }
         case "trap": {   // 床に置いた爪とぎ
-          const m = this.flat("post", nPost++, () => new THREE.Mesh(this.planeGeo, new THREE.MeshBasicMaterial({ map: this.techTex.get("post"), transparent: true, alphaTest: 0.1, depthWrite: false })));
+          const m = this.flat("post", nPost++, () => new THREE.Mesh(this.planeGeo, new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.1, depthWrite: false })));
+          const ptex = this.techTex.get(pr.tech)!, pm = m.material as THREE.MeshBasicMaterial;
+          if (pm.map !== ptex) { pm.map = ptex; pm.needsUpdate = true; }
           const k = pr.radius * 3;
           m.position.set(pr.pos.x, 0.05, pr.pos.z); m.rotation.set(-Math.PI / 2, 0, 0); m.scale.set(k, k, 1);
           (m.material as THREE.MeshBasicMaterial).opacity = Math.min(1, pr.life / 0.8);
@@ -324,7 +326,7 @@ export class GameView {
           break;
         }
         default:
-          techSprite(pr.tech, pr.pos.x, 0.55, pr.pos.z, size, pr.tech === "hairball" ? world.time * 8 : Math.atan2(-pr.vel.z, pr.vel.x));
+          techSprite(pr.tech, pr.pos.x, 0.55, pr.pos.z, size, pr.tech === "hairball" || pr.tech === "pumpkin" ? world.time * 8 : pr.tech === "bubble" || pr.tech === "duck" ? 0 : Math.atan2(-pr.vel.z, pr.vel.x));
       }
     }
 

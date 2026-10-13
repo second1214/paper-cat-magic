@@ -128,7 +128,7 @@
       #result .menu button { font-size: 15px; padding: 8px 18px; }
 
       /* ずかん */
-      .zgroups { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+      .zgroups { display: flex; flex-wrap: wrap; gap: 6px 14px; overflow-y: auto; max-height: calc(100dvh - 110px); padding: 8px 4px 4px; touch-action: pan-y; }
       .zgroup { margin-bottom: 2px; }
       .zukan .boardHead .back { margin: 0 0 0 auto; padding: 4px 14px; }
       .ztitle { font-size: 12px; font-weight: 800; color: var(--muted); margin-bottom: 3px; }
@@ -198,6 +198,7 @@
         .edit .detail .card { padding: 6px 8px; }
       }
       @media (max-width: 700px) {
+        .zgroups { max-height: calc(100dvh - 400px); }
         .intro .cols, .edit { grid-template-columns: 1fr; }
         .choices { flex-direction: column; align-items: center; } .choices .card { width: 100%; max-width: none; }
         #slots { top: auto; bottom: 120px; }

@@ -6,7 +6,8 @@
 export type SpellKind = "attack" | "modifier" | "multicast" | "trigger";
 
 /** 技が当たったときに出す絵（描画側で使う）。 */
-export type TechFx = "claw" | "bite" | "hairball" | "hiss" | "swing" | "yarn" | "laser" | "pounce" | "punch" | "post" | "friend" | "roomba" | "enemy";
+export type TechFx = "claw" | "bite" | "hairball" | "hiss" | "swing" | "yarn" | "laser" | "pounce" | "punch" | "post" | "friend" | "roomba"
+  | "squirt" | "duck" | "hammer" | "bubble" | "flash" | "pumpkin" | "box" | "roller" | "enemy";
 
 /** 技の動き。shot=飛ぶ / orbit=猫のまわりを回る / beam=猫から線で届く / ring=足元から広がる輪 / melee=目の前で連打 / trap=床に置く。 */
 export type Motion = "shot" | "orbit" | "beam" | "ring" | "melee" | "trap" | "summon";
@@ -69,6 +70,8 @@ export interface Modifier {
   /** 大きさ（当たり判定・回る半径・輪・爆発）の倍率。 */
   sizeMul?: number;
   element?: Element;
+  slowAdd?: number; // 当たった虫がすくむ秒数を足す
+  lifeMul?: number; // とどく距離（出ている時間）
 }
 
 export interface SpellDef {
@@ -159,6 +162,47 @@ export const SPELLS: Record<string, SpellDef> = {
     desc: "お掃除ロボを呼ぶ。部屋を走り回って壁ではね返り、ぶつかった虫を吸いこむ",
     projectile: base({ damage: 4, speed: 3.4, radius: 0.55, life: 15, motion: "summon", hits: 99, hitEvery: 0.5, knock: 2, spread: 0.6, color: "#adb5bd", tech: "roomba" }),
   },
+  // ---- 飼い主が買ってきた物シリーズ ----
+  mizudeppo: {
+    id: "mizudeppo", name: "水鉄砲", kind: "attack", mana: 5, glyph: "水", color: "#4dabf7",
+    desc: "お風呂用の水鉄砲。弱いけれど速く、当たるとびしょぬれ",
+    projectile: base({ damage: 3, speed: 16, life: 0.8, spread: 0.06, element: "wet", color: "#74c0fc", tech: "squirt" }),
+  },
+  ahiru: {
+    id: "ahiru", name: "ゴムのアヒル", kind: "attack", mana: 10, glyph: "鳥", color: "#fab005",
+    desc: "プピッと鳴るお風呂のアヒル。壁で4回はね返る",
+    projectile: base({ damage: 7, speed: 9, radius: 0.28, life: 3, bounce: 4, knock: 2, color: "#ffd43b", tech: "duck" }),
+  },
+  hammer: {
+    id: "hammer", name: "ピコピコハンマー", kind: "attack", mana: 12, glyph: "槌", color: "#f03e3e",
+    desc: "100円ショップのおもちゃ。目の前を1発たたいて、はじき飛ばす",
+    projectile: base({ damage: 16, speed: 0, radius: 0.6, life: 0.25, motion: "melee", reach: 1.7, knock: 7, color: "#ff8787", tech: "hammer" }),
+  },
+  shabon: {
+    id: "shabon", name: "シャボン玉", kind: "attack", mana: 9, glyph: "泡", color: "#74c0fc",
+    desc: "ふわふわ漂って虫をゆっくり追いかけ、パチンとはじける",
+    projectile: base({ damage: 6, speed: 3.5, radius: 0.3, life: 3.5, explode: 1.3, homing: 0.4, color: "#d0ebff", tech: "bubble" }),
+  },
+  flash: {
+    id: "flash", name: "自撮りフラッシュ", kind: "attack", mana: 12, glyph: "光", color: "#fcc419",
+    desc: "飼い主の自撮りの光。まわりの虫がまぶしくて2.5秒すくむ",
+    projectile: base({ damage: 3, speed: 0, life: 0.35, motion: "ring", reach: 3.4, slow: 2.5, color: "#fff3bf", tech: "flash" }),
+  },
+  kabocha: {
+    id: "kabocha", name: "ハロウィンのかぼちゃ", kind: "attack", mana: 24, glyph: "瓜", color: "#fd7e14",
+    desc: "去年のハロウィンの飾り。転がって大きくはじける",
+    projectile: base({ damage: 14, speed: 6, radius: 0.36, life: 1.8, explode: 2.2, knock: 4, color: "#ff922b", tech: "pumpkin" }),
+  },
+  danbo: {
+    id: "danbo", name: "通販の段ボール", kind: "attack", mana: 14, glyph: "箱", color: "#c0864a",
+    desc: "床に置くと、上を通った虫がはまってねばねば（置くものは合わせて4つまで）",
+    projectile: base({ damage: 2, speed: 0, radius: 0.75, life: 8, motion: "trap", reach: 1.3, hits: 99, hitEvery: 0.5, element: "sticky", color: "#d9a066", tech: "box" }),
+  },
+  korokoro: {
+    id: "korokoro", name: "粘着コロコロ", kind: "attack", mana: 15, glyph: "転", color: "#868e96",
+    desc: "掃除用のコロコロ。転がった線の上の虫がくっついて止まる",
+    projectile: base({ damage: 3, speed: 9, radius: 0.32, life: 1.1, motion: "beam", hits: 2, hitEvery: 0.4, element: "sticky", color: "#dee2e6", tech: "roller" }),
+  },
   matatabi: {
     id: "matatabi", name: "またたび", kind: "modifier", mana: 8, glyph: "強", color: "#2f9e44",
     desc: "右の技のダメージ1.5倍＋3", modifier: { damageMul: 1.5, damageAdd: 3 },
@@ -207,6 +251,22 @@ export const SPELLS: Record<string, SpellDef> = {
     id: "spray", name: "虫よけスプレー", kind: "modifier", mana: 8, glyph: "毒", color: "#5fbf5a",
     desc: "右の技に虫よけ属性をつける", modifier: { element: "repel" },
   },
+  rame: {
+    id: "rame", name: "ラメのシール", kind: "modifier", mana: 6, glyph: "煌", color: "#cc5de8",
+    desc: "キラキラ。右の技が少し大きくなり、攻撃力＋2", modifier: { sizeMul: 1.3, damageAdd: 2 },
+  },
+  suzu: {
+    id: "suzu", name: "鈴のリボン", kind: "modifier", mana: 6, glyph: "鈴", color: "#fab005",
+    desc: "チリンと鳴る。右の技が当たった虫が1秒すくむ", modifier: { slowAdd: 1 },
+  },
+  kenko: {
+    id: "kenko", name: "よくわからない健康グッズ", kind: "modifier", mana: 14, glyph: "謎", color: "#495057",
+    desc: "通販で買った謎の石。なぜか右の技の攻撃力×1.7", modifier: { damageMul: 1.7 },
+  },
+  jidori: {
+    id: "jidori", name: "自撮り棒", kind: "modifier", mana: 6, glyph: "伸", color: "#228be6",
+    desc: "右の技が1.5倍遠くまで届く（置く技・仲間は1.5倍長くいる）", modifier: { lifeMul: 1.5 },
+  },
   double: {
     id: "double", name: "二刀流", kind: "multicast", mana: 6, glyph: "×2", color: "#e67700", count: 2,
     desc: "右に続く2つの技を同時に出す",
@@ -238,6 +298,8 @@ export function spellStats(def: SpellDef): [string, string][] {
     if (p.slow) out.push(["すくみ", `${p.slow}秒`]);
     if (p.pierce) out.push(["貫通", `${p.pierce}匹`]);
     if (p.knock >= 3) out.push(["はじき飛ばし", "あり"]);
+    if (p.bounce) out.push(["はね返り", `${p.bounce}回`]);
+    if (p.element !== "none") out.push(["属性", ELEMENT_INFO[p.element].name]);
     return out;
   }
   out.push(["やる気", `${def.mana}`]);
@@ -250,6 +312,8 @@ export function spellStats(def: SpellDef): [string, string][] {
   if (m?.bounce) out.push(["はね返り", `＋${m.bounce}回`]);
   if (m?.pierce) out.push(["貫通", `＋${m.pierce}匹`]);
   if (m?.speedMul && m.speedMul !== 1) out.push(["速さ", `×${m.speedMul}`]);
+  if (m?.slowAdd) out.push(["すくみ", `＋${m.slowAdd}秒`]);
+  if (m?.lifeMul) out.push(["とどく距離", `×${m.lifeMul}`]);
   if (def.kind === "multicast") out.push(["同時に出す", `右の${def.count}つ`]);
   if (def.kind === "trigger") out.push(["命中で", "さらに右の技"]);
   return out;

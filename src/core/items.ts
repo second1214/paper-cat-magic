@@ -83,29 +83,34 @@ export const RELICS: Record<string, RelicDef> = {
 export const RELIC_IDS = Object.keys(RELICS);
 
 // ---------- 装備（Magicraft の装備セットのように、同じセットをそろえるとボーナス） ----------
+// 飼い主が「かわいい！」と思って買ってきた、よくわからない物を着せられている。
 export type GearSlot = "hat" | "body" | "collar";
 export const GEAR_SLOTS: GearSlot[] = ["hat", "body", "collar"];
-export const SLOT_NAME: Record<GearSlot, string> = { hat: "帽子", body: "服", collar: "首輪" };
+export const SLOT_NAME: Record<GearSlot, string> = { hat: "頭", body: "服", collar: "首" };
 
-export interface GearDef { id: string; name: string; slot: GearSlot; set: string; bonus: Part }
+export interface GearDef { id: string; name: string; slot: GearSlot; set: string; desc: string; bonus: Part }
 export interface SetDef { id: string; name: string; color: string; two: Part; three: Part }
 
 export const SETS: Record<string, SetDef> = {
-  ninja: { id: "ninja", name: "忍者猫セット", color: "#5c5f8a", two: { speedMul: 1.08 }, three: { dashPower: 1.5 } },
-  wizard: { id: "wizard", name: "魔法使い猫セット", color: "#7048e8", two: { manaMax: 20 }, three: { regenMul: 1.3 } },
-  knight: { id: "knight", name: "騎士猫セット", color: "#868e96", two: { maxHp: 2 }, three: { guard: 0.2 } },
+  hawaii: { id: "hawaii", name: "ハワイのお土産セット", color: "#f76707", two: { regenMul: 1.2 }, three: { stillRegen: 1 } },
+  gacha: { id: "gacha", name: "ガチャガチャの天使セット", color: "#e64980", two: { guard: 0.1 }, three: { clearHeal: 2 } },
+  fruit: { id: "fruit", name: "くだものの被り物セット", color: "#f59f00", two: { maxHp: 2 }, three: { iframes: 0.5 } },
+  knit: { id: "knit", name: "ママの手編みセット", color: "#2f9e44", two: { dmgMul: 1.1 }, three: { dashPower: 1.5 } },
 };
 
 export const GEAR: Record<string, GearDef> = {
-  ninjaHat: { id: "ninjaHat", name: "忍びずきん", slot: "hat", set: "ninja", bonus: { dashCdMul: 0.85 } },
-  ninjaBody: { id: "ninjaBody", name: "忍び装束", slot: "body", set: "ninja", bonus: { speedMul: 1.05 } },
-  ninjaCollar: { id: "ninjaCollar", name: "鈴なし首輪", slot: "collar", set: "ninja", bonus: { iframes: 0.2 } },
-  wizHat: { id: "wizHat", name: "とんがり帽子", slot: "hat", set: "wizard", bonus: { manaMax: 10 } },
-  wizBody: { id: "wizBody", name: "星のマント", slot: "body", set: "wizard", bonus: { regenMul: 1.1 } },
-  wizCollar: { id: "wizCollar", name: "魔法の首輪", slot: "collar", set: "wizard", bonus: { dmgMul: 1.05 } },
-  knightHat: { id: "knightHat", name: "小さなかぶと", slot: "hat", set: "knight", bonus: { maxHp: 2 } },
-  knightBody: { id: "knightBody", name: "ねこよろい", slot: "body", set: "knight", bonus: { guard: 0.1 } },
-  knightCollar: { id: "knightCollar", name: "盾の首輪", slot: "collar", set: "knight", bonus: { iframes: 0.3 } },
+  hibiscus: { id: "hibiscus", name: "ハイビスカスの髪飾り", slot: "hat", set: "hawaii", desc: "ハワイ土産。耳に引っかけてある", bonus: { regenMul: 1.1 } },
+  aloha: { id: "aloha", name: "アロハシャツ", slot: "body", set: "hawaii", desc: "人間用Sサイズ。すそを引きずる", bonus: { speedMul: 1.05 } },
+  lei: { id: "lei", name: "フラのレイ", slot: "collar", set: "hawaii", desc: "造花のレイ。ちょっとかじった跡がある", bonus: { manaMax: 10 } },
+  halo: { id: "halo", name: "天使の輪カチューシャ", slot: "hat", set: "gacha", desc: "ガチャガチャで3回目に出た", bonus: { iframes: 0.2 } },
+  wings: { id: "wings", name: "天使の羽", slot: "body", set: "gacha", desc: "ガチャガチャの大当たり。飛べない", bonus: { dashCdMul: 0.85 } },
+  heartCollar: { id: "heartCollar", name: "光るハートの首輪", slot: "collar", set: "gacha", desc: "ボタン電池で7色に光る", bonus: { maxHp: 2 } },
+  mikan: { id: "mikan", name: "みかんの被り物", slot: "hat", set: "fruit", desc: "SNSで流行っていたやつ。顔だけ出る", bonus: { maxHp: 2 } },
+  suika: { id: "suika", name: "スイカ柄のTシャツ", slot: "body", set: "fruit", desc: "夏祭りで買った。背中に種のもよう", bonus: { clearHeal: 1 } },
+  cherry: { id: "cherry", name: "さくらんぼの首輪", slot: "collar", set: "fruit", desc: "鈴の代わりにさくらんぼが2つ", bonus: { regenMul: 1.1 } },
+  beanie: { id: "beanie", name: "毛糸の帽子", slot: "hat", set: "knit", desc: "耳の穴の位置がちょっとずれている", bonus: { dmgMul: 1.05 } },
+  sweater: { id: "sweater", name: "手編みのセーター", slot: "body", set: "knit", desc: "ママの力作。猫の顔のもよう入り", bonus: { iframes: 0.2 } },
+  nametag: { id: "nametag", name: "迷子札の首輪", slot: "collar", set: "knit", desc: "名前と「とてもかわいい」と書いてある", bonus: { dmgMul: 1.05 } },
 };
 export const GEAR_IDS = Object.keys(GEAR);
 

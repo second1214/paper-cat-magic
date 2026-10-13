@@ -40,7 +40,8 @@ function once(slots: (string | null)[], dx: number, sec = 1.5) {
 
 describe("技の動き", () => {
   it("どの技も、届く位置の虫に当たる", () => {
-    const where: Record<string, number> = { claw: 3, bite: 3, hairball: 3, hiss: 3, swing: 1.7, yarn: 3, laser: 4, pounce: 1.5, punch: 0.9, post: 1.3 };
+    const where: Record<string, number> = { claw: 3, bite: 3, hairball: 3, hiss: 3, swing: 1.7, yarn: 3, laser: 4, pounce: 1.5, punch: 0.9, post: 1.3,
+      mizudeppo: 3, ahiru: 3, hammer: 1.0, shabon: 2, flash: 1.5, kabocha: 3, danbo: 1.3, korokoro: 2 };
     for (const [id, dx] of Object.entries(where)) {
       expect(SPELLS[id].kind).toBe("attack");
       expect(once([id], dx).dmg, id).toBeGreaterThan(0);
@@ -64,6 +65,18 @@ describe("技の動き", () => {
     const { w } = arena(["post"], { dx: 50, dz: 0 });
     for (let k = 0; k < 6; k++) { w.player.castCd = 0; run(w, 1 / 60); run(w, 0.6, false); }
     expect(w.projectiles.filter((p) => p.motion === "trap").length).toBe(4);
+  });
+});
+
+describe("買ってきた物", () => {
+  it("水鉄砲はびしょぬれ・段ボールはねばねば・フラッシュはすくませる", () => {
+    expect(once(["mizudeppo"], 3).foe.wet).toBeGreaterThan(0);
+    expect(once(["danbo"], 1.3, 0.8).foe.sticky).toBeGreaterThan(0);
+    expect(once(["flash"], 1.5, 0.5).foe.slow).toBeGreaterThan(1.5);
+  });
+  it("健康グッズで攻撃力×1.7、鈴ですくむ", () => {
+    expect(once(["kenko", "bite"], 3).dmg).toBeCloseTo(once(["bite"], 3).dmg * 1.7, 0);
+    expect(once(["suzu", "claw"], 3, 0.3).foe.slow).toBeGreaterThan(0.5);
   });
 });
 
