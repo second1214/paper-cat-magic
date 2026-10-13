@@ -196,6 +196,16 @@ describe("リビングに来る子どもたち", () => {
     for (let t = 0; t < 2; t += 1 / 60) w.update(1 / 60, { move: { x: 1, z: 0 }, aim: null, fire: false, dash: false });
     expect(w.player.held).toBe(0);
   });
+  it("遠くにいても猫と遊びたくて追いかけてくる。そばに来ると猫は必死に逃げる（速くなる）", () => {
+    const w = arena({ dx: 6, dz: 3 });
+    const k = kid(w, "girl", 6);
+    const d0 = Math.hypot(k.pos.x - w.player.pos.x, k.pos.z - w.player.pos.z);
+    for (let t = 0; t < 1.5; t += 1 / 60) w.update(1 / 60, { move: { x: 0, z: 0 }, aim: null, fire: false, dash: false });
+    expect(Math.hypot(k.pos.x - w.player.pos.x, k.pos.z - w.player.pos.z)).toBeLessThan(d0 - 1.5);
+    k.pos = { x: w.player.pos.x + 2, z: w.player.pos.z };
+    w.update(1 / 60, { move: { x: -1, z: 0 }, aim: null, fire: false, dash: false });
+    expect(w.player.scared).toBe(true);
+  });
   it("虫がいなくなれば、子どもがいても部屋は片付く（子どもは帰る）", () => {
     const w = arena(null);
     kid(w, "girl", 6).phase = 99;
