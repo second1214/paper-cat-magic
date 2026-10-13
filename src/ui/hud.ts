@@ -3,6 +3,16 @@
 import { ELEMENT_INFO, KIND_LABEL, MOTION_LABEL, SPELLS, spellStats } from "../core/spells";
 import { groupSummary, TOYS, toyStats, type ToyDef } from "../core/wand";
 import { loadRecord, recordRun, recordText } from "./record";
+import { enemyTexture } from "../render/stickers";
+import type { EnemyType } from "../game/world";
+
+const bugUrls = new Map<EnemyType, string>();
+/** タイトル用の虫の絵（ゲーム中と同じステッカー）。 */
+const bugUrl = (t: EnemyType) => {
+  let u = bugUrls.get(t);
+  if (!u) { u = (enemyTexture(t).image as HTMLCanvasElement).toDataURL(); bugUrls.set(t, u); }
+  return u;
+};
 import { REWARD_INFO, type Choice, type World } from "../game/world";
 import { elementCanvas, rewardCanvas, spellCanvas, toyCanvas, urlOf } from "../art/items";
 
@@ -154,7 +164,8 @@ export class Hud {
     const base = import.meta.env.BASE_URL, rec = loadRecord();
     el.innerHTML = `<div class="title">
       <div class="logo"><small>ママを虫から守れ！</small>My Cat Is <br>So Cute</div>
-      <div class="hero"><img class="cat" src="${base}cat/P03_sit_happy.png" alt="猫"><img class="mom" src="${base}mama/scared.png" alt="ママ"></div>
+      <div class="hero"><img class="mom" src="${base}mama/scared.png" alt="ママ"><img class="cat" src="${base}cat/P03_sit_happy.png" alt="猫">
+        <img class="bug b1" src="${bugUrl("roach")}" alt=""><img class="bug b2" src="${bugUrl("mosquito")}" alt=""></div>
       <div class="menu">
         <button class="go start">はじめる</button>
         <button class="howtoBtn">あそびかた</button>
