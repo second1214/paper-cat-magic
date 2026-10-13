@@ -14,7 +14,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="theme-color" content="#2b2433" />
     <style>
-      :root { --ink: #3a2414; --paper: #fff8ec; --line: #d9c7ad; --accent: #e8772b; --muted: #8a7560; --atk: #d9480f; --mod: #1c7ed6; --cell: 46px; --gap: 6px; }
+      :root { --ink: #3a2414; --paper: #fff8ec; --line: #d9c7ad; --accent: #e8772b; --muted: #8a7560; --atk: #d9480f; --mod: #1c7ed6; --cell: 46px; --cellBase: 46px; --gap: 6px; }
       * { box-sizing: border-box; }
       [hidden] { display: none !important; }
       html, body { margin: 0; height: 100%; overflow: hidden; background: #2b2433; color: var(--ink);
@@ -52,7 +52,9 @@
       #help { left: 12px; bottom: 12px; color: #fffb; font-size: 12px; line-height: 1.6; }
 
       /* スロット（技＝赤い実線、修飾＝青い点線＋右向き矢印） */
-      .slotrow { position: relative; padding-bottom: 20px; }
+      .slotrow { position: relative; padding-bottom: 20px; --cell: min(var(--cellBase), calc((min(100vw, 860px) - 150px) / var(--count) - var(--gap))); }
+      .slotrow .cell .badge { font-size: min(9px, calc(var(--cell) * 0.24)); }
+      #slots .slotrow.many .cell .badge, #slots .slotrow.many .cell .stars { display: none; }
       .cells { display: flex; gap: var(--gap); }
       .cell { position: relative; width: var(--cell); height: var(--cell); padding: 0; border-radius: 10px; background: var(--paper); display: grid; place-items: center; border: 3px solid var(--c, #ccc); cursor: pointer; }
       .cell img { width: 82%; height: 82%; object-fit: contain; pointer-events: none; }
@@ -256,7 +258,7 @@
 
       /* 低い画面（スマホ横持ち） */
       @media (max-height: 520px) {
-        :root { --cell: 36px; --gap: 5px; }
+        :root { --cell: 36px; --cellBase: 36px; --gap: 5px; }
         #hearts { font-size: 18px; } #mana { width: 100px; height: 8px; } #room { font-size: 12px; }
         #slots .toyIcon { width: 30px; height: 30px; }
         .panel { padding: 8px 12px; } .panel h2 { font-size: 16px; }
@@ -277,7 +279,7 @@
         .tabs { margin-bottom: 4px; } .tab { padding: 2px 8px 2px 2px; font-size: 11px; } .tab img { width: 22px; height: 22px; }
       }
       @media (max-width: 460px) {
-        :root { --cell: 36px; --gap: 5px; }
+        :root { --cell: 36px; --cellBase: 36px; --gap: 5px; }
         .baggrid { grid-template-columns: repeat(8, var(--cell)); }
         .rhead .mama .say { display: none; }
         .edit .detail .card { padding: 6px 8px; }

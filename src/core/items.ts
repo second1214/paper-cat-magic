@@ -30,12 +30,15 @@ export interface Bonus {
   extraShot: number; // 技がもう1発出る確率
   moveMana: number; // 動いている間のやる気回復（毎秒）
   luck: number; // 装備のレアリティが上がりやすい
+  manaCostMul: number; // 技のやる気の消費
+  castMul: number; // 振る間隔・休けい
 }
 
 export const NO_BONUS: Bonus = {
   maxHp: 0, dmgMul: 1, manaMax: 0, regenMul: 1, stillRegen: 0, speedMul: 1, dashCdMul: 1, iframes: 0, guard: 0,
   rangeMul: 1, elemMul: 1, zapAdd: 0, summonAdd: 0, killMana: 0, clearHeal: 0, choiceAdd: 0, dashPower: 0,
   crit: 0, killHeal: 0, killBoom: 0, thorns: 0, shield: 0, extraShot: 0, moveMana: 0, luck: 0,
+  manaCostMul: 1, castMul: 1,
 };
 
 export type Part = Partial<Bonus>;
@@ -76,6 +79,8 @@ export function bonusRows(b: Part): [string, string][] {
   if (b.extraShot) rows.push(["技がもう1発", `${Math.round(b.extraShot * 100)}%`]);
   if (b.moveMana) rows.push(["動くとやる気", `＋${b.moveMana}/秒`]);
   if (b.luck) rows.push(["レア装備が出やすい", `＋${b.luck}`]);
+  if (b.manaCostMul) rows.push(["技のやる気", pct(b.manaCostMul)]);
+  if (b.castMul) rows.push(["振る間隔・休けい", pct(b.castMul)]);
   return rows;
 }
 
@@ -103,6 +108,8 @@ export const RELICS: Record<string, RelicDef> = {
   omamori: { id: "omamori", name: "ペットのお守り", desc: "部屋に入るたび、1回だけ当たりを防ぐ", bonus: { shield: 1 } },
   nekokan: { id: "nekokan", name: "高級猫缶", desc: "虫を倒すと、ときどき元気が戻る", bonus: { killHeal: 0.1 } },
   copy: { id: "copy", name: "ママのコピー用紙", desc: "技がときどきもう1発出る", bonus: { extraShot: 0.15 } },
+  kyujiki: { id: "kyujiki", name: "自動給餌器", desc: "時間になるとごはんが出てくる。技のやる気が25%少なくてすむ", bonus: { manaCostMul: 0.75 } },
+  catwalk: { id: "catwalk", name: "キャットウォーク", desc: "壁の上の通り道で鍛えた。振る間隔・休けいが20%短い", bonus: { castMul: 0.8 } },
 };
 export const RELIC_IDS = Object.keys(RELICS);
 

@@ -239,3 +239,53 @@ describe("途中セーブ（部屋に入るたびに自動）", () => {
     expect(r.player.hp).toBe(w.checkpoint!.hp);
   });
 });
+
+describe("画面を埋め尽くす連鎖", () => {
+  it("毛糸のほつれ: 当たった弾が割れて、まわりへ飛び散る", () => {
+    const w = arena({ dx: 3, dz: 0 });
+    w.toy.slots = ["hotsure", "claw", null, null, null, null, null, null];
+    run(w, 1 / 60, { fire: true });
+    let most = 0;
+    for (let t = 0; t < 0.4; t += 1 / 60) { run(w, 1 / 60); most = Math.max(most, w.projectiles.filter((p) => p.tech === "claw").length); }
+    expect(most).toBe(3);
+  });
+  it("何度でも: ぶんぶんが当たるたびに右の技が出る（つづけては1回だけ）", () => {
+    const count = (trig: string) => {
+      const w = arena({ dx: 1.7, dz: 0 });
+      w.toy.slots = ["swing", trig, "claw", null, null, null, null, null];
+      let n = 0;
+      for (let t = 0; t < 1.4; t += 1 / 60) {
+        const before = new Set(w.projectiles.map((p) => p.id));
+        run(w, 1 / 60, { fire: t === 0 });
+        n += w.projectiles.filter((p) => p.tech === "claw" && !before.has(p.id)).length;
+      }
+      return n;
+    };
+    expect(count("chain")).toBe(1);
+    expect(count("nandodemo")).toBeGreaterThanOrEqual(2);
+  });
+  it("とどめ: 虫を倒した場所から右の技が出る", () => {
+    const w = arena({ dx: 3, dz: 0 });
+    w.enemies[0].hp = w.enemies[0].maxHp = 1;
+    w.toy.slots = ["claw", "todome", "pounce", null, null, null, null, null];
+    run(w, 1 / 60, { fire: true }); run(w, 0.4);
+    expect(w.projectiles.some((p) => p.tech === "pounce")).toBe(true);
+  });
+  it("出すぎても上限で止まる（重くならない）", () => {
+    const w = arena(null);
+    w.toy.slots = ["tatougai", "butimake", "butimake", "post", "butimake", "butimake", "post", "butimake", "butimake", "post", "butimake", "butimake", "post"].slice(0, 8);
+    w.toy.slots = ["butimake", "butimake", "butimake", "butimake", "claw", null, null, null];
+    w.player.mana = 999; w.toy.manaMax = 999;
+    for (let k = 0; k < 3; k++) { w.player.castCd = 0; run(w, 1 / 60, { fire: true }); }
+    expect(w.projectiles.length).toBeLessThanOrEqual(400);
+    expect(w.projectiles.length).toBeGreaterThan(300);
+  });
+  it("後半の季節には虫の大群の波がまざる", () => {
+    let found = false;
+    for (let seed = 1; seed < 40 && !found; seed++) {
+      const w = new World(seed); w.start(); w.enterRoom(2, 5, "spell");
+      found = w.room.waves.some((wv) => wv.length >= 14);
+    }
+    expect(found).toBe(true);
+  });
+});

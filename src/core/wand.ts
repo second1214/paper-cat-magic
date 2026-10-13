@@ -1,5 +1,5 @@
 // おもちゃ（装備）と発射計画。スロットを左から読み、1回で出す技の一覧を決める（純粋関数）。
-import { spellDef, type Modifier, type ProjectileStats, type SpellDef } from "./spells";
+import { spellDef, type Modifier, type ProjectileStats, type SpellDef, type TriggerOn } from "./spells";
 
 /** サブスロットがたまる条件。 */
 export type SubCharge = "still" | "hit" | "dash" | "kill" | "hurt";
@@ -35,6 +35,8 @@ export interface Shot {
   stats: ProjectileStats;
   payload: Shot[];
   timer?: number;
+  /** payload を出すきっかけ（なければ「当たったら」）。 */
+  on?: TriggerOn;
 }
 
 export interface CastResult {
@@ -48,6 +50,9 @@ export interface CastResult {
   wrapped: boolean;
   /** やる気不足で途中で止まった。 */
   fizzled: boolean;
+  /** 今回読んだ修飾で変わる、振る間隔・休けい（秒）。 */
+  delayAdd: number;
+  rechargeAdd: number;
 }
 
 function applyMods(p: ProjectileStats, mods: Modifier[]): ProjectileStats {
@@ -66,6 +71,7 @@ function applyMods(p: ProjectileStats, mods: Modifier[]): ProjectileStats {
     if (m.speedMul) s.hitEvery /= m.speedMul;
     if (m.element) s.element = m.element;
     if (m.slowAdd) s.slow += m.slowAdd;
+    if (m.split) s.split += m.split;
     if (m.lifeMul && s.motion !== "melee" && s.motion !== "ring" && !(s.motion === "beam" && s.speed === 0)) s.life *= m.lifeMul;
   }
   return s;
@@ -103,6 +109,7 @@ export function planCast(toy: ToyDef, cursor: number, mana: number, slots: (stri
   let used = 0;
   let wrapped = false;
   let fizzled = false;
+  let delayAdd = 0, rechargeAdd = 0;
   const toyMods = [...(toy.baseMod ? [toy.baseMod] : []), ...passiveMods(toy)];
 
   const nextIndex = () => { let j = i; while (j < slots.length && (!slots[j] || isPassive(spellDef(slots[j]!)))) j++; return j; };
@@ -115,6 +122,7 @@ export function planCast(toy: ToyDef, cursor: number, mana: number, slots: (stri
     if (used + def.mana > mana) { fizzled = true; return null; }
     used += def.mana;
     i++;
+    delayAdd += def.modifier?.castDelayAdd ?? 0; rechargeAdd += def.modifier?.rechargeAdd ?? 0;
     return def;
   };
 
@@ -133,7 +141,7 @@ export function planCast(toy: ToyDef, cursor: number, mana: number, slots: (stri
       }
       const right = drawOne([]);
       if (!right?.length) return;
-      if (nx.kind === "trigger") { out[0].payload.push(...right); if (nx.timer) out[0].timer = nx.timer; return; }
+      if (nx.kind === "trigger") { out[0].payload.push(...right); if (nx.timer) out[0].timer = nx.timer; if (nx.on) out[0].on = nx.on; return; }
       // ふたつ持ち: 左の技は右の技といっしょに1発に
       right[0].stats = fuse(out[0].stats, right[0].stats);
       right[0].payload.unshift(...out[0].payload);
@@ -154,6 +162,9 @@ export function planCast(toy: ToyDef, cursor: number, mana: number, slots: (stri
       if (def.kind === "attack" && def.projectile) {
         const out: Shot[] = [{ stats: applyMods(def.projectile, [...toyMods, ...mods]), payload: [] }];
         after(out);
+        // ぶちまけ: 1発を何発にも（重ねると掛け算）。扇状に並ぶ
+        const copies = mods.reduce((k, m) => k * (m.copies ?? 1), 1);
+        if (copies > 1) out.splice(0, 1, ...Array.from({ length: copies }, () => structuredClone(out[0])));
         for (let k = 1; k < pendingMulti; k++) {
           const more = drawOne([]);
           if (!more) break;
@@ -166,20 +177,20 @@ export function planCast(toy: ToyDef, cursor: number, mana: number, slots: (stri
 
   const shots = drawOne([]) ?? [];
   if (nextIndex() >= slots.length) wrapped = true;
-  return { shots, manaUsed: used, nextCursor: wrapped ? 0 : i, start, end: i, wrapped, fizzled };
+  return { shots, manaUsed: used, nextCursor: wrapped ? 0 : i, start, end: i, wrapped, fizzled, delayAdd, rechargeAdd };
 }
 
 /** 全部のスロットを左から最後まで、いっぺんに出す（サブスロット・鈴入りボール）。 */
-export function castAll(toy: ToyDef, mana: number, slots: (string | null)[] = toy.slots): { shots: Shot[]; manaUsed: number } {
+export function castAll(toy: ToyDef, mana: number, slots: (string | null)[] = toy.slots): { shots: Shot[]; manaUsed: number; delayAdd: number; rechargeAdd: number } {
   const shots: Shot[] = [];
-  let cursor = 0, used = 0;
+  let cursor = 0, used = 0, delayAdd = 0, rechargeAdd = 0;
   for (let guard = 0; guard < slots.length + 1; guard++) {
     const r = planCast(toy, cursor, mana - used, slots);
-    shots.push(...r.shots); used += r.manaUsed;
+    shots.push(...r.shots); used += r.manaUsed; delayAdd += r.delayAdd; rechargeAdd += r.rechargeAdd;
     if (r.wrapped || r.fizzled || r.end <= r.start) break;
     cursor = r.nextCursor;
   }
-  return { shots, manaUsed: used };
+  return { shots, manaUsed: used, delayAdd, rechargeAdd };
 }
 
 /**
@@ -203,70 +214,74 @@ const empty = (n: number) => Array.from({ length: n }, (): string | null => null
 /** おもちゃ。どれも本当に売っていそうな、ふつうの猫のおもちゃ。 */
 export const TOYS: Record<string, ToyDef> = {
   jarashi: {
-    id: "jarashi", name: "ねこじゃらし", desc: "ふつうの使いやすさ。6スロット",
-    slots: empty(6), manaMax: 80, manaRegen: 30, castDelay: 0.2, recharge: 0.55,
+    id: "jarashi", name: "ねこじゃらし", desc: "ふつうの使いやすさ。8スロット",
+    slots: empty(8), manaMax: 80, manaRegen: 30, castDelay: 0.2, recharge: 0.55,
   },
   tombo: {
-    id: "tombo", name: "トンボじゃらし", desc: "トンボが少し虫を追いかける。4スロットで休みが短い",
-    slots: empty(4), manaMax: 70, manaRegen: 34, castDelay: 0.16, recharge: 0.35,
+    id: "tombo", name: "トンボじゃらし", desc: "トンボが少し虫を追いかける。6スロットで休みが短い",
+    slots: empty(6), manaMax: 70, manaRegen: 34, castDelay: 0.16, recharge: 0.35,
     baseMod: { homing: 0.35 },
   },
   tissue: {
-    id: "tissue", name: "ティッシュボール", desc: "丸めたティッシュが壁で1回はね返る。8スロット、休みが長い",
-    slots: empty(8), manaMax: 110, manaRegen: 28, castDelay: 0.22, recharge: 0.9,
+    id: "tissue", name: "ティッシュボール", desc: "丸めたティッシュが壁で1回はね返る。12スロット、休みが長い",
+    slots: empty(12), manaMax: 110, manaRegen: 28, castDelay: 0.22, recharge: 0.9,
     baseMod: { bounce: 1 },
   },
   keri: {
-    id: "keri", name: "けりぐるみ", desc: "抱えてけりけりする細長いぬいぐるみ。技の攻撃力×1.35。3スロットで振るのが遅い",
-    slots: empty(3), manaMax: 90, manaRegen: 30, castDelay: 0.32, recharge: 0.6,
+    id: "keri", name: "けりぐるみ", desc: "抱えてけりけりする細長いぬいぐるみ。技の攻撃力×1.35。5スロットで振るのが遅い",
+    slots: empty(5), manaMax: 90, manaRegen: 30, castDelay: 0.32, recharge: 0.6,
     baseMod: { damageMul: 1.35 },
   },
   pingpong: {
-    id: "pingpong", name: "ピンポン玉", desc: "軽くてよく弾む。技が速くなり、壁で2回はね返る。5スロット",
-    slots: empty(5), manaMax: 70, manaRegen: 32, castDelay: 0.18, recharge: 0.5,
+    id: "pingpong", name: "ピンポン玉", desc: "軽くてよく弾む。技が速くなり、壁で2回はね返る。7スロット",
+    slots: empty(7), manaMax: 70, manaRegen: 32, castDelay: 0.18, recharge: 0.5,
     baseMod: { bounce: 2, speedMul: 1.25 },
   },
   himo: {
-    id: "himo", name: "ただのひも", desc: "高いおもちゃより夢中になる。10スロットあるが休みが長い",
-    slots: empty(10), manaMax: 100, manaRegen: 26, castDelay: 0.13, recharge: 1.3,
+    id: "himo", name: "ただのひも", desc: "高いおもちゃより夢中になる。14スロットあるが休みが長い",
+    slots: empty(14), manaMax: 100, manaRegen: 26, castDelay: 0.13, recharge: 1.3,
   },
   cap: {
-    id: "cap", name: "ペットボトルのキャップ", desc: "床をカシャカシャ滑る。3スロットだけど、やる気の回復がとても速く休みも短い",
-    slots: empty(3), manaMax: 60, manaRegen: 46, castDelay: 0.1, recharge: 0.25,
+    id: "cap", name: "ペットボトルのキャップ", desc: "床をカシャカシャ滑る。5スロットだけど、やる気の回復がとても速く休みも短い",
+    slots: empty(5), manaMax: 60, manaRegen: 46, castDelay: 0.1, recharge: 0.25,
   },
   longrod: {
-    id: "longrod", name: "ロングじゃらし", desc: "釣りざおみたいに長い。技が1.4倍遠くまで届き、少し大きい。6スロット",
-    slots: empty(6), manaMax: 85, manaRegen: 30, castDelay: 0.22, recharge: 0.7,
+    id: "longrod", name: "ロングじゃらし", desc: "釣りざおみたいに長い。技が1.4倍遠くまで届き、少し大きい。9スロット",
+    slots: empty(9), manaMax: 85, manaRegen: 30, castDelay: 0.22, recharge: 0.7,
     baseMod: { lifeMul: 1.4, sizeMul: 1.1 },
   },
   suzuball: {
     id: "suzuball", name: "鈴入りボール", desc: "転がすと鳴りっぱなし。全部のスロットを1回でいっぺんに出す（休みが長い）",
-    slots: empty(4), manaMax: 120, manaRegen: 32, castDelay: 0.2, recharge: 1.4, castAll: true,
+    slots: empty(6), manaMax: 120, manaRegen: 32, castDelay: 0.2, recharge: 1.4, castAll: true,
   },
   kamibukuro: {
     id: "kamibukuro", name: "紙袋", desc: "中でじっとしてから飛び出す。止まっているとサブスロットがたまり、いっぺんに出る",
-    slots: empty(4), manaMax: 80, manaRegen: 30, castDelay: 0.2, recharge: 0.55,
+    slots: empty(6), manaMax: 80, manaRegen: 30, castDelay: 0.2, recharge: 0.55,
     sub: { slots: empty(2), charge: "still", need: 1.5 },
   },
   tunnel: {
     id: "tunnel", name: "猫トンネル", desc: "シャカシャカ鳴るトンネル。ダッシュでくぐるとサブスロットがたまる",
-    slots: empty(5), manaMax: 80, manaRegen: 30, castDelay: 0.2, recharge: 0.6,
+    slots: empty(7), manaMax: 80, manaRegen: 30, castDelay: 0.2, recharge: 0.6,
     sub: { slots: empty(2), charge: "dash", need: 2 },
   },
   nezumiPlush: {
     id: "nezumiPlush", name: "ねずみのぬいぐるみ", desc: "かじられてボロボロ。技を当てるとサブスロットがたまる。かみつき入り",
-    slots: ["bite", null, null, null], manaMax: 80, manaRegen: 30, castDelay: 0.22, recharge: 0.6,
+    slots: ["bite", null, null, null, null, null], manaMax: 80, manaRegen: 30, castDelay: 0.22, recharge: 0.6,
     sub: { slots: empty(3), charge: "hit", need: 14 },
   },
   matatabiStick: {
     id: "matatabiStick", name: "またたびの木", desc: "かじるとごきげん。虫をたおすとサブスロットがたまる",
-    slots: empty(5), manaMax: 85, manaRegen: 30, castDelay: 0.2, recharge: 0.6,
+    slots: empty(7), manaMax: 85, manaRegen: 30, castDelay: 0.2, recharge: 0.6,
     sub: { slots: empty(2), charge: "kill", need: 4 },
   },
   chiiku: {
     id: "chiiku", name: "知育ボール", desc: "転がすとおやつが出る。ダメージを受けるとサブスロットがすぐ出て反撃",
-    slots: empty(4), manaMax: 80, manaRegen: 30, castDelay: 0.2, recharge: 0.55,
+    slots: empty(6), manaMax: 80, manaRegen: 30, castDelay: 0.2, recharge: 0.55,
     sub: { slots: empty(3), charge: "hurt", need: 1 },
+  },
+  fukubukuro: {
+    id: "fukubukuro", name: "ねこじゃらし福袋", desc: "お正月の福袋にねこじゃらしが10本。16スロット、やる気がたっぷりで休みが長い",
+    slots: empty(16), manaMax: 170, manaRegen: 40, castDelay: 0.18, recharge: 1.6,
   },
   // ---- 電池式（持っているだけで自動で動く。持ち替えの3つとは別に2つまで） ----
   denmouse: {
@@ -292,7 +307,7 @@ export const MAX_BATT = 2;
 
 export function starterToy(): ToyDef {
   const t = structuredClone(TOYS.jarashi);
-  t.slots = ["claw", "claw", "matatabi", "bite", null, null];
+  t.slots = ["claw", "claw", "matatabi", "bite", null, null, null, null];
   return t;
 }
 
