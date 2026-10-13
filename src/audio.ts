@@ -124,6 +124,8 @@ export class Sound {
       case "dead": [523, 440, 349, 262].forEach((f, i) => s(f, 0.3, "triangle", 0.18, i * 0.18)); break;
       case "win": case "caught": [523, 659, 784, 1047, 784, 1047].forEach((f, i) => s(f, 0.22, "triangle", 0.18, i * 0.11)); break;
       case "final": s(784, 0.4, "sine", 0.2); s(659, 0.5, "sine", 0.2, 0.25); break;
+      case "sub": [660, 880, 1320].forEach((f, i) => s(f, 0.1, "square", 0.07, i * 0.04)); break;
+      case "curse": [311, 294, 277].forEach((f, i) => s(f, 0.35, "sawtooth", 0.1, i * 0.15)); break;
     }
   }
 }

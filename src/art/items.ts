@@ -307,6 +307,80 @@ const MOD_DRAW: Record<string, (g: CanvasRenderingContext2D) => void> = {
     }
     g.fillStyle = INK; g.font = "bold 44px sans-serif"; g.textAlign = "center"; g.fillText("×2", 150, 55);
   },
+  hitoiki: (g) => {   // 砂時計
+    g.fillStyle = "#d0bfff"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.moveTo(55, 30); g.lineTo(145, 30); g.lineTo(100, 100); g.lineTo(145, 170); g.lineTo(55, 170); g.lineTo(100, 100); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "#f59f00"; g.beginPath(); g.moveTo(75, 150); g.lineTo(125, 150); g.lineTo(100, 115); g.closePath(); g.fill();
+    g.fillStyle = "#a0522d"; for (const y of [22, 170]) { g.beginPath(); g.roundRect(40, y, 120, 14, 6); g.fill(); g.stroke(); }
+  },
+  issho: (g) => {   // 2匹の猫の手がハイタッチ
+    for (const [x, a, c] of [[70, 0.5, "#ffb3c1"], [130, -0.5, "#ffd8a8"]] as const) {
+      g.save(); g.translate(x, 110); g.rotate(a); g.fillStyle = c; g.strokeStyle = INK; g.lineWidth = 6;
+      g.beginPath(); g.roundRect(-22, -10, 44, 80, 20); g.fill(); g.stroke();
+      g.beginPath(); g.ellipse(0, -20, 34, 30, 0, 0, 7); g.fill(); g.stroke(); g.restore();
+    }
+    g.fillStyle = "#ffd43b"; g.strokeStyle = INK; g.lineWidth = 5; spikyBlob(g, 100, 55, 10, 26, 6); g.fill(); g.stroke();
+  },
+  okawari: (g) => {   // ごはん皿に山盛りカリカリ
+    g.fillStyle = "#c8873a"; g.strokeStyle = INK; g.lineWidth = 5;
+    for (const [x, y] of [[70, 95], [95, 80], [120, 92], [85, 105], [110, 108], [135, 104], [100, 66]] as const) { g.beginPath(); g.ellipse(x, y, 16, 11, x / 30, 0, 7); g.fill(); g.stroke(); }
+    g.fillStyle = "#ff8787"; g.lineWidth = 7; g.beginPath(); g.moveTo(25, 110); g.lineTo(175, 110); g.lineTo(150, 170); g.lineTo(50, 170); g.closePath(); g.fill(); g.stroke();
+  },
+  oikake: (g) => {   // 走る足あと
+    g.fillStyle = INK;
+    for (const [x, y, k] of [[45, 150, 0.8], [90, 115, 0.9], [130, 85, 1], [168, 50, 1.1]] as const) {
+      g.beginPath(); g.ellipse(x, y + 8 * k, 12 * k, 10 * k, 0, 0, 7); g.fill();
+      for (const [dx, dy] of [[-12, -8], [-4, -16], [5, -16], [13, -8]]) { g.beginPath(); g.arc(x + dx * k, y + dy * k, 4.5 * k, 0, 7); g.fill(); }
+    }
+    g.strokeStyle = "#1971c2"; g.lineWidth = 8; g.beginPath(); g.moveTo(30, 60); g.lineTo(80, 60); g.lineTo(70, 45); g.moveTo(80, 60); g.lineTo(70, 75); g.stroke();
+  },
+  tsurutsuru: (g) => {   // ワックスの床とキラリ
+    g.fillStyle = "#e3c08f"; g.strokeStyle = INK; g.lineWidth = 6;
+    g.beginPath(); g.moveTo(15, 150); g.lineTo(185, 150); g.lineTo(160, 95); g.lineTo(40, 95); g.closePath(); g.fill(); g.stroke();
+    g.strokeStyle = "#b08050"; g.lineWidth = 4; for (const x of [70, 100, 130]) { g.beginPath(); g.moveTo(x, 97); g.lineTo(x + (x - 100) * 0.4, 148); g.stroke(); }
+    g.fillStyle = "#fff"; g.strokeStyle = INK; g.lineWidth = 5; spikyBlob(g, 140, 55, 8, 26, 4); g.fill(); g.stroke(); spikyBlob(g, 75, 60, 5, 15, 4); g.fill(); g.stroke();
+  },
+  dryer: (g) => {   // ドライヤーと風
+    g.fillStyle = "#f783ac"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.roundRect(30, 55, 100, 60, 26); g.fill(); g.stroke();
+    g.beginPath(); g.roundRect(55, 105, 32, 70, 10); g.fill(); g.stroke();
+    g.fillStyle = "#fff"; g.beginPath(); g.ellipse(130, 85, 12, 26, 0, 0, 7); g.fill(); g.stroke();
+    g.strokeStyle = "#74c0fc"; g.lineWidth = 7; for (const y of [60, 85, 110]) { g.beginPath(); g.moveTo(150, y); g.quadraticCurveTo(170, y - 10, 190, y); g.stroke(); }
+  },
+  catnipBag: (g) => {   // またたびの小袋
+    g.fillStyle = "#8ce99a"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.moveTo(55, 60); g.lineTo(145, 60); g.lineTo(160, 175); g.lineTo(40, 175); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "#2b8a3e"; g.beginPath(); g.moveTo(55, 60); g.quadraticCurveTo(100, 20, 145, 60); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "#2f9e44"; g.save(); g.translate(100, 118); g.rotate(-0.5); g.beginPath(); g.ellipse(0, 0, 28, 14, 0, 0, 7); g.fill(); g.stroke(); g.restore();
+  },
+  kotatsu: (g) => {   // こたつ
+    g.fillStyle = "#c2255c"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.moveTo(20, 170); g.lineTo(40, 90); g.lineTo(160, 90); g.lineTo(180, 170); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "#a0522d"; g.beginPath(); g.roundRect(25, 70, 150, 24, 6); g.fill(); g.stroke();
+    g.fillStyle = "#ff922b"; g.beginPath(); g.arc(80, 55, 16, 0, 7); g.arc(118, 55, 16, 0, 7); g.fill(); g.stroke();
+    g.strokeStyle = "#fff"; g.lineWidth = 4; g.setLineDash([10, 8]); g.beginPath(); g.moveTo(40, 130); g.lineTo(160, 130); g.stroke(); g.setLineDash([]);
+  },
+  maigofuda: (g) => {   // 迷子札
+    g.strokeStyle = INK; g.lineWidth = 8; g.beginPath(); g.arc(100, 45, 22, 0, 7); g.stroke();
+    g.fillStyle = "#ffd43b"; g.lineWidth = 7; g.beginPath(); g.roundRect(45, 65, 110, 110, 22); g.fill(); g.stroke();
+    g.fillStyle = INK; g.font = "bold 42px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("ねこ", 100, 112);
+    g.font = "bold 22px sans-serif"; g.fillText("TEL", 100, 150);
+  },
+  hidamari: (g) => {   // おひさまとクッション
+    g.fillStyle = "#ffd43b"; g.strokeStyle = INK; g.lineWidth = 6; spikyBlob(g, 100, 72, 34, 55, 10); g.fill(); g.stroke();
+    g.fillStyle = "#ffa94d"; g.beginPath(); g.ellipse(100, 160, 80, 26, 0, 0, 7); g.fill(); g.stroke();
+  },
+  sensor: (g) => {   // センサーライト
+    g.fillStyle = "rgba(255,236,153,.8)"; g.beginPath(); g.moveTo(80, 90); g.lineTo(20, 190); g.lineTo(180, 190); g.lineTo(120, 90); g.closePath(); g.fill();
+    g.fillStyle = "#f1f3f5"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.roundRect(55, 30, 90, 65, 14); g.fill(); g.stroke();
+    g.fillStyle = "#fcc419"; g.beginPath(); g.arc(100, 62, 20, 0, 7); g.fill(); g.stroke();
+  },
+  kezukuroi: (g) => {   // ブラシと毛
+    g.fillStyle = "#e9ecef"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.roundRect(30, 60, 120, 60, 16); g.fill(); g.stroke();
+    g.fillStyle = "#a0522d"; g.beginPath(); g.roundRect(130, 78, 60, 24, 10); g.fill(); g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 4; for (let x = 42; x < 140; x += 12) { g.beginPath(); g.moveTo(x, 120); g.lineTo(x, 140); g.stroke(); }
+    g.fillStyle = "#ffc078"; spikyBlob(g, 70, 165, 12, 24, 7); g.fill();
+  },
   chain: (g) => {   // つながる輪
     g.strokeStyle = INK; g.lineWidth = 22;
     for (const [x, y, a] of [[65, 120, -0.6], [135, 80, -0.6]] as const) { g.beginPath(); g.ellipse(x, y, 48, 28, a, 0, 7); g.stroke(); }
@@ -336,7 +410,96 @@ const TOY_DRAW: Record<string, (g: CanvasRenderingContext2D) => void> = {
     g.strokeStyle = "#b8b8c8"; g.lineWidth = 4;
     for (const [x0, y0, x1, y1] of [[60, 70, 105, 95], [120, 55, 95, 130], [135, 105, 80, 135], [65, 115, 110, 75]]) { g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
   },
+  keri: (g) => {   // けりぐるみ（細長いエビ）
+    g.fillStyle = "#ff8787"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.save(); g.translate(100, 100); g.rotate(-0.6); g.beginPath(); g.roundRect(-80, -26, 160, 52, 26); g.fill(); g.stroke();
+    g.strokeStyle = "#fff"; g.lineWidth = 4; for (const x of [-40, -10, 20, 50]) { g.beginPath(); g.moveTo(x, -22); g.lineTo(x, 22); g.stroke(); }
+    g.fillStyle = INK; g.beginPath(); g.arc(-58, -6, 6, 0, 7); g.fill(); g.restore();
+  },
+  pingpong: (g) => {
+    g.fillStyle = "#ffffff"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.arc(100, 95, 60, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#ff922b"; g.font = "bold 22px sans-serif"; g.textAlign = "center"; g.fillText("★★★", 100, 102);
+    g.strokeStyle = "#adb5bd"; g.lineWidth = 5; g.setLineDash([8, 10]); g.beginPath(); g.moveTo(20, 185); g.quadraticCurveTo(60, 120, 60, 150); g.stroke(); g.setLineDash([]);
+  },
+  himo: (g) => {   // くねくねのひも
+    g.strokeStyle = INK; g.lineWidth = 12; g.beginPath(); g.moveTo(20, 160); g.bezierCurveTo(60, 40, 100, 200, 140, 80); g.quadraticCurveTo(160, 30, 185, 60); g.stroke();
+    g.strokeStyle = "#e64980"; g.lineWidth = 6; g.stroke();
+  },
+  cap: (g) => {   // ペットボトルのキャップ
+    for (const [x, y, c] of [[75, 110, "#4dabf7"], [130, 95, "#ff6b6b"]] as const) {
+      g.fillStyle = c; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.ellipse(x, y + 25, 38, 14, 0, 0, Math.PI); g.lineTo(x - 38, y - 10); g.ellipse(x, y - 10, 38, 14, 0, Math.PI, 0); g.closePath(); g.fill(); g.stroke();
+      g.lineWidth = 3; for (let k = -30; k <= 30; k += 10) { g.beginPath(); g.moveTo(x + k, y - 2); g.lineTo(x + k, y + 30); g.stroke(); }
+    }
+  },
+  longrod: (g) => {   // 長いさおと糸の先の羽根
+    g.strokeStyle = INK; g.lineWidth = 8; g.beginPath(); g.moveTo(10, 190); g.lineTo(150, 20); g.stroke();
+    g.strokeStyle = "#868e96"; g.lineWidth = 3; g.beginPath(); g.moveTo(150, 20); g.quadraticCurveTo(185, 80, 160, 130); g.stroke();
+    g.fillStyle = "#74c0fc"; g.strokeStyle = INK; g.lineWidth = 5; for (const a of [-0.5, 0, 0.5]) { g.save(); g.translate(160, 130); g.rotate(1.6 + a); g.beginPath(); g.ellipse(25, 0, 28, 9, 0, 0, 7); g.fill(); g.stroke(); g.restore(); }
+  },
+  suzuball: (g) => {   // 穴あきボールと鈴
+    g.fillStyle = "#ffe066"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.arc(100, 100, 72, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#fff"; for (const [x, y] of [[70, 70], [130, 70], [70, 130], [130, 130], [100, 100]] as const) { g.beginPath(); g.arc(x, y, 14, 0, 7); g.fill(); g.stroke(); }
+    g.fillStyle = "#f59f00"; g.beginPath(); g.arc(100, 100, 9, 0, 7); g.fill();
+  },
+  kamibukuro: (g) => {   // 紙袋から猫の耳
+    g.fillStyle = "#d9a066"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.moveTo(40, 70); g.lineTo(160, 70); g.lineTo(170, 185); g.lineTo(30, 185); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "#ffa94d"; for (const x of [80, 120]) { g.beginPath(); g.moveTo(x - 18, 72); g.lineTo(x, 35); g.lineTo(x + 18, 72); g.closePath(); g.fill(); g.stroke(); }
+    g.strokeStyle = "#b07a3c"; g.lineWidth = 4; g.beginPath(); g.moveTo(40, 90); g.lineTo(160, 90); g.stroke();
+  },
+  tunnel: (g) => {   // 猫トンネル
+    g.fillStyle = "#748ffc"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.moveTo(40, 60); g.lineTo(160, 80); g.lineTo(160, 160); g.lineTo(40, 150); g.closePath(); g.fill(); g.stroke();
+    g.strokeStyle = "#4263eb"; g.lineWidth = 4; for (const x of [70, 100, 130]) { g.beginPath(); g.moveTo(x, 64 + (x - 40) / 6); g.lineTo(x, 152 + (x - 40) / 12); g.stroke(); }
+    g.fillStyle = "#1a1a2e"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.ellipse(40, 105, 22, 46, 0, 0, 7); g.fill(); g.stroke();
+  },
+  nezumiPlush: (g) => {   // ねずみのぬいぐるみ
+    g.fillStyle = "#adb5bd"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.ellipse(95, 115, 62, 42, 0, 0, 7); g.fill(); g.stroke();
+    g.beginPath(); g.arc(60, 72, 20, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#ffc9c9"; g.beginPath(); g.arc(60, 72, 10, 0, 7); g.fill();
+    g.fillStyle = INK; g.beginPath(); g.arc(48, 110, 6, 0, 7); g.fill();
+    g.strokeStyle = INK; g.lineWidth = 5; g.beginPath(); g.moveTo(155, 120); g.quadraticCurveTo(195, 130, 180, 170); g.stroke();
+  },
+  matatabiStick: (g) => {   // またたびの枝
+    g.strokeStyle = INK; g.lineWidth = 18; g.beginPath(); g.moveTo(30, 170); g.lineTo(170, 40); g.stroke();
+    g.strokeStyle = "#a0723c"; g.lineWidth = 10; g.stroke();
+    g.strokeStyle = "#6b4520"; g.lineWidth = 3; for (const t of [0.3, 0.55, 0.8]) { g.beginPath(); g.arc(30 + 140 * t, 170 - 130 * t, 8, 0, 7); g.stroke(); }
+  },
+  chiiku: (g) => {   // おやつが出るボール
+    g.fillStyle = "#63e6be"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.arc(95, 95, 66, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#1a1a2e"; g.beginPath(); g.arc(120, 115, 14, 0, 7); g.fill();
+    g.fillStyle = "#c8873a"; g.lineWidth = 5; for (const [x, y] of [[150, 165], [175, 150]] as const) { g.beginPath(); g.ellipse(x, y, 13, 9, 0.4, 0, 7); g.fill(); g.stroke(); }
+  },
+  denmouse: (g) => {   // 電動ねずみ（電池マーク）
+    g.fillStyle = "#e9ecef"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.moveTo(25, 135); g.quadraticCurveTo(60, 60, 150, 110); g.lineTo(150, 140); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "#ffc9c9"; g.beginPath(); g.arc(70, 85, 15, 0, 7); g.fill(); g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 5; g.beginPath(); g.moveTo(150, 125); g.quadraticCurveTo(185, 120, 190, 150); g.stroke();
+    battery(g, 130, 45);
+  },
+  autolaser: (g) => {   // 台の上のレーザー
+    g.fillStyle = "#495057"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.roundRect(45, 120, 90, 55, 12); g.fill(); g.stroke();
+    g.fillStyle = "#868e96"; g.beginPath(); g.arc(90, 105, 26, Math.PI, 0); g.closePath(); g.fill(); g.stroke();
+    g.strokeStyle = "#ff3b3b"; g.lineWidth = 5; g.beginPath(); g.moveTo(100, 95); g.lineTo(175, 40); g.stroke();
+    g.fillStyle = "#ff3b3b"; g.beginPath(); g.arc(175, 40, 10, 0, 7); g.fill();
+    battery(g, 40, 50);
+  },
+  pichifish: (g) => {   // ぴちぴち魚
+    g.fillStyle = "#4dabf7"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.moveTo(25, 110); g.quadraticCurveTo(80, 50, 140, 105); g.lineTo(185, 70); g.lineTo(175, 110); g.lineTo(185, 150); g.lineTo(140, 115); g.quadraticCurveTo(80, 165, 25, 110); g.fill(); g.stroke();
+    g.fillStyle = "#fff"; g.beginPath(); g.arc(55, 102, 9, 0, 7); g.fill(); g.stroke();
+    battery(g, 100, 40);
+  },
+  kurukuru: (g) => {   // 台と回る羽根
+    g.fillStyle = "#ffd8a8"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.ellipse(100, 160, 70, 22, 0, 0, 7); g.fill(); g.stroke();
+    g.lineWidth = 6; g.beginPath(); g.moveTo(100, 150); g.lineTo(100, 90); g.stroke();
+    g.fillStyle = "#ff9ec4"; g.lineWidth = 5; for (const a of [0, 2.1, 4.2]) { g.save(); g.translate(100, 85); g.rotate(a); g.beginPath(); g.ellipse(38, 0, 40, 11, 0, 0, 7); g.fill(); g.stroke(); g.restore(); }
+    battery(g, 160, 40);
+  },
 };
+
+/** 電池のしるし（電池式のおもちゃ）。 */
+function battery(g: CanvasRenderingContext2D, x: number, y: number) {
+  g.fillStyle = "#69db7c"; g.strokeStyle = INK; g.lineWidth = 5; g.beginPath(); g.roundRect(x - 26, y - 14, 48, 28, 5); g.fill(); g.stroke();
+  g.fillStyle = INK; g.fillRect(x + 22, y - 6, 6, 12);
+}
 
 /** レリックの絵。 */
 const RELIC_DRAW: Record<string, (g: CanvasRenderingContext2D) => void> = {
@@ -611,6 +774,32 @@ const REWARD_DRAW: Record<RewardKind, (g: CanvasRenderingContext2D) => void> = {
     g.fillStyle = "#fff"; g.beginPath(); g.arc(80, 95, 16, 0, 7); g.arc(120, 95, 16, 0, 7); g.fill();
     g.fillStyle = INK; g.beginPath(); g.arc(83, 98, 8, 0, 7); g.arc(123, 98, 8, 0, 7); g.fill();
     g.lineWidth = 8; g.beginPath(); g.moveTo(62, 72); g.lineTo(95, 84); g.moveTo(138, 72); g.lineTo(105, 84); g.stroke();
+  },
+  treasure: (g) => {   // 宝箱（通販の箱にリボン）
+    g.fillStyle = "#e8a95b"; g.strokeStyle = INK; g.lineWidth = 8; g.beginPath(); g.roundRect(30, 85, 140, 90, 10); g.fill(); g.stroke();
+    g.fillStyle = "#d08a40"; g.beginPath(); g.moveTo(20, 85); g.lineTo(100, 50); g.lineTo(180, 85); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "#ffd43b"; g.beginPath(); g.rect(88, 60, 24, 115); g.fill(); g.stroke();
+    g.fillStyle = "#fff"; spikyBlob(g, 150, 45, 6, 18, 4); g.fill();
+  },
+  rest: (g) => {   // ママのひざ（エプロンとハート）
+    g.fillStyle = "#ffc9c9"; g.strokeStyle = INK; g.lineWidth = 8; g.beginPath(); g.roundRect(30, 95, 140, 75, 30); g.fill(); g.stroke();
+    g.fillStyle = "#fff"; g.beginPath(); g.roundRect(60, 105, 80, 55, 12); g.fill(); g.stroke();
+    g.fillStyle = "#ff5f7e"; g.beginPath(); g.moveTo(100, 85); g.bezierCurveTo(55, 55, 70, 15, 100, 40); g.bezierCurveTo(130, 15, 145, 55, 100, 85); g.fill(); g.stroke();
+  },
+  fusion: (g) => {   // 融合台（ミキサー）
+    g.fillStyle = "rgba(208,235,255,.95)"; g.strokeStyle = INK; g.lineWidth = 8; g.beginPath(); g.moveTo(55, 30); g.lineTo(145, 30); g.lineTo(130, 130); g.lineTo(70, 130); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "#b197fc"; g.beginPath(); g.moveTo(62, 80); g.lineTo(138, 80); g.lineTo(130, 130); g.lineTo(70, 130); g.closePath(); g.fill();
+    g.fillStyle = "#7048e8"; g.beginPath(); g.roundRect(50, 130, 100, 50, 10); g.fill(); g.stroke();
+    g.fillStyle = "#fff"; g.beginPath(); g.arc(100, 155, 10, 0, 7); g.fill();
+  },
+  challenge: (g) => {   // 光る虫の目と「！」
+    g.fillStyle = "#ff8787"; g.strokeStyle = INK; g.lineWidth = 8; spikyBlob(g, 100, 100, 55, 82, 9); g.fill(); g.stroke();
+    g.fillStyle = INK; g.beginPath(); g.roundRect(88, 45, 24, 75, 10); g.fill(); g.beginPath(); g.arc(100, 145, 13, 0, 7); g.fill();
+  },
+  curse: (g) => {   // あやしい箱（むらさきの煙）
+    g.fillStyle = "#b197fc"; g.beginPath(); for (const [x, y, r] of [[70, 55, 26], [105, 40, 30], [135, 60, 24]] as const) { g.moveTo(x + r, y); g.arc(x, y, r, 0, 7); } g.fill();
+    g.fillStyle = "#5f3dc4"; g.strokeStyle = INK; g.lineWidth = 8; g.beginPath(); g.roundRect(35, 90, 130, 85, 10); g.fill(); g.stroke();
+    g.fillStyle = "#ffd43b"; g.font = "bold 60px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("?", 100, 135);
   },
   next: (g) => {
     g.fillStyle = "#69db7c"; g.strokeStyle = INK; g.lineWidth = 8;

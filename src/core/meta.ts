@@ -40,10 +40,11 @@ export function metaBonus(lv: MetaLv): Part {
   return out;
 }
 
-/** 1回の冒険でもらえるにぼし（進んだ部屋・ボス・クリア × 難易度）。 */
-export function runReward(roomsCleared: number, bossesBeaten: number, win: boolean, diff: number): number {
-  return Math.round((roomsCleared * 1 + bossesBeaten * 5 + (win ? 10 : 0)) * DIFFS[diff].reward);
+/** 1回の冒険でもらえるにぼし（進んだ部屋・ボス・クリア × 難易度。呪い1つにつき＋15%）。 */
+export function runReward(roomsCleared: number, bossesBeaten: number, win: boolean, diff: number, curses = 0): number {
+  return Math.round((roomsCleared * 1 + bossesBeaten * 5 + (win ? 10 : 0)) * DIFFS[diff].reward * (1 + curses * 0.15));
 }
 
-export interface RunOptions { difficulty: number; meta: MetaLv }
+/** locked: まだ解放していないもの（"spell:id" / "toy:id" / "relic:id"）。 */
+export interface RunOptions { difficulty: number; meta: MetaLv; locked?: string[] }
 export const DEFAULT_RUN: RunOptions = { difficulty: 1, meta: NO_META };

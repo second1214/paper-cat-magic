@@ -4,12 +4,13 @@ import { Controls } from "./input";
 import { Hud } from "./ui/hud";
 import { loadRecord } from "./ui/record";
 import { Sound } from "./audio";
+import { lockedKeys } from "./core/unlock";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
 const seed = () => Date.now() % 100000;
-/** 難易度と、ねこの成長（保存してあるレベル）で新しい冒険を作る。 */
-const newWorld = (difficulty: number, s = seed()) => new World(s, { difficulty, meta: loadRecord().meta });
+/** 難易度と、ねこの成長（保存してあるレベル）・解放ずみのもので新しい冒険を作る。 */
+const newWorld = (difficulty: number, s = seed()) => { const r = loadRecord(); return new World(s, { difficulty, meta: r.meta, locked: lockedKeys(r.stats) }); };
 let world = newWorld(1, Number(params.get("seed")) || seed());
 const view = new GameView(canvas);
 const sound = new Sound();
@@ -40,9 +41,9 @@ function frame(now: number) {
   if (!hud.bagOpen && !hud.paused) world.update(dt, input);
   // 効果音と曲
   for (const e of world.events) sound.sfx(e);
-  if (!wasOpen && world.doorOpen && world.room.kind !== "shop") sound.sfx("door");
+  if (!wasOpen && world.doorOpen && world.room.kind !== "shop" && world.room.kind !== "special") sound.sfx("door");
   const r = world.room;
-  sound.play(world.phase === "intro" ? "title" : r.kind === "final" ? "final" : r.kind === "shop" ? "shop" : r.kind === "boss" ? "boss" : r.season);
+  sound.play(world.phase === "intro" ? "title" : r.kind === "final" ? "final" : r.kind === "shop" || r.kind === "special" ? "shop" : r.kind === "boss" ? "boss" : r.season);
   view.render(world, dt);
   hud.update();
   requestAnimationFrame(frame);
