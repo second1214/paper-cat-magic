@@ -1,4 +1,4 @@
-// つづけて・サブスロット・電池式・強い虫・特別な部屋・呪い・融合台・解放。
+// つづけて・サブスロット・電池式・強い虫・特別な部屋・呪い・秘密の隠し場所・解放。
 import { describe, expect, it } from "vitest";
 import { cellCenter } from "../src/game/stage";
 import { World, type Enemy } from "../src/game/world";
@@ -132,7 +132,7 @@ describe("特別な部屋・強い虫・呪い", () => {
     const b = new World(9); b.start(); b.curses = ["katai"]; b.enterRoom(1, 4, "spell");
     expect(b.enemies[0].maxHp).toBeGreaterThan(a.enemies[0].maxHp);
   });
-  it("融合台: 同じレア度の技4つ → 1つ上のレア度の技1つ", () => {
+  it("秘密の隠し場所: 同じレア度の技4つ → 1つ上のレア度の技1つ", () => {
     const w = enter("fusion");
     touch(w);
     expect(w.phase).toBe("bench");

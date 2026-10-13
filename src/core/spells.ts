@@ -17,7 +17,7 @@ export const DIR_INFO: Record<ModDir, { arrow: string; label: string }> = {
   all: { arrow: "全", label: "このおもちゃの全部の技にかかる" },
 };
 
-/** 技のレア度（融合台で使う）。0 ふつう / 1 レア / 2 エピック / 3 伝説。 */
+/** 技のレア度（秘密の隠し場所で使う）。0 ふつう / 1 レア / 2 エピック / 3 伝説。 */
 export const SPELL_RAR_NAME = ["ふつう", "レア", "エピック", "伝説"];
 
 /** 技が当たったときに出す絵（描画側で使う）。 */

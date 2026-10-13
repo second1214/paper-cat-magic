@@ -786,11 +786,15 @@ const REWARD_DRAW: Record<RewardKind, (g: CanvasRenderingContext2D) => void> = {
     g.fillStyle = "#fff"; g.beginPath(); g.roundRect(60, 105, 80, 55, 12); g.fill(); g.stroke();
     g.fillStyle = "#ff5f7e"; g.beginPath(); g.moveTo(100, 85); g.bezierCurveTo(55, 55, 70, 15, 100, 40); g.bezierCurveTo(130, 15, 145, 55, 100, 85); g.fill(); g.stroke();
   },
-  fusion: (g) => {   // 融合台（ミキサー）
-    g.fillStyle = "rgba(208,235,255,.95)"; g.strokeStyle = INK; g.lineWidth = 8; g.beginPath(); g.moveTo(55, 30); g.lineTo(145, 30); g.lineTo(130, 130); g.lineTo(70, 130); g.closePath(); g.fill(); g.stroke();
-    g.fillStyle = "#b197fc"; g.beginPath(); g.moveTo(62, 80); g.lineTo(138, 80); g.lineTo(130, 130); g.lineTo(70, 130); g.closePath(); g.fill();
-    g.fillStyle = "#7048e8"; g.beginPath(); g.roundRect(50, 130, 100, 50, 10); g.fill(); g.stroke();
-    g.fillStyle = "#fff"; g.beginPath(); g.arc(100, 155, 10, 0, 7); g.fill();
+  fusion: (g) => {   // 秘密の隠し場所（ソファの下のすき間から、ボールと羽根がのぞく）
+    g.fillStyle = "#9775fa"; g.strokeStyle = INK; g.lineWidth = 8;
+    g.beginPath(); g.roundRect(15, 40, 170, 70, 18); g.fill(); g.stroke();
+    g.beginPath(); g.roundRect(25, 25, 150, 30, 12); g.fill(); g.stroke();
+    g.fillStyle = "#1a1a2e"; g.beginPath(); g.roundRect(25, 110, 150, 38, 4); g.fill();
+    g.fillStyle = "#a0522d"; for (const x of [25, 160]) { g.beginPath(); g.rect(x, 110, 15, 55); g.fill(); g.stroke(); }
+    g.fillStyle = "#ff8fab"; g.beginPath(); g.arc(80, 142, 17, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#74c0fc"; g.lineWidth = 5; g.save(); g.translate(118, 146); g.rotate(-0.4); g.beginPath(); g.ellipse(18, 0, 22, 7, 0, 0, 7); g.fill(); g.stroke(); g.restore();
+    g.fillStyle = "#ffd43b"; spikyBlob(g, 150, 125, 4, 12, 4); g.fill();
   },
   challenge: (g) => {   // 光る虫の目と「！」
     g.fillStyle = "#ff8787"; g.strokeStyle = INK; g.lineWidth = 8; spikyBlob(g, 100, 100, 55, 82, 9); g.fill(); g.stroke();
