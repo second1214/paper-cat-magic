@@ -28,28 +28,6 @@ function particleTexture(season: Season) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
-/** さいごのママ: ニコニコの上半身の絵に、足と猫用キャリーを描き足した紙人形。 */
-async function mamaTexture(url: string) {
-  const img = await new THREE.ImageLoader().loadAsync(url);
-  const W = img.width + 150, H = img.height + 150;
-  const c = stickerCanvas(W, H, (g) => {
-    g.strokeStyle = INK; g.lineWidth = 7;
-    for (const x of [img.width * 0.36, img.width * 0.58]) {   // ズボンとブーツ
-      g.fillStyle = "#868e96"; g.beginPath(); g.roundRect(x, img.height - 30, 52, 130, 14); g.fill(); g.stroke();
-      g.fillStyle = "#343a40"; g.beginPath(); g.roundRect(x - 6, img.height + 92, 68, 40, 12); g.fill(); g.stroke();
-    }
-    g.drawImage(img, 0, 0);
-    // 猫用キャリー（病院へ行く気まんまん）
-    const cx = img.width - 20, cy = img.height - 60;
-    g.fillStyle = "#74c0fc"; g.beginPath(); g.roundRect(cx, cy, 150, 110, 18); g.fill(); g.stroke();
-    g.fillStyle = "#e7f5ff"; g.beginPath(); g.roundRect(cx + 18, cy + 22, 70, 66, 10); g.fill(); g.stroke();
-    g.lineWidth = 4; for (let x = cx + 30; x < cx + 88; x += 14) { g.beginPath(); g.moveTo(x, cy + 24); g.lineTo(x, cy + 86); g.stroke(); }
-    g.lineWidth = 9; g.beginPath(); g.arc(cx + 75, cy, 40, Math.PI, 0); g.stroke();
-    g.fillStyle = "#ff8fa3"; g.font = "bold 28px sans-serif"; g.fillText("♡", cx + 105, cy + 70);
-  }, 0.02);
-  return canvasTexture(c);
-}
-
 /** 主人公の絵をグレーの猫にしたテクスチャ（友達猫）。 */
 async function grayCat(url: string) {
   const img = await new THREE.ImageLoader().loadAsync(url);
@@ -118,7 +96,8 @@ export class GameView {
     this.cat.group.traverse((o) => { o.castShadow = true; });
     this.scene.add(this.cat.group);
     for (const t of Object.keys(ENEMY) as EnemyType[]) if (t !== "mama") this.enemyTex.set(t, enemyTexture(t));
-    this.enemyTex.set("mama", await mamaTexture(`${base}mama/relief.png`));
+    const mamaTex = await new THREE.TextureLoader().loadAsync(`${base}mama/walk.png`);   // ニコニコでキャリーを持って歩いてくるママ
+    mamaTex.colorSpace = THREE.SRGBColorSpace; this.enemyTex.set("mama", mamaTex);
     this.kibble = canvasTexture(kibbleCanvas());
     for (const t of ["claw", "bite", "hairball", "hiss", "swing", "yarn", "laser", "pounce", "punch", "post", "friend", "roomba", "squirt", "duck", "hammer", "bubble", "flash", "pumpkin", "box", "roller"] as const) this.techTex.set(t, canvasTexture(techCanvas(t)));
     this.friendTex = await Promise.all([1, 2, 3, 4].map((i) => grayCat(`${base}cat/A01_walk_${i}.png`)));
@@ -255,7 +234,8 @@ export class GameView {
       const bob = hop || (fly ? fly + Math.sin(e.t * 8 + e.id) * 0.08 : e.type === "roach" && Math.hypot(e.vel.x, e.vel.z) > 0.5 ? Math.abs(Math.sin(e.t * 30)) * 0.03 : 0);
       g.position.set(e.pos.x, bob, e.pos.z);
       g.rotation.x = -LEAN;
-      const face = e.vel.x < -0.1 ? -1 : 1;
+      const face = (e.vel.x < -0.1 ? -1 : 1) * (e.type === "mama" ? -1 : 1);   // ママの絵は左向き
+      g.rotation.z = e.type === "mama" && Math.hypot(e.vel.x, e.vel.z) > 0.2 ? Math.sin(e.t * 9) * 0.05 : 0;   // てくてく揺れる
       const appear = e.spawn > 0 ? Math.max(0.05, 1 - e.spawn / 1.0) : 1;
       const squash = e.hurt > 0 ? 0.88 : 1;
       g.scale.set(face * (2 - squash) * appear, squash * appear, 1);
