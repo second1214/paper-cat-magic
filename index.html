@@ -30,6 +30,10 @@
       #slots { left: 50%; top: 6px; transform: translateX(-50%); display: flex; align-items: flex-start; gap: 8px; background: #0007; padding: 6px 10px 2px; border-radius: 14px; }
       #slots .toyIcon { width: 40px; height: 40px; margin-top: 3px; }
       #slots .rest { color: #ffd8a8; font-size: 11px; align-self: center; }
+      .toySws { display: flex; flex-direction: column; gap: 3px; }
+      .toySw { pointer-events: auto; position: relative; width: 30px; height: 30px; padding: 2px; border-radius: 8px; background: #fff3; border: 2px solid #fff6; }
+      .toySw img { width: 100%; height: 100%; opacity: .75; }
+      .toySw span { position: absolute; right: -4px; bottom: -4px; font-size: 9px; font-weight: 800; color: #fff; background: #3a2414; border-radius: 5px; padding: 0 3px; }
       #hint { left: 50%; bottom: 12px; transform: translateX(-50%); color: #fff; background: #000b; padding: 6px 12px; border-radius: 14px; font-size: 13px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 24px); }
       #hint .chip { display: inline-flex; align-items: center; gap: 4px; background: #fff2; border-radius: 999px; padding: 2px 8px 2px 2px; }
       #hint .chip img { width: 26px; height: 26px; }
@@ -131,6 +135,25 @@
       .zcells { display: flex; flex-wrap: wrap; gap: var(--gap); }
       .cell.toy { border-color: #9c36b5; }
 
+      /* 持ち物（タブ・装備・レリック） */
+      .tabs { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+      .tab { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px 4px 4px; font-size: 13px; font-weight: 700; background: #f3e9d9; }
+      .tab img { width: 26px; height: 26px; }
+      .tab small { font-size: 9px; color: #fff; background: var(--accent); border-radius: 5px; padding: 0 4px; margin-left: 2px; }
+      .tab.on { background: #fff; border-color: var(--accent); box-shadow: 0 0 0 2px #e8772b55; }
+      .tabs .close { margin: 0 0 0 auto; padding: 4px 14px; }
+      .gearRow { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+      .gslot { display: flex; flex-direction: column; align-items: center; font-size: 10px; color: var(--muted); gap: 2px; }
+      .sets { display: grid; gap: 3px; flex: 1; min-width: 180px; }
+      .setline { font-size: 11px; color: var(--muted); border-left: 4px solid var(--c, #ccc); padding-left: 6px; }
+      .setline b { margin-right: 6px; color: var(--ink); }
+      .setline.on { color: var(--ink); background: #fff3bf; }
+      .setbox { border: 2px solid var(--c); border-radius: 10px; padding: 4px 6px; display: grid; gap: 2px; }
+      .setbox .setline { border-left: 0; padding-left: 0; }
+      .setname { font-size: 12px; font-weight: 800; color: var(--c); }
+      .tag.relic { background: #12b886; }
+      .cell.relic { border-color: #12b886; } .cell.gear { border-color: var(--c); }
+
       /* おもちゃの編集 */
       .edit { display: grid; grid-template-columns: 240px 1fr; gap: 14px; align-items: start; text-align: left; }
       .boardHead { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 8px; }
@@ -166,6 +189,13 @@
         .hero { height: 52vh; } .menu { width: 220px; } .menu button { padding: 7px; font-size: 15px; }
         .record { width: 100%; max-width: max-content; }
         .zgroup { margin-bottom: 3px; } .ztitle { font-size: 11px; }
+        .tabs { margin-bottom: 4px; } .tab { padding: 2px 8px 2px 2px; font-size: 11px; } .tab img { width: 22px; height: 22px; }
+      }
+      @media (max-width: 460px) {
+        :root { --cell: 36px; --gap: 5px; }
+        .baggrid { grid-template-columns: repeat(8, var(--cell)); }
+        .rhead .mama .say { display: none; }
+        .edit .detail .card { padding: 6px 8px; }
       }
       @media (max-width: 700px) {
         .intro .cols, .edit { grid-template-columns: 1fr; }
@@ -179,10 +209,10 @@
     <div id="loading">読み込み中…</div>
     <div class="hud" id="status"><div id="hearts"></div><div id="manaWrap"><span>やる気</span><div id="mana"><div id="manaFill"></div></div><span id="manaNum"></span></div></div>
     <div class="hud" id="slots"></div>
-    <div class="hud" id="roomBox"><div id="room"></div><div class="row"><button id="bagBtn">おもちゃ</button><button id="pauseBtn" aria-label="一時停止">Ⅱ</button></div></div>
+    <div class="hud" id="roomBox"><div id="room"></div><div class="row"><button id="bagBtn">持ち物</button><button id="pauseBtn" aria-label="一時停止">Ⅱ</button></div></div>
     <div class="hud" id="hint" hidden></div>
     <div class="hud" id="toast" hidden></div>
-    <div class="hud" id="help">WASD 移動 ／ クリック長押し 攻撃 ／ J 自動で狙う<br />Space ダッシュ ／ Tab おもちゃ</div>
+    <div class="hud" id="help">WASD 移動 ／ クリック長押し 攻撃 ／ J 自動で狙う<br />Space ダッシュ ／ Q 持ち替え ／ Tab 持ち物</div>
     <div class="tbtn" id="atkBtn">攻撃</div>
     <div class="tbtn" id="dashBtn">ダッシュ</div>
     <div class="overlay" id="bag" hidden></div>

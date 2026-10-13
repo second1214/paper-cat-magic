@@ -15,6 +15,7 @@ const hud = new Hud(
 const controls = new Controls(canvas, document.getElementById("stick")!, document.getElementById("atkBtn")!, document.getElementById("dashBtn")!);
 controls.onToggleBag = () => hud.toggleBag();
 controls.onPause = () => hud.togglePause();
+controls.onSwitch = (i) => { if (hud.bagOpen || hud.paused) return; world.switchToy(i < 0 ? (world.cur + 1) % world.toys.length : i); };
 
 const fit = () => view.resize(innerWidth, innerHeight);
 addEventListener("resize", fit); fit();

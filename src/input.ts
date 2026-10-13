@@ -10,11 +10,15 @@ export class Controls {
   private atkHeld = false;
   onToggleBag: () => void = () => {};
   onPause: () => void = () => {};
+  /** おもちゃの持ち替え（番号、または -1 で次へ）。 */
+  onSwitch: (i: number) => void = () => {};
 
   constructor(el: HTMLElement, private stickEl: HTMLElement, atkBtn: HTMLElement, dashBtn: HTMLElement) {
     addEventListener("keydown", (e) => {
       if (e.code === "Tab" || e.code === "KeyE") { e.preventDefault(); this.onToggleBag(); return; }
       if (e.code === "Escape" || e.code === "KeyP") { e.preventDefault(); this.onPause(); return; }
+      if (e.code === "KeyQ") { this.onSwitch(-1); return; }
+      if (e.code === "Digit1" || e.code === "Digit2" || e.code === "Digit3") { this.onSwitch(Number(e.code.slice(5)) - 1); return; }
       if (e.code === "Space" || e.code === "ShiftLeft") { e.preventDefault(); this.dashQueued = true; }
       this.keys.add(e.code);
     });
@@ -24,6 +28,7 @@ export class Controls {
     el.addEventListener("pointerdown", (e) => { if (e.pointerType === "mouse") { this.mouse.down = true; this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.mouse.has = true; } });
     addEventListener("pointerup", (e) => { if (e.pointerType === "mouse") this.mouse.down = false; });
     el.addEventListener("contextmenu", (e) => e.preventDefault());
+    el.addEventListener("wheel", (e) => { if (Math.abs(e.deltaY) > 20) this.onSwitch(-1); }, { passive: true });
 
     // 左手: 画面のどこでも、触った所が中心のスティック（ボタン以外）
     el.addEventListener("touchstart", (e) => {
