@@ -153,7 +153,7 @@ export class Hud {
   /** 今回の冒険でもらったにぼし。 */
   private earned = 0;
   private sel: Spot | null = null;
-  /** 融合台で選んでいる手持ちの番号。 */
+  /** 秘密の隠し場所に入れようと選んでいる手持ちの番号。 */
   private fusePick: number[] = [];
   /** 今回の冒険で新しく解放されたもの。 */
   private opened: Unlock[] = [];
@@ -322,7 +322,7 @@ export class Hud {
           <div class="example">${cell("claw")}${cell("chain")}${cell("swing")}<span><b>つづけて</b>: ひっかきが当たった所で、ぶんぶんが回る。<b>いっしょに</b>は左の技を右の技に合体</span></div>
           <p>スロットの下の線が「1回で一緒に出る範囲」。⚔は攻撃力の合計、⚡は使うやる気。サブスロットのあるおもちゃは、条件がたまると全部いっぺんに出る。電池式のおもちゃは持っているだけで自動で動く。</p>
           <p><b>属性</b>（静電気・水のみ皿・ガムテープ・虫よけ）を技の左に置くと効果がつく。<b>ぬれた虫にビリビリ</b>、<b>ねばねばの虫に虫よけ</b>はよく効く。</p>
-          <p>部屋を片付けると扉が開く。扉の上の絵が<b>次の部屋のごほうび</b>（♥最大HP／⚡やる気／★技／おもちゃ）や<b>特別な部屋</b>（宝箱・ママのおひざ・融合台・強い虫・あやしい箱）。季節ごとに8部屋＋ボス、秋から始まり夏が最後。</p>
+          <p>部屋を片付けると扉が開く。扉の上の絵が<b>次の部屋のごほうび</b>（♥最大HP／⚡やる気／★技／おもちゃ）や<b>特別な部屋</b>（宝箱・ママのおひざ・秘密の隠し場所・強い虫・あやしい箱）。季節ごとに8部屋＋ボス、秋から始まり夏が最後。</p>
           <p>負けても、倒した虫や片付けた部屋の数で<b>新しいおもちゃや技が解放</b>される。</p>
         </div>
       </div>`;
@@ -482,17 +482,17 @@ export class Hud {
     el.querySelector<HTMLButtonElement>(".close")!.onclick = () => { w.closeShop(); this.fusePick = []; this.lastKey = ""; };
   }
 
-  /** 融合台: 手持ちから同じレア度の技を4つ選ぶ → 1つ上のレア度の技がランダムで1つ。 */
-  private fusionHtml(w: World) {
+  /** 秘密の隠し場所（ソファの下）: 同じレア度の物を4つ隠す → 奥から1つ上のレア度の物が1つ出てくる。 */
+  private fusionHtml(w: World, title = "ボス猫の隠し場所") {
     const pick = this.fusePick.filter((i) => i < w.bag.length), r = pick.length ? rarOf(w.bag[pick[0]]) : -1;
     const ok = w.fusable();
     const cells = w.bag.map((id, i) => {
       const on = pick.includes(i), can = ok.includes(rarOf(id)) && (r < 0 || rarOf(id) === r);
       return cell(id, `data-fuse="${i}" ${can || on ? "" : "disabled"}`, `${on ? "sel" : ""} ${can || on ? "" : "dim"}`);
     }).join("");
-    return `<div class="forge fusion"><b>融合台</b><span class="muted">同じレア度の技4つ → 1つ上のレア度の技がランダムで1つ（伝説は伝説）</span>
+    return `<div class="forge fusion"><b>${title}</b><span class="muted">ソファの下の、猫だけの隠し場所。同じレア度の物を4つ押しこむと、奥から前に失くした物（1つ上のレア度）が1つ出てくる</span>
       <div class="fuseBag">${w.bag.length ? cells : `<span class="muted">手持ちが空っぽ</span>`}</div>
-      <button class="fuseGo go" ${pick.length === 4 ? "" : "disabled"}>${pick.length === 4 ? `融合する（${SPELL_RAR_NAME[r]} → ${SPELL_RAR_NAME[Math.min(3, r + 1)]}）` : `${pick.length}/4 選んだ`}</button></div>`;
+      <button class="fuseGo go" ${pick.length === 4 ? "" : "disabled"}>${pick.length === 4 ? `4つ隠す（${SPELL_RAR_NAME[Math.min(3, r + 1)]}の物が出てくる）` : `${pick.length}/4 選んだ`}</button></div>`;
   }
   private bindFusion(el: HTMLElement, w: World) {
     el.querySelectorAll<HTMLButtonElement>("[data-fuse]").forEach((b) => b.onclick = () => {
@@ -504,12 +504,12 @@ export class Hud {
     if (go) go.onclick = () => { w.fuse(this.fusePick); this.fusePick = []; this.lastKey = ""; };
   }
 
-  /** 融合台の部屋。 */
+  /** 秘密の隠し場所の部屋。 */
   private renderBench(w: World) {
     const el = this.el("shopPanel");
     if (w.phase !== "bench") return;
     el.hidden = false;
-    el.innerHTML = `<div class="panel shopPanel bench"><div class="shead"><h2>融合台</h2><button class="close">閉じる</button></div>${this.fusionHtml(w)}</div>`;
+    el.innerHTML = `<div class="panel shopPanel bench"><div class="shead"><h2>秘密の隠し場所</h2><button class="close">閉じる</button></div>${this.fusionHtml(w)}</div>`;
     this.bindFusion(el, w);
     el.querySelector<HTMLButtonElement>(".close")!.onclick = () => { w.closeShop(); this.fusePick = []; this.lastKey = ""; };
   }

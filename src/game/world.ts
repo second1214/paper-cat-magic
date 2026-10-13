@@ -181,13 +181,13 @@ export const REWARD_INFO: Record<RewardKind, { icon: string; label: string; colo
   next: { icon: "➜", label: "次の季節へ", color: "#2f9e44" },
   treasure: { icon: "🎁", label: "宝箱の部屋（虫なし）", color: "#f59f00" },
   rest: { icon: "🛋", label: "ママのおひざ（虫なし・全回復）", color: "#ff8787" },
-  fusion: { icon: "⚗", label: "融合台の部屋（虫なし）", color: "#7048e8" },
+  fusion: { icon: "🐾", label: "秘密の隠し場所（虫なし）", color: "#7048e8" },
   challenge: { icon: "‼", label: "強い虫の部屋（ごほうび2倍）", color: "#c92a2a" },
   curse: { icon: "☁", label: "あやしい箱（呪いと引きかえ）", color: "#5f3dc4" },
 };
 /** 特別な部屋の置き物。 */
 export type AltarKind = "treasure" | "rest" | "fusion" | "curse";
-export const ALTAR_NAME: Record<AltarKind, string> = { treasure: "宝箱", rest: "ママのおひざ", fusion: "融合台", curse: "あやしい箱" };
+export const ALTAR_NAME: Record<AltarKind, string> = { treasure: "宝箱", rest: "ママのおひざ", fusion: "秘密の隠し場所", curse: "あやしい箱" };
 
 /** 持ち物画面の置き場所。 */
 export interface Spot { where: "slot" | "sub" | "bag"; i: number }
@@ -642,7 +642,7 @@ export class World {
 
   closeShop() { if (this.phase === "shop" || this.phase === "bench") this.phase = "play"; }
 
-  /** 特別な部屋の置き物を使う。宝箱・ママのおひざ・あやしい箱は1回だけ、融合台は何回でも。 */
+  /** 特別な部屋の置き物を使う。宝箱・ママのおひざ・あやしい箱は1回だけ、秘密の隠し場所は何回でも。 */
   private useAltar() {
     const al = this.room.altar!, p = this.player;
     if (al.kind === "fusion") { this.phase = "bench"; this.events.push("shop"); return; }
@@ -655,15 +655,16 @@ export class World {
     al.used = true; this.offerPacts();
   }
 
-  // ---------- 融合台（Magicraft の融合: 同じレア度の技4つ → 1つ上のレア度の技1つ） ----------
-  /** 融合できるレア度（手持ちに同じレア度の技が4つ以上）。 */
+  // ---------- 秘密の隠し場所（Magicraft の融合にあたる） ----------
+  // ソファの下の、猫だけが知っている隠し場所。同じレア度の物を4つ押しこむと、奥から前に失くした1つ上のレア度の物が出てくる。
+  /** 隠し場所で交換できるレア度（手持ちに同じレア度の技が4つ以上）。 */
   fusable(): number[] {
     const n = [0, 0, 0, 0];
     for (const id of this.bag) n[rarOf(id)]++;
     return n.map((k, r) => (k >= 4 ? r : -1)).filter((r) => r >= 0);
   }
 
-  /** 手持ちから選んだ4つ（同じレア度）を融合して、1つ上のレア度の技を1つ得る（伝説は伝説）。 */
+  /** 手持ちから選んだ4つ（同じレア度）を隠し場所に入れて、1つ上のレア度の技を1つ得る（伝説は伝説）。 */
   fuse(picks: number[]): string | null {
     const ids = picks.map((i) => this.bag[i]);
     if (new Set(picks).size !== 4 || ids.some((x) => !x)) return null;
@@ -674,7 +675,7 @@ export class World {
     this.bag = this.bag.filter((_, i) => !picks.includes(i));
     this.bag.push(got);
     this.events.push("forge");
-    this.notify(`融合: ${spellDef(got).name} ができた`);
+    this.notify(`隠し場所の奥から ${spellDef(got).name} が出てきた`);
     return got;
   }
 
