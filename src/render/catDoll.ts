@@ -2,7 +2,8 @@
 import * as THREE from "three";
 
 const STAND = 1.45; // 立ち姿の高さ（ワールド単位）。カメラを引いたので大きめ
-const STEP = 0.38;  // 歩き1コマで進む距離
+const STEP = 0.38;      // 歩き1コマで進む距離
+const STEP_RUN = 0.55;  // 走り1コマで進む距離（速さ5.2で約9.5コマ/秒）
 
 /** 画像名と、1ピクセルあたりのワールド長。素材ごとに描かれた縮尺が違うので個別に揃える。 */
 const FRAMES: Record<string, number> = {
@@ -65,12 +66,14 @@ export class CatDoll {
     switch (state) {
       case "walk": {
         // 歩いた距離でコマを送る（時間で送ると、速く動くほど足が床を滑って見える）。
-        // 4コマで体1つ分（約1.5マス）進む。速さ5.2なら約14コマ/秒
-        this.stride += (dt * speed) / STEP;
-        const ph = this.stride * Math.PI / 2;
-        name = `A01_walk_${(Math.floor(this.stride) % 4) + 1}`;
-        bob = Math.abs(Math.sin(ph)) * 0.05;
-        tilt = Math.sin(ph) * 0.035;
+        // 歩きの絵は前足しか動かないので、ゆっくり（スティック半分以下）のときだけ使い、
+        // ふつうの速さ（本物の猫なら小走り）は脚がはっきり動く走りの4コマで見せる。
+        const run = speed > 3.2;
+        this.stride += (dt * speed) / (run ? STEP_RUN : STEP);
+        const f = Math.floor(this.stride) % 4, ph = this.stride * Math.PI / 2;
+        name = run ? `A02_run_${f + 1}` : `A01_walk_${f + 1}`;
+        bob = Math.abs(Math.sin(ph)) * (run ? 0.06 : 0.04);
+        tilt = Math.sin(ph) * 0.03;
         break;
       }
       case "jump": {
