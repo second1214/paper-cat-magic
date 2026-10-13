@@ -1,7 +1,9 @@
 // HTML の HUD と各画面（はじめに・ごほうび選び・おもちゃの編集・結果）。
 // Magicraft の説明欄のように、アイテムは「絵・名前・種類・数値・説明」をいつも同じ形で見せる。
-import { baseId, ELEMENT_INFO, KIND_LABEL, MOTION_LABEL, SPELLS, spellDef, spellStats, starsOf } from "../core/spells";
-import { groupSummary, TOYS, toyStats, type ToyDef } from "../core/wand";
+import { baseId, DIR_INFO, ELEMENT_INFO, KIND_LABEL, MOTION_LABEL, rarOf, SPELL_RAR_NAME, SPELLS, spellDef, spellStats, starsOf, type SpellDef } from "../core/spells";
+import { groupSummary, SUB_LABEL, TOYS, toyStats, type ToyDef } from "../core/wand";
+import { CURSES } from "../core/curses";
+import { findUnlock, isOpen, UNLOCKS, unlockText, type Unlock, type UnlockKind } from "../core/unlock";
 import { buyUpgrade, canPick, loadRecord, recordRun, recordText } from "./record";
 import { DIFFS, runReward, UPGRADES } from "../core/meta";
 import { enemyTexture } from "../render/stickers";
@@ -14,7 +16,7 @@ const bugUrl = (t: EnemyType) => {
   if (!u) { u = (enemyTexture(t).image as HTMLCanvasElement).toDataURL(); bugUrls.set(t, u); }
   return u;
 };
-import { REWARD_INFO, type Choice, type World } from "../game/world";
+import { ALTAR_NAME, REWARD_INFO, type Choice, type HeldToy, type Spot, type World } from "../game/world";
 import { elementCanvas, gearCanvas, kibbleCanvas, relicCanvas, rewardCanvas, spellCanvas, toyCanvas, urlOf } from "../art/items";
 import { bonusRows, GEAR, GEAR_FX, GEAR_IDS, GEAR_SLOTS, gearBonus, RARITY, RELIC_IDS, RELICS, SETS, setCounts, SLOT_NAME, type Gear, type GearItem } from "../core/items";
 
@@ -27,12 +29,19 @@ const spellImg = (id: string) => urlOf(spellCanvas(baseId(id), spellDef(id).proj
 const mama = (img: "scared" | "relief" | "pet" | "scream", line: string, small = false) =>
   `<div class="mama ${small ? "small" : ""}"><img src="${import.meta.env.BASE_URL}mama/${img}.png" alt="ママ"><div class="say">${line}</div></div>`;
 
-/** スロット・手持ちの1マス。修飾には「右にかかる」矢印。 */
+/** 修飾のかかる向きの矢印（▶右・◀左・◀▶両側・全 全体・つづけて/いっしょには左右をつなぐ）。 */
+const arrowOf = (s: SpellDef) => s.kind === "attack" ? "" : s.kind === "modifier" ? DIR_INFO[s.dir ?? "right"].arrow : s.kind === "multicast" ? "▶" : "◀▶";
+/** 修飾の説明の札（カード用）。 */
+const modTag = (s: SpellDef) => s.kind === "trigger" ? (s.timer ? "つづけて ◀左の技から時間で右の技" : "つづけて ◀左の技が当たると右の技▶")
+  : s.kind === "duet" ? "合体 ◀左の技を右の技に混ぜる▶" : s.kind === "multicast" ? "修飾 ▶右の技を同時に"
+  : `${s.modifier?.element ? "属性" : s.dir === "all" ? "全体修飾" : "修飾"} ${DIR_INFO[s.dir ?? "right"].arrow}${DIR_INFO[s.dir ?? "right"].label}`;
+
+/** スロット・手持ちの1マス。修飾にはかかる向きの矢印、レア度は下の帯。 */
 const cell = (id: string | null, attrs = "", extra = "") => {
   if (!id) return `<button class="cell empty ${extra}" ${attrs}></button>`;
-  const s = spellDef(id), mod = isMod(id);
-  return `<button class="cell ${mod ? "mod" : "atk"} ${extra}" style="--c:${s.color}" ${attrs}>
-    <img src="${spellImg(id)}" alt="">${starsOf(id) ? `<span class="stars">${"★".repeat(starsOf(id))}</span>` : ""}<span class="badge">${s.modifier?.element ? "属性" : KIND_LABEL[s.kind]}</span>${mod ? '<span class="arrow">▶</span>' : ""}</button>`;
+  const s = spellDef(id), mod = isMod(id), dir = s.kind === "modifier" ? s.dir ?? "right" : s.kind === "attack" ? "" : "both";
+  return `<button class="cell ${mod ? "mod" : "atk"} dir-${dir} rar${rarOf(id)} ${extra}" style="--c:${s.color}" ${attrs}>
+    <img src="${spellImg(id)}" alt="">${starsOf(id) ? `<span class="stars">${"★".repeat(starsOf(id))}</span>` : ""}<span class="badge">${s.modifier?.element ? "属性" : s.dir === "all" ? "全体" : KIND_LABEL[s.kind]}</span>${mod ? `<span class="arrow">${arrowOf(s)}</span>` : ""}</button>`;
 };
 
 /** おもちゃ・レリック・装備のマス。 */
@@ -50,7 +59,7 @@ const statsTable = (rows: [string, string][]) =>
 function spellCard(id: string, attrs = "") {
   const s = spellDef(id), mod = isMod(id);
   return `<div class="card" ${attrs}>
-    <div class="head"><img src="${spellImg(id)}" alt=""><div><b>${s.name}</b><span class="tag ${mod ? "mod" : "atk"}">${mod ? (s.modifier?.element ? "属性 ▶右の技につく" : "修飾 ▶右の技にかかる") : `技（${MOTION_LABEL[s.projectile!.motion]}）`}</span></div></div>
+    <div class="head"><img src="${spellImg(id)}" alt=""><div><b>${s.name}</b><span class="tag ${mod ? "mod" : "atk"}">${mod ? modTag(s) : `技（${MOTION_LABEL[s.projectile!.motion]}）`}</span></div></div>
     ${statsTable(spellStats(s))}<p class="desc">${s.desc}</p>${elementNote(s.modifier?.element)}</div>`;
 }
 
@@ -83,9 +92,24 @@ function gearCard(item: GearItem, gear: Gear | null, attrs = "") {
 }
 
 function toyCard(t: ToyDef, attrs = "") {
+  const d = TOYS[t.id] ?? t, pre = [...d.slots, ...(d.sub?.slots ?? [])].filter((x): x is string => !!x);   // 売り物としての最初の中身
   return `<div class="card" ${attrs}>
-    <div class="head"><img src="${urlOf(toyCanvas(t.id))}" alt=""><div><b>${t.name}</b><span class="tag toy">おもちゃ（装備）</span></div></div>
-    ${statsTable(toyStats(t))}<p class="desc">${t.desc}</p></div>`;
+    <div class="head"><img src="${urlOf(toyCanvas(t.id))}" alt=""><div><b>${t.name}</b><span class="tag toy">${t.auto ? "電池式のおもちゃ（自動）" : "おもちゃ（装備）"}</span></div></div>
+    ${statsTable(toyStats(t))}${pre.length ? `<div class="pre">最初から入っている: ${pre.map((id) => spellDef(id).name).join("・")}</div>` : ""}<p class="desc">${t.desc}</p></div>`;
+}
+
+/** 解放していないもののカード（条件を見せる）。 */
+function lockedCard(u: Unlock) {
+  return `<div class="card locked"><div class="head"><div class="qmark">？</div><div><b>まだ解放していない</b><span class="tag">${u.kind === "toy" ? "おもちゃ" : u.kind === "relic" ? "レリック" : "技・修飾"}</span></div></div>
+    <p class="desc">解放の条件: <b>${unlockText(u)}</b><br>負けても記録は積み上がる。条件を満たすと、次の冒険から出てくる。</p></div>`;
+}
+
+/** サブスロットの列（たまり具合のメーターつき）。 */
+function subRow(h: HeldToy, cellOf: (i: number) => string) {
+  const sub = h.def.sub;
+  if (!sub) return "";
+  return `<div class="subrow"><span class="sublabel">サブ<small>${SUB_LABEL[sub.charge](sub.need)}で発動</small></span><div class="cells">${sub.slots.map((_, i) => cellOf(i)).join("")}</div>
+    <div class="meter"><i style="width:${Math.min(100, (h.charge / sub.need) * 100)}%"></i></div></div>`;
 }
 
 /** スロット列＋まとまりごとの下線（1回で一緒に出る範囲と、その合計攻撃力）。 */
@@ -101,10 +125,13 @@ const ZUKAN: { title: string; ids: string[]; kind?: "toy" | "relic" | "gear" }[]
   { title: "近く・置く技", ids: ["swing", "pounce", "punch", "post"] },
   { title: "召喚", ids: ["friend", "roomba"] },
   { title: "買ってきた物の技", ids: ["mizudeppo", "ahiru", "shabon", "kabocha", "korokoro", "hammer", "flash", "danbo"] },
-  { title: "修飾", ids: ["matatabi", "kajikaji", "big", "small", "quick", "stare", "bouncy", "pushy", "double", "chain"] },
-  { title: "買ってきた物の修飾", ids: ["rame", "suzu", "kenko", "jidori"] },
+  { title: "▶修飾（右の技に）", ids: ["matatabi", "kajikaji", "big", "small", "quick", "stare", "bouncy", "pushy", "rame", "suzu", "kenko", "jidori", "double"] },
+  { title: "◀修飾（左の技に）・◀▶修飾（左右の技に）", ids: ["okawari", "oikake", "tsurutsuru", "dryer", "catnipBag", "kotatsu"] },
+  { title: "全体修飾（どこに置いても）", ids: ["maigofuda", "hidamari", "sensor", "kezukuroi"] },
+  { title: "つづけて・合体", ids: ["chain", "hitoiki", "issho"] },
   { title: "属性", ids: ["static", "water", "tape", "spray"] },
-  { title: "おもちゃ", ids: Object.keys(TOYS), kind: "toy" },
+  { title: "おもちゃ", ids: Object.keys(TOYS).filter((t) => !TOYS[t].auto), kind: "toy" },
+  { title: "電池式のおもちゃ（自動で動く）", ids: Object.keys(TOYS).filter((t) => TOYS[t].auto), kind: "toy" },
   { title: "レリック", ids: RELIC_IDS, kind: "relic" },
   { title: "装備", ids: GEAR_IDS, kind: "gear" },
 ];
@@ -125,7 +152,11 @@ export class Hud {
   private recorded = new WeakSet<World>();
   /** 今回の冒険でもらったにぼし。 */
   private earned = 0;
-  private sel: { where: "slot" | "bag"; i: number } | null = null;
+  private sel: Spot | null = null;
+  /** 融合台で選んでいる手持ちの番号。 */
+  private fusePick: number[] = [];
+  /** 今回の冒険で新しく解放されたもの。 */
+  private opened: Unlock[] = [];
   /** 持ち物画面のタブ（おもちゃの番号、または装備・レリック）と、そこで選んでいるもの。 */
   private tab: number | "gear" = 0;
   private pick: string | null = null;
@@ -167,23 +198,34 @@ export class Hud {
     toast.hidden = !w.toast; if (w.toast) toast.textContent = w.toast.text;
 
     // 記録（やられた・守りきったときに一度だけ）
-    if ((w.phase === "dead" || w.phase === "win") && !this.recorded.has(w)) { this.recorded.add(w); this.earned = runReward(w.cleared, w.bosses, w.phase === "win", w.opts.difficulty); recordRun(w.room.act, w.room.index, w.phase === "win", w.opts.difficulty, this.earned); }
-    const key = JSON.stringify([w.coins, w.shop?.items, w.shop?.rerollCost, w.room.kind, w.toys.map((h) => h.def), w.cur, w.relics, w.gear, this.tab, this.pick, w.bag, p.cursor, p.recharging, this.bagOpen, this.paused, this.screen, this.zukanSel, this.sel, w.phase, w.choices, w.doorOpen, w.room.act, w.room.index]);
+    if ((w.phase === "dead" || w.phase === "win") && !this.recorded.has(w)) {
+      this.recorded.add(w);
+      this.earned = runReward(w.cleared, w.bosses, w.phase === "win", w.opts.difficulty, w.curses.length);
+      this.opened = recordRun(w.room.act, w.room.index, w.phase === "win", w.opts.difficulty, this.earned,
+        { kills: w.kills, elites: w.elites, bosses: w.bosses, rooms: w.cleared, specials: w.specials, curses: w.curses.length });
+    }
+    this.meters(w);
+    const key = JSON.stringify([w.coins, w.shop?.items, w.shop?.rerollCost, w.room.kind, w.held.map((h) => h.def), w.cur, w.relics, w.gear, w.curses, this.tab, this.pick, this.fusePick, w.bag, p.cursor, p.recharging, this.bagOpen, this.paused, this.screen, this.zukanSel, this.sel, w.phase, w.choices, w.doorOpen, w.room.act, w.room.index, w.room.altar?.used]);
     if (key === this.lastKey) return;
     this.lastKey = key;
 
     // 上の帯: おもちゃのスロット（まとまりの下線と合計攻撃力、次に出るまとまりを光らせる）
     // 持っているおもちゃ（タップで持ち替え）。今のものは大きく
     const others = w.toys.map((h, i) => i === w.cur ? "" : `<button class="toySw" data-toy="${i}" title="${h.def.name}"><img src="${urlOf(toyCanvas(h.def.id))}" alt=""><span>${i + 1}</span></button>`).join("");
+    const sub = toy.sub ? `<div class="subTop"><span>サブ</span>${toy.sub.slots.map((id) => cell(id, "tabindex=-1", "mini")).join("")}<div class="meter"><i data-meter="sub"></i></div></div>` : "";
+    const batts = w.batt.length ? `<div class="batts">${w.batt.map((h, i) => `<div class="batt" title="${h.def.name}"><img src="${urlOf(toyCanvas(h.def.id))}" alt=""><div class="meter"><i data-meter="batt${i}"></i></div></div>`).join("")}</div>` : "";
     this.el("slots").innerHTML = (others ? `<div class="toySws">${others}</div>` : "") + `<img class="toyIcon" src="${urlOf(toyCanvas(toy.id))}" alt="${toy.name}">`
-      + slotRow(toy, (i) => cell(toy.slots[i], "tabindex=-1"), p.recharging ? -1 : p.cursor)
-      + (p.recharging ? `<span class="rest">休けい中</span>` : "");
+      + `<div>${slotRow(toy, (i) => cell(toy.slots[i], "tabindex=-1"), p.recharging ? -1 : p.cursor)}${sub}</div>`
+      + (p.recharging ? `<span class="rest">休けい中</span>` : "") + batts;
+    this.meters(w);
     this.el("slots").querySelectorAll<HTMLButtonElement>("[data-toy]").forEach((b) => b.onclick = () => w.switchToy(Number(b.dataset.toy)));
 
     // 扉の選択肢
     const hint = this.el("hint");
     hint.hidden = !(w.doorOpen && w.phase === "play");
-    if (!hint.hidden) hint.innerHTML = `<b>扉を選んで進もう</b>` + w.room.doors.map((d) =>
+    const al = w.room.altar;
+    const altarHint = al && (!al.used || al.kind === "fusion") ? `<b>真ん中の${ALTAR_NAME[al.kind]}に近づこう</b>` : "";
+    if (!hint.hidden) hint.innerHTML = (altarHint || `<b>扉を選んで進もう</b>`) + w.room.doors.map((d) =>
       `<span class="chip"><img src="${urlOf(rewardCanvas(d.reward))}" alt="">${REWARD_INFO[d.reward].label}</span>`).join("");
 
     document.body.classList.toggle("titling", w.phase === "intro");
@@ -192,7 +234,15 @@ export class Hud {
     this.renderBag(w);
     this.renderReward(w);
     this.renderShop(w);
+    this.renderBench(w);
     this.renderResult(w);
+  }
+
+  /** 毎フレーム変わるメーター（サブスロット・電池式の次の自動まで）だけを書きかえる。 */
+  private meters(w: World) {
+    const h = w.toys[w.cur], set = (k: string, v: number) => { const e = document.querySelector<HTMLElement>(`[data-meter="${k}"]`); if (e) e.style.width = `${Math.max(0, Math.min(1, v)) * 100}%`; };
+    if (h.def.sub) set("sub", h.charge / h.def.sub.need);
+    w.batt.forEach((b, i) => set(`batt${i}`, 1 - b.autoCd / (b.def.auto ?? 1)));
   }
 
   /** タイトル・あそびかた・ずかん（ゲーム開始前）。 */
@@ -246,7 +296,7 @@ export class Hud {
         <button class="howtoBtn">あそびかた</button>
         <button class="zukanBtn">ずかん</button>
       </div>
-      <div class="record">${recordText(rec)}</div>
+      <div class="record">${recordText(rec)}<br>解放: <b>${UNLOCKS.filter((u) => isOpen(u, rec.stats)).length}/${UNLOCKS.length}</b>（倒した虫 ${rec.stats.kills}・片付けた部屋 ${rec.stats.rooms}）</div>
     </div>`;
     el.querySelector<HTMLButtonElement>(".start")!.onclick = go("diff");
     el.querySelector<HTMLButtonElement>(".growBtn")!.onclick = go("grow");
@@ -268,21 +318,27 @@ export class Hud {
         <div class="rules">
           <h3>おもちゃのしくみ</h3>
           <p>おもちゃを振ると、スロットに入れた<b>技（爪・牙など）が出る</b>。スロットは<b>左から順に</b>使われる。</p>
-          <div class="example">${cell("matatabi")}${cell("bite")}<span>修飾の ▶ は<b>右隣の技</b>にかかる<br>＝「またたびで強くなったかみつき」</span></div>
-          <p>スロットの下の線が「1回で一緒に出る範囲」。⚔は攻撃力の合計、⚡は使うやる気。</p>
+          <div class="example">${cell("matatabi")}${cell("bite")}<span>修飾の ▶ は<b>右の技</b>、◀ は<b>左の技</b>、◀▶ は<b>左右の技</b>にかかる。<b>全</b>はどこに置いても全部の技に</span></div>
+          <div class="example">${cell("claw")}${cell("chain")}${cell("swing")}<span><b>つづけて</b>: ひっかきが当たった所で、ぶんぶんが回る。<b>いっしょに</b>は左の技を右の技に合体</span></div>
+          <p>スロットの下の線が「1回で一緒に出る範囲」。⚔は攻撃力の合計、⚡は使うやる気。サブスロットのあるおもちゃは、条件がたまると全部いっぺんに出る。電池式のおもちゃは持っているだけで自動で動く。</p>
           <p><b>属性</b>（静電気・水のみ皿・ガムテープ・虫よけ）を技の左に置くと効果がつく。<b>ぬれた虫にビリビリ</b>、<b>ねばねばの虫に虫よけ</b>はよく効く。</p>
-          <p>部屋を片付けると扉が開く。扉の上の絵が<b>次の部屋のごほうび</b>（♥最大HP／⚡やる気／★技／おもちゃ）。秋から始まり、夏が最後。</p>
+          <p>部屋を片付けると扉が開く。扉の上の絵が<b>次の部屋のごほうび</b>（♥最大HP／⚡やる気／★技／おもちゃ）や<b>特別な部屋</b>（宝箱・ママのおひざ・融合台・強い虫・あやしい箱）。季節ごとに8部屋＋ボス、秋から始まり夏が最後。</p>
+          <p>負けても、倒した虫や片付けた部屋の数で<b>新しいおもちゃや技が解放</b>される。</p>
         </div>
       </div>`;
   }
 
   /** ずかん: 左に選んだものの説明、右に種類ごとのアイコン一覧。 */
   private zukanHtml() {
-    const sel = this.zukanSel;
-    const detail = TOYS[sel] ? toyCard(TOYS[sel]) : RELICS[sel] ? relicCard(sel) : GEAR[sel] ? gearCard({ id: sel, rar: 0, fx: [] }, null) : spellCard(sel);
-    const groups = ZUKAN.map((g) => `<div class="zgroup"><div class="ztitle">${g.title}</div><div class="zcells">${g.ids.map((id) => g.kind
-      ? itemCell(g.kind, id, `data-z="${id}"`, id === sel ? "sel" : "")
-      : cell(id, `data-z="${id}"`, id === sel ? "sel" : "")).join("")}</div></div>`).join("");
+    const sel = this.zukanSel, stats = loadRecord().stats;
+    const lock = (kind: UnlockKind, id: string) => { const u = findUnlock(kind, id); return u && !isOpen(u, stats) ? u : null; };
+    const kindOf = (id: string): UnlockKind => (TOYS[id] ? "toy" : RELICS[id] ? "relic" : "spell");
+    const lk = lock(kindOf(sel), sel);
+    const detail = lk ? lockedCard(lk) : TOYS[sel] ? toyCard(TOYS[sel]) : RELICS[sel] ? relicCard(sel) : GEAR[sel] ? gearCard({ id: sel, rar: 0, fx: [] }, null) : spellCard(sel);
+    const groups = ZUKAN.map((g) => `<div class="zgroup"><div class="ztitle">${g.title}</div><div class="zcells">${g.ids.map((id) => {
+      const x = `${id === sel ? "sel" : ""} ${lock(kindOf(id), id) ? "lockedCell" : ""}`;
+      return g.kind ? itemCell(g.kind, id, `data-z="${id}"`, x) : cell(id, `data-z="${id}"`, x);
+    }).join("")}</div></div>`).join("");
     return `<div class="edit"><div class="detail">${detail}</div><div class="board"><div class="boardHead"><b>ずかん</b><span class="muted">タップで説明を見る</span><button class="back">もどる</button></div><div class="zgroups">${groups}</div></div></div>`;
   }
 
@@ -302,8 +358,8 @@ export class Hud {
     const el = this.el("bag");
     el.hidden = !this.bagOpen;
     if (el.hidden) return;
-    if (typeof this.tab === "number" && this.tab >= w.toys.length) this.tab = w.cur;
-    const tabs = `<div class="tabs">${w.toys.map((h, i) => `<button class="tab ${this.tab === i ? "on" : ""}" data-tab="${i}"><img src="${urlOf(toyCanvas(h.def.id))}" alt="">${h.def.name}${i === w.cur ? "<small>使用中</small>" : ""}</button>`).join("")}
+    if (typeof this.tab === "number" && this.tab >= w.held.length) this.tab = w.cur;
+    const tabs = `<div class="tabs">${w.held.map((h, i) => `<button class="tab ${this.tab === i ? "on" : ""}" data-tab="${i}"><img src="${urlOf(toyCanvas(h.def.id))}" alt="">${h.def.name}${i === w.cur ? "<small>使用中</small>" : h.def.auto ? "<small>電池</small>" : ""}</button>`).join("")}
       <button class="tab ${this.tab === "gear" ? "on" : ""}" data-tab="gear"><img src="${urlOf(rewardCanvas("relic"))}" alt="">装備・レリック</button>
       <button class="close">閉じる</button></div>`;
     el.innerHTML = `<div class="panel edit2">${tabs}${this.tab === "gear" ? this.gearHtml(w) : this.toyHtml(w, this.tab)}</div>`;
@@ -315,10 +371,10 @@ export class Hud {
       el.querySelectorAll<HTMLButtonElement>("[data-pick]").forEach((b) => b.onclick = () => { this.pick = b.dataset.pick || null; this.lastKey = ""; });
       return;
     }
-    const t = this.tab, slots = w.toys[t].def.slots;
+    const t = this.tab, def = w.held[t].def;
     el.querySelectorAll<HTMLButtonElement>("[data-where]").forEach((b) => b.onclick = () => {
-      const here = { where: b.dataset.where as "slot" | "bag", i: Number(b.dataset.i) };
-      const hasItem = (here.where === "slot" ? slots[here.i] : w.bag[here.i]) ?? null;
+      const here: Spot = { where: b.dataset.where as Spot["where"], i: Number(b.dataset.i) };
+      const hasItem = (here.where === "slot" ? def.slots[here.i] : here.where === "sub" ? def.sub?.slots[here.i] : w.bag[here.i]) ?? null;
       if (!this.sel) { if (hasItem) this.sel = here; }
       else if (this.sel.where === here.where && this.sel.i === here.i) this.sel = null;
       else { w.move(this.sel, here, t); this.sel = null; }
@@ -328,15 +384,16 @@ export class Hud {
 
   /** 持ち物: おもちゃのスロットと手持ち。 */
   private toyHtml(w: World, t: number) {
-    const toy = w.toys[t].def, sel = this.sel;
+    const h = w.held[t], toy = h.def, sel = this.sel;
     const isSel = (where: string, i: number) => sel?.where === where && sel.i === i;
     const BAG = Math.max(16, Math.ceil((w.bag.length + 1) / 8) * 8);
-    const selId = sel ? (sel.where === "slot" ? toy.slots[sel.i] : w.bag[sel.i]) ?? null : null;
+    const selId = sel ? (sel.where === "slot" ? toy.slots[sel.i] : sel.where === "sub" ? toy.sub?.slots[sel.i] : w.bag[sel.i]) ?? null : null;
     return `<div class="edit">
       <div class="detail">${selId ? spellCard(selId) : toyCard(toy)}</div>
       <div class="board">
         <div class="boardHead"><span class="muted">選んでから、置きたい場所をタップ（入れ替え）。おもちゃどうしは手持ちを通して移す</span></div>
         ${slotRow(toy, (i) => cell(toy.slots[i], `data-where="slot" data-i="${i}"`, isSel("slot", i) ? "sel" : ""))}
+        ${subRow(h, (i) => cell(toy.sub!.slots[i], `data-where="sub" data-i="${i}"`, isSel("sub", i) ? "sel" : ""))}
         <div class="bagTitle">手持ち</div>
         <div class="baggrid">${Array.from({ length: BAG }, (_, i) => cell(w.bag[i] ?? null, `data-where="bag" data-i="${i}"`, isSel("bag", i) ? "sel" : "")).join("")}</div>
       </div></div>`;
@@ -358,6 +415,7 @@ export class Hud {
       <div class="board">
         <div class="bagTitle">装備</div>
         <div class="gearRow">${GEAR_SLOTS.map((sl) => `<div class="gslot">${itemCell("gear", w.gear[sl]?.id ?? null, `data-pick="${w.gear[sl]?.id ?? ""}"`, pick && pick === w.gear[sl]?.id ? "sel" : "", w.gear[sl]?.rar ?? 0)}<span>${SLOT_NAME[sl]}</span></div>`).join("")}<div class="sets">${sets}</div></div>
+        ${w.curses.length ? `<div class="bagTitle">呪い（${w.curses.length}）</div><div class="curses">${w.curses.map((c) => `<span class="curse"><b>${CURSES[c].name}</b>${CURSES[c].desc}</span>`).join("")}</div>` : ""}
         <div class="bagTitle">レリック（${w.relics.length}）</div>
         <div class="baggrid">${w.relics.length ? w.relics.map((r) => itemCell("relic", r, `data-pick="${r}"`, pick === r ? "sel" : "")).join("") : `<span class="muted">まだ持っていません（◆の扉・ボスでもらえる）</span>`}</div>
       </div></div>`;
@@ -367,14 +425,21 @@ export class Hud {
     const el = this.el("reward");
     el.hidden = w.phase !== "reward";
     if (el.hidden) return;
-    const boss = w.room.kind === "boss";
-    const title = boss ? `${ENEMY[w.room.waves[0][0]].name}を追い払った！` : `${w.title.split("・")[1].replace(/ \d.*$/, "")}を片付けた！`;
+    const boss = w.room.kind === "boss", al = w.room.altar;
+    const title = boss ? `${ENEMY[w.room.waves[0][0]].name}を追い払った！` : al?.kind === "treasure" ? "宝箱を開けた！" : al?.kind === "curse" ? "あやしい箱を開けた…"
+      : `${w.title.split("・")[1].replace(/ \d.*$/, "")}を片付けた！`;
+    const one = (c: Choice, a = "") => c.kind === "pact" ? "" : c.kind === "toy" ? toyCard(TOYS[c.id], a) : c.kind === "relic" ? relicCard(c.id, a) : c.kind === "gear" ? gearCard(c.gear ?? { id: c.id, rar: 0, fx: [] }, w.gear, a) : spellCard(c.id, a);
     const card = (c: Choice, i: number) => {
       const a = `data-i="${i}" role="button" tabindex="0"`;
-      return c.kind === "toy" ? toyCard(TOYS[c.id], a) : c.kind === "relic" ? relicCard(c.id, a) : c.kind === "gear" ? gearCard(c.gear ?? { id: c.id, rar: 0, fx: [] }, w.gear, a) : spellCard(c.id, a);
+      if (c.kind !== "pact") return one(c, a);
+      const k = CURSES[c.id];
+      return `<div class="card pact" ${a}><div class="cursebox"><b>呪い: ${k.name}</b><small>${k.desc}（この冒険のあいだずっと）</small></div>
+        <div class="pactget">もらえる: カリカリ ${c.coins} ＋</div>${one(c.reward)}</div>`;
     };
     const kind = w.choices[0]?.kind;
-    const note = kind === "toy" ? (w.toys.length < 3 ? `おもちゃを1つ増やす（今 ${w.toys.length}/3。持ち替えはスロットの横のアイコン）` : "持てるのは3つまで。今使っているおもちゃと交換（技はそのまま移る）")
+    const batt = w.choices.some((c) => c.kind === "toy" && TOYS[c.id].auto);
+    const note = kind === "pact" ? "呪いを1つ受けると、強いごほうびがもらえる（呪い1つにつき、にぼし＋15%）。いらないなら何も受けない"
+      : kind === "toy" ? (w.toys.length < 3 ? `おもちゃを1つ増やす（今 ${w.toys.length}/3。持ち替えはスロットの横のアイコン）` : "持てるのは3つまで。今使っているおもちゃと交換（技はそのまま移る）") + (batt ? `。電池式は別に${2}つまで（今 ${w.batt.length}/2・自動で動く）` : "")
       : kind === "relic" ? "レリックを1つ選ぼう（持っているだけで効く）"
       : kind === "gear" ? "装備を1つ選ぼう（同じ場所の装備とは交換。セットをそろえるとボーナス）"
       : "1つ選んで手持ちに加えよう（「持ち物」でスロットにはめる）";
@@ -408,11 +473,45 @@ export class Hud {
       <div class="sitems">${items}</div>
       <div class="forge"><b>鍛冶（合成）</b><span class="muted">手持ちの同じ技3つ → ★の技1つ（強くなる）</span>
         <div class="fcells">${forge.length ? forge.map((id) => `<div class="fbtn" role="button" tabindex="0" data-forge="${id}">${cell(id, "tabindex=-1")}<span>×3 → ${spellDef(id + "+").name}</span></div>`).join("") : `<span class="muted">合成できる技はまだない（同じ技を3つ集めよう）</span>`}</div></div>
+      ${this.fusionHtml(w)}
     </div>`;
     el.querySelectorAll<HTMLButtonElement>("[data-buy]").forEach((b) => b.onclick = () => { w.buy(Number(b.dataset.buy)); this.lastKey = ""; });
-    el.querySelectorAll<HTMLElement>("[data-forge]").forEach((b) => b.onclick = () => { w.forge(b.dataset.forge!); this.lastKey = ""; });
+    el.querySelectorAll<HTMLElement>("[data-forge]").forEach((b) => b.onclick = () => { w.forge(b.dataset.forge!); this.fusePick = []; this.lastKey = ""; });
+    this.bindFusion(el, w);
     el.querySelector<HTMLButtonElement>(".reroll")!.onclick = () => { w.reroll(); this.lastKey = ""; };
-    el.querySelector<HTMLButtonElement>(".close")!.onclick = () => { w.closeShop(); this.lastKey = ""; };
+    el.querySelector<HTMLButtonElement>(".close")!.onclick = () => { w.closeShop(); this.fusePick = []; this.lastKey = ""; };
+  }
+
+  /** 融合台: 手持ちから同じレア度の技を4つ選ぶ → 1つ上のレア度の技がランダムで1つ。 */
+  private fusionHtml(w: World) {
+    const pick = this.fusePick.filter((i) => i < w.bag.length), r = pick.length ? rarOf(w.bag[pick[0]]) : -1;
+    const ok = w.fusable();
+    const cells = w.bag.map((id, i) => {
+      const on = pick.includes(i), can = ok.includes(rarOf(id)) && (r < 0 || rarOf(id) === r);
+      return cell(id, `data-fuse="${i}" ${can || on ? "" : "disabled"}`, `${on ? "sel" : ""} ${can || on ? "" : "dim"}`);
+    }).join("");
+    return `<div class="forge fusion"><b>融合台</b><span class="muted">同じレア度の技4つ → 1つ上のレア度の技がランダムで1つ（伝説は伝説）</span>
+      <div class="fuseBag">${w.bag.length ? cells : `<span class="muted">手持ちが空っぽ</span>`}</div>
+      <button class="fuseGo go" ${pick.length === 4 ? "" : "disabled"}>${pick.length === 4 ? `融合する（${SPELL_RAR_NAME[r]} → ${SPELL_RAR_NAME[Math.min(3, r + 1)]}）` : `${pick.length}/4 選んだ`}</button></div>`;
+  }
+  private bindFusion(el: HTMLElement, w: World) {
+    el.querySelectorAll<HTMLButtonElement>("[data-fuse]").forEach((b) => b.onclick = () => {
+      const i = Number(b.dataset.fuse);
+      this.fusePick = this.fusePick.includes(i) ? this.fusePick.filter((x) => x !== i) : this.fusePick.length < 4 ? [...this.fusePick, i] : this.fusePick;
+      this.lastKey = "";
+    });
+    const go = el.querySelector<HTMLButtonElement>(".fuseGo");
+    if (go) go.onclick = () => { w.fuse(this.fusePick); this.fusePick = []; this.lastKey = ""; };
+  }
+
+  /** 融合台の部屋。 */
+  private renderBench(w: World) {
+    const el = this.el("shopPanel");
+    if (w.phase !== "bench") return;
+    el.hidden = false;
+    el.innerHTML = `<div class="panel shopPanel bench"><div class="shead"><h2>融合台</h2><button class="close">閉じる</button></div>${this.fusionHtml(w)}</div>`;
+    this.bindFusion(el, w);
+    el.querySelector<HTMLButtonElement>(".close")!.onclick = () => { w.closeShop(); this.fusePick = []; this.lastKey = ""; };
   }
 
   private renderResult(w: World) {
@@ -422,7 +521,9 @@ export class Hud {
     el.innerHTML = `<div class="panel"><h2>${w.phase === "win" ? "ママにつかまった！" : "虫にやられた…"}</h2>
       ${w.phase === "win" ? mama("pet", "つかまえた〜♪<br>病院でワクチン打とうね。<br>1年間ありがとう！") : mama("scream", "いやぁぁぁ！<br>虫がーっ！")}
       <p class="muted">${w.phase === "win" ? "秋から夏まで、ぜんぶの虫を追い払った。さいごは病院へ…（おしまい）" : `${w.title} で力尽きた。`}</p>
-      <p class="nibline">にぼし <b>+${this.earned}</b>（${DIFFS[w.opts.difficulty].name}・片付けた部屋 ${w.cleared}）　タイトルの「ねこの成長」で使える</p>
+      <p class="nibline">にぼし <b>+${this.earned}</b>（${DIFFS[w.opts.difficulty].name}・片付けた部屋 ${w.cleared}・倒した虫 ${w.kills}${w.curses.length ? `・呪い ${w.curses.length}` : ""}）　タイトルの「ねこの成長」で使える</p>
+      ${this.opened.length ? `<div class="opened"><b>新しく解放！</b>（次の冒険から出てくる）<div class="zcells">${this.opened.map((u) => u.kind === "spell" ? cell(u.id, "tabindex=-1") : itemCell(u.kind, u.id, "tabindex=-1")).join("")}</div>
+        <small>${this.opened.map((u) => (u.kind === "spell" ? SPELLS[u.id].name : u.kind === "toy" ? TOYS[u.id].name : RELICS[u.id].name)).join("・")}</small></div>` : ""}
       <div class="menu"><button class="go again">もう一度</button><button class="toTitle">タイトルへ</button></div></div>`;
     el.querySelector<HTMLButtonElement>(".again")!.onclick = () => this.onRestart();
     el.querySelector<HTMLButtonElement>(".toTitle")!.onclick = () => this.toTitle();

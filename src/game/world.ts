@@ -1,12 +1,13 @@
 // ゲームの状態と1フレームの更新。描画・入力・DOM には依存しない（x,z の2D平面で計算）。
 //
 // 物語: ママは虫が大の苦手。家に入りこんだ虫を、猫がおもちゃで追い払う。
-// 構成（Magicraft 風）: 季節ごとの「章」= 部屋4つ＋ボス。部屋を片付けると出口が2〜3個開き、
-// 扉の上のアイコンで「次の部屋をクリアしたときのごほうび」を選んで進む。
-import { planCast, starterToy, TOYS, type Shot, type ToyDef } from "../core/wand";
-import { baseId, MAX_STARS, SPELL_IDS, SPELLS, spellDef, starsOf, type Element, type Motion, type TechFx } from "../core/spells";
+// 構成（Magicraft 風）: 季節ごとの「章」= 部屋8つ＋ボス。部屋を片付けると出口が2〜3個開き、
+// 扉の上のアイコンで「次の部屋をクリアしたときのごほうび」（または特別な部屋）を選んで進む。
+import { castAll, MAX_BATT, passiveCost, planCast, starterToy, TOYS, type Shot, type ToyDef } from "../core/wand";
+import { MAX_STARS, rarOf, SPELL_IDS, SPELLS, spellDef, starsOf, type Element, type Motion, type TechFx } from "../core/spells";
+import { CURSE_IDS, CURSES, curseBonus } from "../core/curses";
 import { makeRng, type Rng } from "../core/rng";
-import { GEAR, GEAR_IDS, NO_BONUS, RELIC_IDS, RELICS, rollGear, totalBonus, type Bonus, type Gear, type GearItem } from "../core/items";
+import { addBonus, GEAR, GEAR_IDS, NO_BONUS, RELIC_IDS, RELICS, rollGear, totalBonus, type Bonus, type Gear, type GearItem, type Rarity } from "../core/items";
 import { DEFAULT_RUN, DIFFS, metaBonus, type RunOptions } from "../core/meta";
 import {
   BOSS_TEMPLATE, buildLayout, Cell, cellAt, cellCenter, cellValue, FINAL_TEMPLATE, OUTDOOR, OUTDOOR_TEMPLATES, SEASON_NAME, SEASONS,
@@ -71,7 +72,19 @@ export interface Enemy {
   repelTick: number;
   /** はじき飛ばされている勢い。 */
   push: Vec;
+  /** 強い虫の性質（null はふつうの虫）。 */
+  elite: Elite | null;
 }
+
+/** 強い虫: 体が大きく体力3倍、カリカリをたくさん落とす。性質は1つ。 */
+export type Elite = "fast" | "split" | "burst" | "hard";
+export const ELITE_INFO: Record<Elite, { name: string; color: string }> = {
+  fast: { name: "すばしこい", color: "#4dabf7" },
+  split: { name: "分かれる", color: "#69db7c" },
+  burst: { name: "はじける", color: "#ff922b" },
+  hard: { name: "かたい", color: "#adb5bd" },
+};
+const ELITES = Object.keys(ELITE_INFO) as Elite[];
 
 export interface Projectile {
   id: number;
@@ -110,6 +123,10 @@ export interface Projectile {
   payloadDone: boolean;
   /** 召喚した仲間の次の攻撃までの秒数。 */
   cd: number;
+  /** つづけてで出た「回る・連打」の技は、猫ではなく出た場所を中心にする。 */
+  anchor: Vec | null;
+  /** ひと呼吸: この秒数で payload を出す（0 なら当たったとき）。 */
+  payloadAt: number;
 }
 
 /** 当たったときの性質（遅れて当たる多段にも使う）。 */
@@ -143,11 +160,15 @@ export interface Player {
 }
 
 /** 持っているおもちゃ。やる気と、次に使うスロットはおもちゃごと（Magicraft の杖と同じ）。 */
-export interface HeldToy { def: ToyDef; mana: number; cursor: number }
+export interface HeldToy { def: ToyDef; mana: number; cursor: number; /** サブスロットのたまり具合 */ charge: number; /** 電池式の次の自動まで */ autoCd: number }
 export const MAX_TOYS = 3;
+const held = (def: ToyDef, mana: number): HeldToy => ({ def, mana, cursor: 0, charge: 0, autoCd: def.auto ?? 0 });
 
 /** 扉のごほうび。部屋をクリアすると受け取れる。 */
-export type RewardKind = "hp" | "mp" | "spell" | "toy" | "relic" | "gear" | "shop" | "boss" | "next";
+export type RewardKind = "hp" | "mp" | "spell" | "toy" | "relic" | "gear" | "shop" | "boss" | "next"
+  | "treasure" | "rest" | "fusion" | "challenge" | "curse";
+/** 特別な部屋（虫が出ない部屋と、強い虫の部屋）。 */
+export const SPECIAL: RewardKind[] = ["treasure", "rest", "fusion", "challenge", "curse"];
 export const REWARD_INFO: Record<RewardKind, { icon: string; label: string; color: string }> = {
   hp: { icon: "♥", label: "最大HP アップ", color: "#ff5f7e" },
   mp: { icon: "⚡", label: "やる気 アップ", color: "#3fa7ff" },
@@ -158,7 +179,18 @@ export const REWARD_INFO: Record<RewardKind, { icon: string; label: string; colo
   shop: { icon: "🐱", label: "お店（ボス猫）", color: "#fab005" },
   boss: { icon: "☠", label: "ボス", color: "#e03131" },
   next: { icon: "➜", label: "次の季節へ", color: "#2f9e44" },
+  treasure: { icon: "🎁", label: "宝箱の部屋（虫なし）", color: "#f59f00" },
+  rest: { icon: "🛋", label: "ママのおひざ（虫なし・全回復）", color: "#ff8787" },
+  fusion: { icon: "⚗", label: "融合台の部屋（虫なし）", color: "#7048e8" },
+  challenge: { icon: "‼", label: "強い虫の部屋（ごほうび2倍）", color: "#c92a2a" },
+  curse: { icon: "☁", label: "あやしい箱（呪いと引きかえ）", color: "#5f3dc4" },
 };
+/** 特別な部屋の置き物。 */
+export type AltarKind = "treasure" | "rest" | "fusion" | "curse";
+export const ALTAR_NAME: Record<AltarKind, string> = { treasure: "宝箱", rest: "ママのおひざ", fusion: "融合台", curse: "あやしい箱" };
+
+/** 持ち物画面の置き場所。 */
+export interface Spot { where: "slot" | "sub" | "bag"; i: number }
 
 export interface Door { slot: number; pos: Vec; dir: "up" | "down" | "left" | "right"; reward: RewardKind }
 
@@ -167,7 +199,7 @@ export interface Room {
   index: number; // 章の中で 0..ROOMS_PER_ACT（最後がボス）
   season: Season;
   theme: Theme;
-  kind: "combat" | "boss" | "shop" | "final";
+  kind: "combat" | "boss" | "shop" | "final" | "special";
   layout: Layout;
   w: number; // 半幅（カメラ用）
   d: number;
@@ -177,9 +209,13 @@ export interface Room {
   /** この部屋をクリアしたときのごほうび（入ってきた扉で決まる）。 */
   reward: RewardKind | null;
   doors: Door[];
+  /** 特別な部屋の置き物（近づくと使える）。 */
+  altar: { kind: AltarKind; pos: Vec; used: boolean; away: boolean } | null;
+  /** 強い虫の部屋。 */
+  challenge: boolean;
 }
 
-export type Phase = "intro" | "play" | "reward" | "shop" | "dead" | "win";
+export type Phase = "intro" | "play" | "reward" | "shop" | "bench" | "dead" | "win";
 
 /** 落ちているカリカリ（お金）。 */
 export interface Pickup { id: number; pos: Vec; value: number; t: number }
@@ -192,7 +228,8 @@ export const POTIONS: Record<string, { name: string; desc: string; price: number
   goldNiboshi: { name: "金のにぼし", desc: "持っているカリカリが1.25倍（最低＋3）", price: 6 },
 };
 
-export type Choice = { kind: "spell" | "toy" | "relic" | "gear"; id: string; gear?: GearItem };
+export type Choice = { kind: "spell" | "toy" | "relic" | "gear"; id: string; gear?: GearItem }
+  | { kind: "pact"; id: string; reward: Choice & { kind: "spell" | "relic" | "gear" }; coins: number };
 
 export interface Input {
   move: Vec;
@@ -202,7 +239,7 @@ export interface Input {
   dash: boolean;
 }
 
-export const ROOMS_PER_ACT = 5; // ＋ボス
+export const ROOMS_PER_ACT = 8; // ＋ボス
 export const ACTS = SEASONS.length;
 
 export class World {
@@ -213,6 +250,16 @@ export class World {
   /** 持っているおもちゃ（最大3つ）と、今使っているもの。 */
   toys: HeldToy[];
   cur = 0;
+  /** 電池式のおもちゃ（自動で動く。2つまで）。 */
+  batt: HeldToy[] = [];
+  /** 受けている呪い。 */
+  curses: string[] = [];
+  /** この冒険の記録（解放に使う）。 */
+  kills = 0;
+  elites = 0;
+  specials = 0;
+  /** まだ解放していないもの。 */
+  private locked: Set<string>;
   bag: string[] = [];
   relics: string[] = [];
   gear: Gear = { hat: null, body: null, collar: null };
@@ -250,8 +297,9 @@ export class World {
   constructor(seed = 1, opts: RunOptions = DEFAULT_RUN) {
     this.rng = makeRng(seed);
     this.opts = opts;
+    this.locked = new Set(opts.locked ?? []);
     const first = starterToy();
-    this.toys = [{ def: first, mana: first.manaMax, cursor: 0 }];
+    this.toys = [held(first, first.manaMax)];
     this.bag = ["swing", "water", "static"];
     this.player = {
       pos: { x: 0, z: 0 }, vel: { x: 0, z: 0 }, hp: 6, maxHp: 6, radius: 0.32,
@@ -271,7 +319,11 @@ export class World {
   /** 今使っているおもちゃ。 */
   get toy(): ToyDef { return this.toys[this.cur].def; }
   /** やる気の最大（おもちゃ＋レリック・装備）。 */
-  manaMaxOf(t: ToyDef) { return t.manaMax + this.bonus.manaMax; }
+  manaMaxOf(t: ToyDef) { return Math.max(10, t.manaMax + this.bonus.manaMax - passiveCost(t)); }
+  /** 持ち替えのおもちゃと電池式（持ち物画面のタブの順）。 */
+  get held(): HeldToy[] { return [...this.toys, ...this.batt]; }
+  /** まだ解放していないか。 */
+  isLocked(kind: "spell" | "toy" | "relic", id: string) { return this.locked.has(`${kind}:${id}`); }
   get manaMax() { return this.manaMaxOf(this.toy); }
 
   /** おもちゃを持ち替える（やる気・次のスロットはおもちゃごとに覚えておく）。 */
@@ -288,6 +340,7 @@ export class World {
   /** レリック・装備を変えたら効果を計算し直す。 */
   private recalc() {
     this.bonus = totalBonus(this.relics, this.gear, metaBonus(this.opts.meta));
+    for (const c of curseBonus(this.curses)) this.bonus = addBonus(this.bonus, c);
     const p = this.player, before = p.maxHp;
     p.maxHp = this.baseMaxHp + this.bonus.maxHp;
     p.hp = Math.min(p.maxHp, p.hp + Math.max(0, p.maxHp - before));
@@ -298,6 +351,8 @@ export class World {
     const r = this.room;
     if (r.kind === "final") return "さいご・ママ";
     if (r.kind === "shop") return `${SEASON_NAME[r.season]}・ボス猫のお店`;
+    if (r.altar) return `${SEASON_NAME[r.season]}・${ALTAR_NAME[r.altar.kind]} ${r.index + 1}/${ROOMS_PER_ACT}`;
+    if (r.challenge) return `${SEASON_NAME[r.season]}・強い虫の部屋 ${r.index + 1}/${ROOMS_PER_ACT}`;
     return `${SEASON_NAME[r.season]}・${r.kind === "boss" ? "ボス" : `${THEME_NAME[r.theme]} ${r.index + 1}/${ROOMS_PER_ACT}`}`;
   }
 
@@ -306,12 +361,15 @@ export class World {
     const boss = index === ROOMS_PER_ACT;
     const season = SEASONS[act];
     if (index === 0) this.usedThemes = [];
-    let theme: Theme;
     const shop = reward === "shop";
+    const altar: AltarKind | null = reward === "treasure" || reward === "rest" || reward === "fusion" || reward === "curse" ? reward : null;
+    const challenge = reward === "challenge";
+    if (altar || challenge) this.specials++;
+    let theme: Theme;
     if (boss || shop) theme = "garden";
     else {
       // 毎章どこかでお庭（外）を通る。それ以外は家の中も外もまぜて、同じ部屋は続けない
-      const pool = index === 2 ? OUTDOOR : THEMES;
+      const pool = index === 2 || index === 5 ? OUTDOOR : THEMES;
       const left = pool.filter((t) => !this.usedThemes.includes(t));
       theme = this.rng.pick(left.length ? left : pool);
       this.usedThemes.push(theme);
@@ -319,40 +377,47 @@ export class World {
     // 出口の数: 2〜3（ボス直前は1つ＝ボス）
     const slots = [1, 2, 3].sort(() => this.rng.next() - 0.5);
     const doorSlots = boss ? [1] : index === ROOMS_PER_ACT - 1 ? [slots[0]] : slots.slice(0, this.rng.next() < 0.5 ? 2 : 3);
-    const outside = OUTDOOR.includes(theme) && !boss && !shop && this.rng.next() < 0.6;
+    const quiet = shop || !!altar;   // 虫の出ない部屋
+    const outside = OUTDOOR.includes(theme) && !boss && !quiet && this.rng.next() < 0.6;
     const tplSet = outside ? OUTDOOR_TEMPLATES : TEMPLATES;
-    const tpl = shop ? SHOP_TEMPLATE : boss ? BOSS_TEMPLATE : tplSet[this.rng.pick(Object.keys(tplSet))];
-    const layout = buildLayout(tpl, theme, this.rng, { flipX: false, flipY: !boss && this.rng.next() < 0.5, doors: doorSlots });
+    const tpl = quiet ? SHOP_TEMPLATE : boss ? BOSS_TEMPLATE : tplSet[this.rng.pick(Object.keys(tplSet))];
+    const layout = buildLayout(tpl, theme, this.rng, { flipX: false, flipY: !boss && !quiet && this.rng.next() < 0.5, doors: doorSlots });
 
     // 敵の組み合わせ（章が進むほど多く・強く）
     const bugs = SEASON_BUGS[season], D = DIFFS[this.opts.difficulty];
     const pool = bugs.pool.slice(0, index === 0 ? (act === 0 ? 1 : 2) : index === 1 ? 2 : bugs.pool.length);
-    const waveCount = shop ? 0 : boss ? 1 : index < 2 && act === 0 ? 1 : 2;
+    const waveCount = quiet ? 0 : boss ? 1 : index < 2 && act === 0 ? 1 : 2;
+    const per = Math.max(2, 3 + Math.floor(index * 0.5) + act + D.extra + (this.curses.includes("mure") ? 1 : 0) - (challenge ? 2 : 0));
     const waves: EnemyType[][] = boss
       ? [[bugs.boss]]
       : Array.from({ length: waveCount }, () => {
-        const w: EnemyType[] = Array.from({ length: Math.max(2, 3 + index + act + D.extra) }, () => this.rng.pick(pool));
+        const w: EnemyType[] = Array.from({ length: per }, () => this.rng.pick(pool));
         return w.flatMap((t) => (t === "ant" ? [t, t] : [t]));   // アリは群れで来る
       });
 
-    // 次の扉のごほうび（重ならないように）
-    const kinds: RewardKind[] = shop ? ["hp", "mp", "spell", "toy", "relic", "gear"] : ["hp", "mp", "spell", "spell", "toy", "relic", "gear", "shop"];
+    // 次の扉のごほうび（重ならないように）。ときどき特別な部屋、章の真ん中では必ずお店を1つ
+    const kinds: RewardKind[] = quiet ? ["hp", "mp", "spell", "toy", "relic", "gear"] : ["hp", "mp", "spell", "spell", "toy", "relic", "gear", "shop"];
     const used = new Set<RewardKind>();
-    const doors: Door[] = layout.exits.map((e) => {
+    const doors: Door[] = layout.exits.map((e, n) => {
       let k: RewardKind;
       if (boss) k = "next";
       else if (index === ROOMS_PER_ACT - 1) k = "boss";
-      else { do k = this.rng.pick(kinds); while (used.has(k) && used.size < 4); used.add(k); }
+      else if (n === 0 && index === 3 && !shop) k = "shop";
+      else if (n === 1 && index >= 1 && this.rng.next() < 0.55) k = this.rng.pick(SPECIAL.filter((x) => x !== reward));
+      else { do k = this.rng.pick(kinds); while (used.has(k) && used.size < 4); }
+      used.add(k);
       return { slot: e.slot, pos: cellCenter(layout, e.c, e.r), dir: e.dir, reward: k };
     });
 
+    const mid = cellCenter(layout, layout.cols >> 1, layout.rows >> 1);
     this.room = {
-      act, index, season, theme, kind: boss ? "boss" : "combat", layout,
-      w: layout.cols / 2, d: layout.rows / 2, waves, wave: 0, cleared: false, reward: shop ? null : reward, doors,
+      act, index, season, theme, kind: boss ? "boss" : altar ? "special" : "combat", layout,
+      w: layout.cols / 2, d: layout.rows / 2, waves, wave: 0, cleared: false, reward: quiet ? null : challenge ? "relic" : reward, doors,
+      altar: altar ? { kind: altar, pos: mid, used: false, away: true } : null, challenge,
     };
     if (shop) {
       this.room.kind = "shop";
-      this.shop = { items: this.stock(), rerollCost: 3, pos: cellCenter(layout, layout.cols >> 1, layout.rows >> 1), away: true };
+      this.shop = { items: this.stock(), rerollCost: 3, pos: mid, away: true };
     } else this.shop = null;
     this.pickups = [];
     this.enemies = []; this.projectiles = []; this.doorOpen = false; this.flow = null;
@@ -362,18 +427,44 @@ export class World {
     this.spawnWave();
   }
 
+  /** 強い虫になる確率（季節・部屋が進むほど、呪いで上がる）。 */
+  private eliteChance() {
+    const r = this.room;
+    if (r.kind === "boss" || (r.act === 0 && r.index < 2)) return 0;
+    return 0.08 + r.act * 0.06 + r.index * 0.01 + (this.curses.includes("tsuyoi") ? 0.25 : 0);
+  }
+
   private spawnWave() {
     const r = this.room, L = r.layout;
     if (!r.waves[r.wave]) return;
     const floors: Vec[] = [];
     for (let rr = 1; rr < L.rows - 1; rr++) for (let c = 1; c < L.cols - 1; c++) if (cellValue(L, c, rr) === Cell.Floor) floors.push(cellCenter(L, c, rr));
     const far = floors.filter((p) => dist(p, this.player.pos) > 7);
-    r.waves[r.wave].forEach((type, k) => {
+    // 強い虫: 強い虫の部屋は半分、ふつうの部屋はときどき1匹
+    const wave = r.waves[r.wave];
+    const elite = new Set<number>();
+    if (r.challenge) wave.forEach((_, k) => { if (k % 2 === 0) elite.add(k); });
+    else if (this.rng.next() < this.eliteChance()) elite.add(Math.floor(this.rng.next() * wave.length));
+    wave.forEach((type, k) => {
       const pos = isBoss(type) ? cellCenter(L, L.cols - 5, L.rows >> 1) : this.rng.pick(far.length ? far : floors);
-      const e = makeEnemy(this.nextId++, type, pos, r.act, this.opts.difficulty);
+      const e = this.makeEnemy(type, pos, elite.has(k) && type !== "ant" ? this.rng.pick(ELITES) : null);
       e.spawn = 1.0 + k * 0.25;
       this.enemies.push(e);
     });
+  }
+
+  /** 虫を作る（難易度・季節・呪い・強い虫）。 */
+  private makeEnemy(type: EnemyType, pos: Vec, elite: Elite | null = null): Enemy {
+    const e = makeEnemy(this.nextId++, type, pos, this.room?.act ?? 0, this.opts.difficulty);
+    if (this.curses.includes("katai")) { e.hp = e.maxHp = Math.round(e.maxHp * 1.25); }
+    if (this.curses.includes("sekkachi")) e.speed *= 1.12;
+    if (elite) {
+      e.elite = elite;
+      e.hp = e.maxHp = Math.round(e.maxHp * (elite === "hard" ? 4.5 : 3));
+      e.radius *= 1.3;
+      if (elite === "fast") e.speed *= 1.5;
+    }
+    return e;
   }
 
   // ---------- 1フレーム ----------
@@ -395,6 +486,12 @@ export class World {
       const d = dist(this.player.pos, sh.pos);
       if (d < 1.4 && sh.away) { sh.away = false; this.phase = "shop"; this.events.push("shop"); }
       else if (d > 2.2) sh.away = true;
+    }
+    const al = this.room.altar;
+    if (al && this.phase === "play") {
+      const d = dist(this.player.pos, al.pos);
+      if (d < 1.3 && al.away) { al.away = false; this.useAltar(); }
+      else if (d > 2.2) al.away = true;
     }
     this.checkRoom();
   }
@@ -430,6 +527,8 @@ export class World {
     p.mana = Math.min(this.manaMax, p.mana + (toy.manaRegen * B.regenMul * still + moving) * dt);
     // 持っているだけのおもちゃも、やる気は戻る
     this.toys.forEach((h, i) => { if (i !== this.cur) h.mana = Math.min(this.manaMaxOf(h.def), h.mana + h.def.manaRegen * B.regenMul * dt); });
+    if (Math.hypot(input.move.x, input.move.z) < 0.1 && p.dash <= 0) this.chargeSub("still", dt);
+    this.updateBattery(dt);
 
     let mv = input.move;
     const len = Math.hypot(mv.x, mv.z);
@@ -440,6 +539,7 @@ export class World {
       if (B.dashPower) p.power = B.dashPower;
       p.vel = { x: dir.x * 13, z: dir.z * 13 };
       this.fx.push({ kind: "puff", pos: { ...p.pos }, radius: 0.5, color: "#ffffff", t: 0, life: 0.35 });
+      this.chargeSub("dash", 1);
     }
     const speed = p.dash > 0 ? 13 : 5.2 * B.speedMul;
     p.dash = Math.max(0, p.dash - dt);
@@ -465,22 +565,12 @@ export class World {
     if (this.room.kind === "final") {   // さいごは肉球ペシペシだけ
       if (input.fire && p.castCd <= 0) { this.fire({ stats: { ...SPELLS.punch.projectile!, damage: 0 }, payload: [] }, p.pos, p.aim, "player"); p.castCd = 0.3; this.events.push("cast"); }
     } else if (input.fire && p.castCd <= 0) {
-      const res = planCast(toy, p.cursor, p.mana);
+      // 鈴入りボールは全部いっぺんに出す
+      const res = toy.castAll ? { ...castAll(toy, p.mana), nextCursor: 0, wrapped: true, fizzled: false } : planCast(toy, p.cursor, p.mana);
       if (res.shots.length) {
         p.mana -= res.manaUsed;
-        const L = this.room.layout, front = { x: p.pos.x + p.aim.x * 0.5, z: p.pos.z + p.aim.z * 0.5 }, fc = cellAt(L, front.x, front.z);
-        const muzzle = cellValue(L, fc.c, fc.r) === Cell.Floor ? front : { ...p.pos }; // 家具にくっついていても撃てる
         const extra = this.bonus.extraShot > 0 && this.rng.next() < this.bonus.extraShot;
-        const shots = extra ? [...res.shots, ...res.shots] : res.shots;   // もう1発（少しずらして）
-        shots.forEach((s, n) => {
-          const k = shots.length;
-          // 回る技は円周に等間隔、ほかは扇状に少しずらす
-          const off = s.stats.motion === "orbit" ? (n / k) * Math.PI * 2 : (n - (k - 1) / 2) * 0.16;
-          this.fire(s, s.stats.motion === "shot" ? muzzle : p.pos, p.aim, "player", off);
-          if (s.stats.motion === "shot") this.projectiles[this.projectiles.length - 1].origin = { ...p.pos };   // 最初の当たり判定は猫の位置から（すぐ横の小さい虫も外さない）
-          if (s.stats.motion === "ring") p.pounce = 0.4;
-        });
-        this.fx.push({ kind: "cast", pos: muzzle, radius: 0.35, color: res.shots[0].stats.color, t: 0, life: 0.15 });
+        this.fireShots(extra ? [...res.shots, ...res.shots] : res.shots, p.aim);   // もう1発（少しずらして）
         p.cursor = res.nextCursor;
         p.castCd = res.wrapped ? toy.recharge : toy.castDelay;
         p.recharging = res.wrapped;
@@ -498,11 +588,13 @@ export class World {
 
   // ---------- お店（Magicraft のお店と鍛冶） ----------
   /** 技の値段（修飾は少し安い。★は高い）。 */
-  static price(id: string) { const d = spellDef(id); return Math.round((d.kind === "attack" ? 8 : d.kind === "modifier" ? 6 : 10) * (1 + starsOf(id) * 1.5)); }
+  static price(id: string) { const d = spellDef(id); return Math.round((d.kind === "attack" ? 8 : d.kind === "modifier" ? 6 : 10) * (1 + starsOf(id) * 1.5) * (1 + rarOf(id) * 0.35)); }
+  /** 値上げの呪いをふくめた値段。 */
+  private cost(n: number) { return Math.round(n * (this.curses.includes("neage") ? 1.5 : 1)); }
 
   private stock(): ShopItem[] {
-    const spells = pickN(this.rng, SPELL_IDS, 4).map((id): ShopItem => ({ kind: "spell", id, price: World.price(id), sold: false }));
-    const pots = pickN(this.rng, Object.keys(POTIONS), 2).map((id): ShopItem => ({ kind: "potion", id, price: POTIONS[id].price, sold: false }));
+    const spells = this.pickSpells(4).map((id): ShopItem => ({ kind: "spell", id, price: this.cost(World.price(id)), sold: false }));
+    const pots = pickN(this.rng, Object.keys(POTIONS), 2).map((id): ShopItem => ({ kind: "potion", id, price: this.cost(POTIONS[id].price), sold: false }));
     return [...spells, ...pots];
   }
 
@@ -524,7 +616,7 @@ export class World {
   reroll(): boolean {
     const sh = this.shop;
     if (!sh || this.coins < sh.rerollCost) return false;
-    this.coins -= sh.rerollCost; sh.rerollCost += 2;
+    this.coins -= sh.rerollCost; sh.rerollCost += this.cost(2);
     const pots = sh.items.filter((x) => x.kind === "potion");
     sh.items = [...this.stock().filter((x) => x.kind === "spell"), ...pots];
     this.events.push("buy");
@@ -548,14 +640,116 @@ export class World {
     return true;
   }
 
-  closeShop() { if (this.phase === "shop") this.phase = "play"; }
+  closeShop() { if (this.phase === "shop" || this.phase === "bench") this.phase = "play"; }
+
+  /** 特別な部屋の置き物を使う。宝箱・ママのおひざ・あやしい箱は1回だけ、融合台は何回でも。 */
+  private useAltar() {
+    const al = this.room.altar!, p = this.player;
+    if (al.kind === "fusion") { this.phase = "bench"; this.events.push("shop"); return; }
+    if (al.used) return;
+    if (al.kind === "rest") {
+      al.used = true; p.hp = p.maxHp; this.events.push("clear");
+      this.notify("ママのおひざで ひと休み（♥ぜんぶ回復）"); return;
+    }
+    if (al.kind === "treasure") { al.used = true; this.events.push("clear"); this.offerTreasure(); return; }
+    al.used = true; this.offerPacts();
+  }
+
+  // ---------- 融合台（Magicraft の融合: 同じレア度の技4つ → 1つ上のレア度の技1つ） ----------
+  /** 融合できるレア度（手持ちに同じレア度の技が4つ以上）。 */
+  fusable(): number[] {
+    const n = [0, 0, 0, 0];
+    for (const id of this.bag) n[rarOf(id)]++;
+    return n.map((k, r) => (k >= 4 ? r : -1)).filter((r) => r >= 0);
+  }
+
+  /** 手持ちから選んだ4つ（同じレア度）を融合して、1つ上のレア度の技を1つ得る（伝説は伝説）。 */
+  fuse(picks: number[]): string | null {
+    const ids = picks.map((i) => this.bag[i]);
+    if (new Set(picks).size !== 4 || ids.some((x) => !x)) return null;
+    const r = rarOf(ids[0]);
+    if (ids.some((x) => rarOf(x) !== r)) return null;
+    const pool = this.spellPool().filter((id) => SPELLS[id].rar === Math.min(3, r + 1) && !ids.includes(id));
+    const got = this.rng.pick(pool.length ? pool : this.spellPool().filter((id) => SPELLS[id].rar === Math.min(3, r + 1)));
+    this.bag = this.bag.filter((_, i) => !picks.includes(i));
+    this.bag.push(got);
+    this.events.push("forge");
+    this.notify(`融合: ${spellDef(got).name} ができた`);
+    return got;
+  }
+
+  /** 解放ずみの技。 */
+  private spellPool() { return SPELL_IDS.filter((id) => !this.isLocked("spell", id)); }
+  /** レア度で重みをつけて技を選ぶ（季節が進むとレアが出やすい）。 */
+  private pickSpells(n: number, minRar = 0): string[] {
+    const act = this.room?.act ?? 0, W = [6, 3 + act * 0.4, 1.2 + act * 0.4, 0.4 + act * 0.25];
+    const left = this.spellPool().filter((id) => (SPELLS[id].rar ?? 0) >= minRar), out: string[] = [];
+    while (out.length < n && left.length) {
+      const total = left.reduce((a, id) => a + W[SPELLS[id].rar ?? 0], 0);
+      let t = this.rng.next() * total, k = 0;
+      for (; k < left.length - 1; k++) { t -= W[SPELLS[left[k]].rar ?? 0]; if (t <= 0) break; }
+      out.push(left.splice(k, 1)[0]);
+    }
+    return out;
+  }
+
+  /** サブスロットを出す（やる気は使わない）。 */
+  private fireSub(h: HeldToy) {
+    const sub = h.def.sub;
+    if (!sub || !sub.slots.some(Boolean)) { h.charge = sub?.need ?? 0; return; }
+    h.charge = 0;
+    const p = this.player, r = castAll(h.def, Infinity, sub.slots);
+    this.fireShots(r.shots, p.aim);
+    this.fx.push({ kind: "puff", pos: { ...p.pos }, radius: 0.9, color: "#ffd43b", t: 0, life: 0.4 });
+    this.events.push("sub");
+  }
+
+  /** サブスロットをためる（今持っているおもちゃだけ）。 */
+  private chargeSub(kind: "still" | "hit" | "dash" | "kill" | "hurt", n: number) {
+    const h = this.toys[this.cur], sub = h?.def.sub;
+    if (!sub || sub.charge !== kind || this.room.kind === "final") return;
+    h.charge += n;
+    if (h.charge >= sub.need) this.fireSub(h);
+  }
+
+  /** 電池式のおもちゃ: それぞれのやる気で、一番近い虫へ自動で振る。 */
+  private updateBattery(dt: number) {
+    const p = this.player, t = this.nearestEnemy(p.pos, 11);
+    for (const h of this.batt) {
+      h.mana = Math.min(this.manaMaxOf(h.def), h.mana + h.def.manaRegen * this.bonus.regenMul * dt);
+      h.autoCd -= dt;
+      if (h.autoCd > 0 || !t || this.room.kind === "final") continue;
+      const res = planCast(h.def, h.cursor, h.mana);
+      if (!res.shots.length) { h.autoCd = 0.3; if (!res.fizzled) h.cursor = 0; continue; }
+      h.mana -= res.manaUsed; h.cursor = res.nextCursor;
+      h.autoCd = (h.def.auto ?? 2) + (res.wrapped ? h.def.recharge : 0);
+      this.fireShots(res.shots, norm({ x: t.pos.x - p.pos.x, z: t.pos.z - p.pos.z }));
+      this.events.push("cast");
+    }
+  }
+
+  /** 猫の位置から技をまとめて出す（扇状・回る技は等間隔）。 */
+  private fireShots(list: Shot[], aim: Vec) {
+    const p = this.player, L = this.room.layout;
+    const front = { x: p.pos.x + aim.x * 0.5, z: p.pos.z + aim.z * 0.5 }, fc = cellAt(L, front.x, front.z);
+    const muzzle = cellValue(L, fc.c, fc.r) === Cell.Floor ? front : { ...p.pos }; // 家具にくっついていても撃てる
+    list.forEach((s, n) => {
+      const k = list.length;
+      // 回る技は円周に等間隔、ほかは扇状に少しずらす
+      const off = s.stats.motion === "orbit" ? (n / k) * Math.PI * 2 : (n - (k - 1) / 2) * 0.16;
+      this.fire(s, s.stats.motion === "shot" ? muzzle : p.pos, aim, "player", off);
+      if (s.stats.motion === "shot") this.projectiles[this.projectiles.length - 1].origin = { ...p.pos };   // 最初の当たり判定は猫の位置から（すぐ横の小さい虫も外さない）
+      if (s.stats.motion === "ring") p.pounce = 0.4;
+    });
+    if (list.length) this.fx.push({ kind: "cast", pos: muzzle, radius: 0.35, color: list[0].stats.color, t: 0, life: 0.15 });
+  }
 
   /** さいごの部屋: ママが猫を病院へ連れて行こうと近づいてくる。猫は肉球ペシペシしかできない。つかまったらクリア。 */
   private enterFinal() {
     const layout = buildLayout(FINAL_TEMPLATE, "living", this.rng, { doors: [] });
     this.room = {
       act: ACTS - 1, index: ROOMS_PER_ACT + 1, season: "summer", theme: "living", kind: "final", layout,
-      w: layout.cols / 2, d: layout.rows / 2, waves: [["mama"]], wave: 0, cleared: false, reward: null, doors: [],
+      w: layout.cols / 2, d: layout.rows / 2, waves: [["mama"]], wave: 0, cleared: false, reward: null, doors: [], altar: null, challenge: false,
     };
     this.enemies = []; this.projectiles = []; this.pickups = []; this.shop = null; this.doorOpen = false; this.flow = null; this.finalT = 0;
     this.player.pos = cellCenter(layout, layout.entry.c, layout.entry.r); this.player.vel = { x: 0, z: 0 };
@@ -572,7 +766,7 @@ export class World {
     } else this.enterRoom(r.act, r.index + 1, d.reward === "boss" ? null : d.reward);
   }
 
-  fire(shot: Shot, from: Vec, dir: Vec, owner: "player" | "enemy", angleOffset = 0) {
+  fire(shot: Shot, from: Vec, dir: Vec, owner: "player" | "enemy", angleOffset = 0, anchored = false) {
     const L = this.room.layout;
     let s = shot.stats;
     if (owner === "player") {
@@ -588,6 +782,7 @@ export class World {
       explode: s.explode, slow: s.slow, color: s.color, tech: s.tech, payload: shot.payload,
       motion: s.motion, hits: s.hits, hitEvery: s.hitEvery, reach: s.reach, element: s.element, knock: s.knock,
       t: 0, life0: s.life, origin: { ...from }, ang: a + angleOffset, angVel: s.speed, dir: d, hitLog: new Map(), payloadDone: false, cd: 0,
+      anchor: anchored ? { ...from } : null, payloadAt: shot.timer ?? 0,
     };
     if (s.motion === "orbit") { pr.vel = { x: 0, z: 0 }; pr.pos = { x: from.x + Math.cos(pr.ang) * s.reach, z: from.z + Math.sin(pr.ang) * s.reach }; }
     if (s.motion === "ring" || s.motion === "melee") pr.vel = { x: 0, z: 0 };
@@ -724,7 +919,7 @@ export class World {
         if (e.t > 2.8) {
           e.t = 0; e.phase++;
           if (e.phase % 2 && this.enemies.length < 9) for (const t of ["ant", "ant", "caterpillar"] as EnemyType[]) {
-            const m = makeEnemy(this.nextId++, t, { x: e.pos.x + (this.rng.next() - 0.5) * 2, z: e.pos.z + (this.rng.next() - 0.5) * 2 }, this.room.act, this.opts.difficulty);
+            const m = this.makeEnemy(t, { x: e.pos.x + (this.rng.next() - 0.5) * 2, z: e.pos.z + (this.rng.next() - 0.5) * 2 });
             m.spawn = 0.6; spawnLater.push(m);
           } else for (let k = -3; k <= 3; k++) this.fire({ stats: enemyShot("#a9e34b", 5.5), payload: [] }, e.pos, direct, "enemy", k * 0.18);
         }
@@ -776,6 +971,7 @@ export class World {
       this.notify("ふせいだ！"); return;
     }
     p.hp -= n * DIFFS[this.opts.difficulty].dmg; p.iframes = 1.0 + this.bonus.iframes; p.hurt = 0.45;
+    this.chargeSub("hurt", 1);
     if (this.bonus.thorns) {   // 反撃: まわりの虫にダメージ
       this.fx.push({ kind: "puff", pos: { ...p.pos }, radius: 1.6, color: "#ffd43b", t: 0, life: 0.35 });
       for (const e of this.enemies) if (e.spawn <= 0 && dist(e.pos, p.pos) < 2.4 + e.radius) this.damageEnemy(e, this.bonus.thorns * this.bonus.dmgMul, 0, "#ffd43b");
@@ -808,11 +1004,12 @@ export class World {
       pr.life -= dt; pr.t += dt;
       const ox = first ? pr.origin.x : pr.pos.x, oz = first ? pr.origin.z : pr.pos.z;
       // 動き
+      const center = pr.anchor ?? p.pos;   // つづけてで出たものは出た場所が中心
       if (pr.motion === "orbit") {
         pr.ang += pr.angVel * dt;
-        pr.pos = { x: p.pos.x + Math.cos(pr.ang) * pr.reach, z: p.pos.z + Math.sin(pr.ang) * pr.reach };
+        pr.pos = { x: center.x + Math.cos(pr.ang) * pr.reach, z: center.z + Math.sin(pr.ang) * pr.reach };
       } else if (pr.motion === "melee") {
-        pr.pos = { x: p.pos.x + pr.dir.x * pr.reach * 0.55, z: p.pos.z + pr.dir.z * pr.reach * 0.55 };
+        pr.pos = { x: center.x + pr.dir.x * pr.reach * 0.55, z: center.z + pr.dir.z * pr.reach * 0.55 };
       } else if (pr.motion === "summon") {
         this.updateSummon(pr, dt, spawned);
       } else if (pr.motion === "shot" || pr.motion === "beam") {
@@ -828,6 +1025,11 @@ export class World {
         pr.pos.x += pr.vel.x * dt; pr.pos.z += pr.vel.z * dt;
       }
       let dead = pr.life <= 0;
+      // ひと呼吸: 時間が来たら、その場所から右の技
+      if (pr.payloadAt > 0 && !pr.payloadDone && (pr.t >= pr.payloadAt || dead)) {
+        pr.payloadDone = true;
+        for (const s of pr.payload) spawned.push({ shot: s, pos: { ...pr.pos }, dir: pr.motion === "shot" ? norm(pr.vel) : pr.dir });
+      }
 
       if (!dead && pr.owner === "enemy") {
         if (dist(p.pos, pr.pos) < p.radius + pr.radius * 0.8) { this.hurtPlayer(1, pr.pos); dead = true; }
@@ -841,7 +1043,7 @@ export class World {
           let touch = false, push: Vec = pr.dir;
           switch (pr.motion) {
             case "shot": touch = segDist(e.pos, ox, oz, pr.pos) <= e.radius + pr.radius; push = norm(pr.vel); break; // 速い弾が通り抜けないよう線分で判定
-            case "orbit": touch = segDist(e.pos, ox, oz, pr.pos) <= e.radius + pr.radius; push = norm({ x: e.pos.x - p.pos.x, z: e.pos.z - p.pos.z }); break;
+            case "orbit": touch = segDist(e.pos, ox, oz, pr.pos) <= e.radius + pr.radius; push = norm({ x: e.pos.x - center.x, z: e.pos.z - center.z }); break;
             case "beam": touch = segDist(e.pos, pr.origin.x, pr.origin.z, pr.pos) <= e.radius + pr.radius; break;
             case "ring": { const d = dist(e.pos, pr.origin); touch = d <= R + e.radius && d >= R - e.radius - 0.6; push = norm({ x: e.pos.x - pr.origin.x, z: e.pos.z - pr.origin.z }); break; }
             case "melee": touch = dist(e.pos, pr.pos) <= pr.reach * 0.55 + e.radius; break;
@@ -853,9 +1055,9 @@ export class World {
           if (pr.explode <= 0) this.hitEnemy(e, pr.damage, info, push);
           if (pr.motion === "shot") {
             for (let k = 1; k < pr.hits; k++) this.later.push({ t: k * pr.hitEvery, eid: e.id, dmg: pr.damage, info, dir: push }); // かじかじ: 食い込んで削る
-            if (pr.payload.length) for (const s of pr.payload) spawned.push({ shot: s, pos: { ...pr.pos }, dir: norm(pr.vel) });
+            if (pr.payload.length && !pr.payloadAt) for (const s of pr.payload) spawned.push({ shot: s, pos: { ...e.pos }, dir: norm(pr.vel) });
             if (pr.pierce > 0) pr.pierce--; else { dead = true; break; }
-          } else if ((pr.motion === "summon" || !pr.payloadDone) && pr.payload.length) {
+          } else if ((pr.motion === "summon" || !pr.payloadDone) && pr.payload.length && !pr.payloadAt) {
             pr.payloadDone = true;
             for (const s of pr.payload) spawned.push({ shot: s, pos: { ...e.pos }, dir: pr.dir });
           }
@@ -874,14 +1076,14 @@ export class World {
       }
       if (dead) {
         if (pr.owner === "player" && pr.explode > 0) this.explode(pr);
-        if (pr.owner === "player" && pr.payload.length && pr.hitLog.size === 0 && pr.motion === "shot")
+        if (pr.owner === "player" && pr.payload.length && pr.hitLog.size === 0 && pr.motion === "shot" && !pr.payloadAt)
           for (const s of pr.payload) spawned.push({ shot: s, pos: { x: ox, z: oz }, dir: norm(pr.vel) });
         continue;
       }
       keep.push(pr);
     }
     this.projectiles = keep;
-    for (const s of spawned) this.fire(s.shot, s.pos, s.dir, "player");
+    for (const s of spawned) this.fire(s.shot, s.pos, s.dir, "player", 0, true);
     const before = this.enemies.length, dead: Enemy[] = [];
     this.enemies = this.enemies.filter((e) => {
       if (e.hp > 0) return true;
@@ -890,9 +1092,19 @@ export class World {
       return false;
     });
     for (const e of dead) {
-      // カリカリを落とす（ボスはたくさん）
-      const n = isBoss(e.type) ? 8 : e.type === "ant" ? (this.rng.next() < 0.5 ? 1 : 0) : 1 + (this.rng.next() < 0.4 ? 1 : 0);
-      for (let k = 0; k < n; k++) this.pickups.push({ id: this.nextId++, pos: { x: e.pos.x + (this.rng.next() - 0.5) * 1.2, z: e.pos.z + (this.rng.next() - 0.5) * 1.2 }, value: isBoss(e.type) ? 2 : 1, t: 0 });
+      this.kills++;
+      // カリカリを落とす（ボス・強い虫はたくさん）
+      const n = isBoss(e.type) ? 8 : e.elite ? 4 : e.type === "ant" ? (this.rng.next() < 0.5 ? 1 : 0) : 1 + (this.rng.next() < 0.4 ? 1 : 0);
+      for (let k = 0; k < n; k++) this.pickups.push({ id: this.nextId++, pos: { x: e.pos.x + (this.rng.next() - 0.5) * 1.2, z: e.pos.z + (this.rng.next() - 0.5) * 1.2 }, value: isBoss(e.type) || e.elite ? 2 : 1, t: 0 });
+      if (e.elite) {
+        this.elites++;
+        if (e.elite === "split") for (const s of [-1, 1]) {   // 分かれる: ふつうの虫2匹に
+          const m = this.makeEnemy(e.type, { x: e.pos.x + s * 0.5, z: e.pos.z }); m.spawn = 0.3; this.enemies.push(m);
+        }
+        if (e.elite === "burst") for (let k = 0; k < 10; k++) {   // はじける: 輪の弾
+          const a = (k / 10) * Math.PI * 2; this.fire({ stats: enemyShot("#ff922b", 4), payload: [] }, e.pos, { x: Math.cos(a), z: Math.sin(a) }, "enemy");
+        }
+      }
       if (e.type === "stinkbug") this.gas(e.pos, 0.9);   // カメムシは倒すとくさい
       if (this.bonus.killHeal && this.rng.next() < this.bonus.killHeal) this.player.hp = Math.min(this.player.maxHp, this.player.hp + 1);
       if (this.bonus.killBoom) {   // 倒した虫がはじける
@@ -900,6 +1112,7 @@ export class World {
         for (const q of this.enemies) if (q.spawn <= 0 && dist(q.pos, e.pos) < 1.6 + q.radius) this.damageEnemy(q, this.bonus.killBoom * this.bonus.dmgMul, 0, "#ffa94d");
       }
     }
+    if (dead.length) this.chargeSub("kill", dead.length);
     if (this.enemies.length < before) {
       this.events.push("kill");
       if (this.bonus.killMana) this.player.mana = Math.min(this.manaMax, this.player.mana + this.bonus.killMana * (before - this.enemies.length));
@@ -954,6 +1167,7 @@ export class World {
       this.events.push("pesi");
       return;
     }
+    this.chargeSub("hit", 1);
     if (h.element === "static" && e.wet > 0) dmg *= 2;
     const crit = this.bonus.crit > 0 && this.rng.next() < this.bonus.crit;
     if (crit) dmg *= 2;
@@ -993,7 +1207,7 @@ export class World {
   private checkRoom() {
     const r = this.room;
     if (r.kind === "final") return;   // ママは倒せない
-    if (r.kind === "shop") { if (!r.cleared) { r.cleared = true; this.doorOpen = true; } return; }
+    if (r.kind === "shop" || r.kind === "special") { if (!r.cleared) { r.cleared = true; this.doorOpen = true; } return; }
     if (r.cleared || this.enemies.length) return;
     if (r.wave + 1 < r.waves.length) { r.wave++; this.spawnWave(); return; }
     r.cleared = true;
@@ -1003,6 +1217,9 @@ export class World {
     this.cleared++; if (r.kind === "boss") this.bosses++;
     if (this.bonus.clearHeal) p.hp = Math.min(p.maxHp, p.hp + this.bonus.clearHeal);
     if (r.kind === "boss") { p.hp = p.maxHp; this.offer("relic"); return; }
+    if (r.challenge) {   // 強い虫の部屋: カリカリの山＋レリック
+      for (let k = 0; k < 8; k++) this.pickups.push({ id: this.nextId++, pos: { x: p.pos.x + (this.rng.next() - 0.5) * 3, z: p.pos.z + (this.rng.next() - 0.5) * 3 }, value: 2, t: 0 });
+    }
     const reward = r.reward;
     if (reward === "hp") { this.baseMaxHp += 2; p.maxHp += 2; p.hp = Math.min(p.maxHp, p.hp + 2); this.notify("最大HP ＋1♥"); }
     else if (reward === "mp") {
@@ -1014,19 +1231,46 @@ export class World {
     this.doorOpen = true;
   }
 
+  private relicPool() { return RELIC_IDS.filter((r) => !this.relics.includes(r) && !this.isLocked("relic", r)); }
+
   private offer(kind: "spell" | "toy" | "relic" | "gear") {
     const n = 3 + this.bonus.choiceAdd;
     if (kind === "toy") {
-      const held = new Set(this.toys.map((h) => h.def.id));
-      const left = Object.keys(TOYS).filter((t) => !held.has(t));
-      this.choices = (left.length ? left : Object.keys(TOYS)).map((id): Choice => ({ kind: "toy", id }));
+      const have = new Set(this.held.map((h) => h.def.id));
+      const left = Object.keys(TOYS).filter((t) => !have.has(t) && !this.isLocked("toy", t));
+      this.choices = pickN(this.rng, left.length ? left : Object.keys(TOYS).filter((t) => !this.isLocked("toy", t)), n).map((id): Choice => ({ kind: "toy", id }));
     } else if (kind === "relic") {
-      const left = RELIC_IDS.filter((r) => !this.relics.includes(r));
+      const left = this.relicPool();
       if (!left.length) { this.offer("spell"); return; }
       this.choices = pickN(this.rng, left, n).map((id): Choice => ({ kind: "relic", id }));
     } else if (kind === "gear") {
       this.choices = pickN(this.rng, GEAR_IDS, n).map((id): Choice => ({ kind: "gear", id, gear: rollGear(id, () => this.rng.next(), this.bonus.luck, this.room.act) }));
-    } else this.choices = pickN(this.rng, SPELL_IDS, n).map((id): Choice => ({ kind: "spell", id }));
+    } else this.choices = this.pickSpells(n).map((id): Choice => ({ kind: "spell", id }));
+    this.phase = "reward";
+  }
+
+  /** 宝箱: レリック・いい装備・レアな技から1つ。 */
+  private offerTreasure() {
+    const relic = this.relicPool(), out: Choice[] = [];
+    if (relic.length) out.push({ kind: "relic", id: this.rng.pick(relic) });
+    const g = this.rng.pick(GEAR_IDS), item = rollGear(g, () => this.rng.next(), this.bonus.luck + 1, this.room.act);
+    out.push({ kind: "gear", id: g, gear: { ...item, rar: Math.max(item.rar, 1) as Rarity } });
+    out.push(...this.pickSpells(3 - out.length, 2).map((id): Choice => ({ kind: "spell", id })));
+    this.choices = out; this.phase = "reward";
+  }
+
+  /** あやしい箱: 呪いと引きかえの、強いごほうび（3つから1つ。いらないも選べる）。 */
+  private offerPacts() {
+    const curses = pickN(this.rng, CURSE_IDS.filter((c) => !this.curses.includes(c)), 3);
+    if (!curses.length) { this.notify("箱は空っぽだった"); return; }
+    const relic = this.relicPool();
+    this.choices = curses.map((id, k): Choice => {
+      let reward: Choice & { kind: "spell" | "relic" | "gear" };
+      if (k === 0 && relic.length) reward = { kind: "relic", id: this.rng.pick(relic) };
+      else if (k === 1 || !relic.length) { const g = this.rng.pick(GEAR_IDS); reward = { kind: "gear", id: g, gear: { ...rollGear(g, () => this.rng.next(), 9, this.room.act), rar: 3 } }; }
+      else reward = { kind: "spell", id: this.pickSpells(1, 3)[0] ?? "kenko" };
+      return { kind: "pact", id, reward, coins: 10 + this.room.act * 5 };
+    });
     this.phase = "reward";
   }
 
@@ -1035,6 +1279,13 @@ export class World {
   /** ごほうびを受け取る。null なら受け取らない。 */
   takeReward(c: Choice | null) {
     if (this.phase !== "reward") return;
+    if (c?.kind === "pact") {   // 呪いを受けて、ごほうびとカリカリ
+      this.curses.push(c.id); this.coins += c.coins; this.recalc();
+      this.events.push("curse");
+      this.phase = "reward"; this.takeReward(c.reward);
+      this.notify(`呪い「${CURSES[c.id].name}」を受けた`);
+      return;
+    }
     if (c?.kind === "spell") this.bag.push(c.id);
     if (c?.kind === "toy") this.addToy(c.id);
     if (c?.kind === "relic") { this.relics.push(c.id); this.recalc(); this.notify(`${RELICS[c.id].name} を手に入れた`); }
@@ -1047,33 +1298,48 @@ export class World {
     this.doorOpen = true;
   }
 
-  /** 新しいおもちゃ: 3つまでは追加で持つ。いっぱいなら今のおもちゃと交換（はめていた技は左から詰め直し、あふれた分は手持ちへ）。 */
+  /**
+   * 新しいおもちゃ。最初から入っている技はそのまま。
+   * 持ち替えのおもちゃは3つまで、いっぱいなら今のおもちゃと交換（はめていた技は移し、あふれた分は手持ちへ）。電池式は2つまで、いっぱいなら古い方と交換。
+   */
   addToy(id: string) {
     const t = structuredClone(TOYS[id]);
     t.manaMax += this.manaUp.max; t.manaRegen += this.manaUp.regen;
+    const spellsOf = (d: ToyDef) => [...d.slots, ...(d.sub?.slots ?? [])].filter((x): x is string => !!x);
+    if (t.auto) {
+      if (this.batt.length >= MAX_BATT) { const old = this.batt.shift()!; this.bag.push(...spellsOf(old.def)); }
+      this.batt.push(held(t, this.manaMaxOf(t)));
+      this.notify(`${t.name} を置いた（電池式・自動で動く）`);
+      return;
+    }
     if (this.toys.length < MAX_TOYS) {
-      this.toys.push({ def: t, mana: this.manaMaxOf(t), cursor: 0 });
+      this.toys.push(held(t, this.manaMaxOf(t)));
       this.notify(`${t.name} を持った（${this.toys.length}つ目）`);
       return;
     }
-    const old = this.toy.slots.filter((s): s is string => !!s);
-    t.slots = t.slots.map((_, i) => old[i] ?? null);
-    this.bag.push(...old.slice(t.slots.length));
-    this.toys[this.cur] = { def: t, mana: Math.min(this.player.mana, this.manaMaxOf(t)), cursor: 0 };
+    // はめていた技は新しいおもちゃの空きスロットへ左から詰め、あふれた分は手持ちへ
+    const old = spellsOf(this.toy);
+    t.slots = t.slots.map((x) => x ?? old.shift() ?? null);
+    this.bag.push(...old);
+    this.toys[this.cur] = held(t, Math.min(this.player.mana, this.manaMaxOf(t)));
     this.player.cursor = 0;
     this.player.mana = this.toys[this.cur].mana;
+    this.notify(`${t.name} と交換した`);
   }
 
-  /** 置き場所どうしで入れ替える（スロット⇔スロット、スロット⇔手持ち、手持ち⇔手持ち）。toy は編集しているおもちゃの番号。 */
-  move(from: { where: "slot" | "bag"; i: number }, to: { where: "slot" | "bag"; i: number }, toy = this.cur) {
-    const slots = this.toys[toy].def.slots;
-    const get = (p: typeof from) => (p.where === "slot" ? slots[p.i] : this.bag[p.i]) ?? null;
-    const set = (p: typeof from, v: string | null) => { if (p.where === "slot") slots[p.i] = v; else this.bag[p.i] = v as string; };
+  /** 置き場所どうしで入れ替える（スロット・サブスロット・手持ち）。toy は持ち物画面のタブ（held の番号）。 */
+  move(from: Spot, to: Spot, toy = this.cur) {
+    const h = this.held[toy], slots = h.def.slots, sub = h.def.sub?.slots ?? [];
+    const arr = (p: Spot) => (p.where === "slot" ? slots : p.where === "sub" ? sub : null);
+    const get = (p: Spot) => (arr(p)?.[p.i] ?? this.bag[p.i]) ?? null;
+    const set = (p: Spot, v: string | null) => { const a = arr(p); if (a) a[p.i] = v; else this.bag[p.i] = v as string; };
+    if ((from.where !== "bag" && from.i >= arr(from)!.length) || (to.where !== "bag" && to.i >= arr(to)!.length)) return;
     const a = get(from), b = get(to);
     set(from, b); set(to, a);
     this.bag = this.bag.filter(Boolean);
-    this.toys[toy].cursor = 0;
+    h.cursor = 0;
     if (toy === this.cur) this.player.cursor = 0;
+    this.player.mana = Math.min(this.player.mana, this.manaMax);
   }
 
   // ---------- 当たり判定 ----------
@@ -1125,7 +1391,7 @@ function makeEnemy(id: number, type: EnemyType, pos: Vec, act: number, difficult
   const d = ENEMY[type], D = DIFFS[difficulty];
   const hp = Math.round(d.hp * (1 + act * (d.boss ? 0.8 : 0.6)) * D.hp);
   return { id, type, pos: { ...pos }, vel: { x: 0, z: 0 }, hp, maxHp: hp, radius: d.r, speed: d.speed * (1 + act * 0.06) * D.speed, slow: 0, hurt: 0, t: (id * 0.37) % 1, phase: 0, spawn: 0,
-    wet: 0, sticky: 0, repel: 0, repelDps: 0, repelTick: 0, push: { x: 0, z: 0 } };
+    wet: 0, sticky: 0, repel: 0, repelDps: 0, repelTick: 0, push: { x: 0, z: 0 }, elite: null };
 }
 
 const enemyShot = (color: string, speed: number) => ({

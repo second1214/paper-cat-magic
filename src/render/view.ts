@@ -1,6 +1,6 @@
 // three.js での描画。World の状態を毎フレーム写すだけで、ゲームの判断はしない。
 import * as THREE from "three";
-import { ENEMY, type World, type EnemyType, type Room } from "../game/world";
+import { ELITE_INFO, ENEMY, type AltarKind, type World, type EnemyType, type Room } from "../game/world";
 import { CatDoll, type CatState } from "./catDoll";
 import { canvasTexture, enemyTexture, glowTexture, orbTexture } from "./stickers";
 import { buildRoom, type BuiltRoom } from "./roomBuilder";
@@ -136,6 +136,13 @@ export class GameView {
     });
   }
 
+  private altarTexs = new Map<AltarKind, THREE.Texture>();
+  private altarTex(k: AltarKind) {
+    let t = this.altarTexs.get(k);
+    if (!t) { t = canvasTexture(rewardCanvas(k)); this.altarTexs.set(k, t); }
+    return t;
+  }
+
   private enemyCard(type: EnemyType) {
     const tex = this.enemyTex.get(type)!;
     const img = tex.image as HTMLCanvasElement, h = ENEMY_H[type], w = h * img.width / img.height;
@@ -224,7 +231,7 @@ export class GameView {
 
     // 虫
     const alive = new Set<number>();
-    let nStat = 0;
+    let nStat = 0, nAura = 0;
     for (const e of world.enemies) {
       alive.add(e.id);
       let g = this.enemyMeshes.get(e.id);
@@ -237,8 +244,13 @@ export class GameView {
       const face = (e.vel.x < -0.1 ? -1 : 1) * (e.type === "mama" ? -1 : 1);   // ママの絵は左向き
       g.rotation.z = e.type === "mama" && Math.hypot(e.vel.x, e.vel.z) > 0.2 ? Math.sin(e.t * 9) * 0.05 : 0;   // てくてく揺れる
       const appear = e.spawn > 0 ? Math.max(0.05, 1 - e.spawn / 1.0) : 1;
-      const squash = e.hurt > 0 ? 0.88 : 1;
-      g.scale.set(face * (2 - squash) * appear, squash * appear, 1);
+      const squash = e.hurt > 0 ? 0.88 : 1, big = e.elite ? 1.3 : 1;   // 強い虫は大きく、足元が光る
+      g.scale.set(face * (2 - squash) * appear * big, squash * appear * big, 1);
+      if (e.elite) {
+        const a = this.sprite("aura", nAura++, () => new THREE.SpriteMaterial({ map: this.glow, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+        const r = ENEMY_H[e.type] * 1.5 * (1 + Math.sin(world.time * 6 + e.id) * 0.08);
+        a.position.set(e.pos.x, ENEMY_H[e.type] * 0.5, e.pos.z - 0.05); a.scale.set(r, r, 1); a.material.color.set(ELITE_INFO[e.elite].color); a.material.opacity = 0.85 * appear;
+      }
       const mat = (g.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
       mat.color.set(e.type === "mama" ? (e.hurt > 0 ? 0xffe0e6 : 0xffffff) : e.spawn > 0 ? 0x888888 : e.hurt > 0 ? 0xff9999 : e.sticky > 0 ? 0xe6cf8a : e.wet > 0 ? 0xa8dcff : e.repel > 0 ? 0xc4f0b4 : e.slow > 0 ? 0xc9b6ff : 0xffffff);
       // 属性のしるし（頭の上に並べる）
@@ -253,7 +265,7 @@ export class GameView {
         s.position.set(e.pos.x + (k - (marks.length - 1) / 2) * 0.38, bob + ENEMY_H[e.type] * 0.95 + 0.25, e.pos.z - 0.2); s.scale.set(0.36, 0.36, 1);
       });
     }
-    this.hideRest("status", nStat);
+    this.hideRest("status", nStat); this.hideRest("aura", nAura);
     for (const [id, g] of this.enemyMeshes) if (!alive.has(id)) { this.scene.remove(g); this.enemyMeshes.delete(id); }
 
     // 弾: 猫の技はその絵（爪・牙・毛糸玉など）が、技ごとの動きで出る。虫の攻撃は縁取りのある玉。
@@ -361,6 +373,15 @@ export class GameView {
       const sign = this.sprite("sign", 0, () => new THREE.SpriteMaterial({ map: canvasTexture(signCanvas()), transparent: true, depthWrite: false }));
       sign.position.set(shop.pos.x, 2.0 + Math.sin(world.time * 2) * 0.05, shop.pos.z); sign.scale.set(1.9, 0.6, 1);
     } else this.hideRest("sign", 0);
+    // 特別な部屋の置き物（使ったものは薄く）
+    const al = world.room.altar;
+    if (al) {
+      const s = this.sprite("altar", 0, () => new THREE.SpriteMaterial({ transparent: true, depthWrite: false, alphaTest: 0.05 }));
+      const tex = this.altarTex(al.kind);
+      if (s.material.map !== tex) { s.material.map = tex; s.material.needsUpdate = true; }
+      s.center.set(0.5, 0); s.position.set(al.pos.x, 0.05 + (al.used && al.kind !== "fusion" ? 0 : Math.abs(Math.sin(world.time * 2.5)) * 0.15), al.pos.z);
+      s.scale.set(1.7, 1.7, 1); s.material.opacity = al.used && al.kind !== "fusion" ? 0.45 : 1;
+    } else this.hideRest("altar", 0);
 
     // エフェクト: 当たった技の絵・ダメージの数字・光
     let nHit = 0, nNum = 0, nFx = 0;

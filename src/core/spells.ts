@@ -3,7 +3,22 @@
 // 猫がおもちゃを振ると、スロットの技（爪・牙・毛糸玉など）が出る。技ごとに「動き」（飛ぶ・回る・ビーム…）が違い、
 // 修飾で強さ・大きさ・属性（おうちのもの属性）を足していく。
 
-export type SpellKind = "attack" | "modifier" | "multicast" | "trigger";
+export type SpellKind = "attack" | "modifier" | "multicast" | "trigger" | "duet";
+
+/**
+ * 修飾がかかる向き（Magicraft の右・左・両側・全体修飾）。
+ * right=右の技 / left=左の技 / both=左右の技（2つをいっしょに出す） / all=置いたおもちゃの全部の技（読まれない・やる気の最大が減る）。
+ */
+export type ModDir = "right" | "left" | "both" | "all";
+export const DIR_INFO: Record<ModDir, { arrow: string; label: string }> = {
+  right: { arrow: "▶", label: "右の技にかかる" },
+  left: { arrow: "◀", label: "左の技にかかる" },
+  both: { arrow: "◀▶", label: "左右の技にかかり、いっしょに出す" },
+  all: { arrow: "全", label: "このおもちゃの全部の技にかかる" },
+};
+
+/** 技のレア度（融合台で使う）。0 ふつう / 1 レア / 2 エピック / 3 伝説。 */
+export const SPELL_RAR_NAME = ["ふつう", "レア", "エピック", "伝説"];
 
 /** 技が当たったときに出す絵（描画側で使う）。 */
 export type TechFx = "claw" | "bite" | "hairball" | "hiss" | "swing" | "yarn" | "laser" | "pounce" | "punch" | "post" | "friend" | "roomba"
@@ -56,7 +71,7 @@ export interface ProjectileStats {
  * 召喚ごとに呼べる数の上限があり、上限で呼ぶと一番古い仲間が帰って新しい仲間に入れ替わる。
  * 左に置いた修飾・属性は、仲間の攻撃にそのままかかる（攻撃力・多段・属性・大きさ・速さ）。
  */
-/** 次（右隣）の技へ足し込む修飾。 */
+/** 技へ足し込む修飾（向きは SpellDef.dir）。 */
 export interface Modifier {
   damageMul?: number;
   damageAdd?: number;
@@ -86,6 +101,12 @@ export interface SpellDef {
   modifier?: Modifier;
   count?: number; // multicast: 右に続く技を何個同時に出すか
   limit?: number; // 召喚: 同時に出せる数
+  /** 修飾の向き（なければ右）。 */
+  dir?: ModDir;
+  /** つづけて系: 当たったときではなく、出てからこの秒数で右の技を出す。 */
+  timer?: number;
+  /** レア度（下の RAR で決める）。 */
+  rar?: number;
 }
 
 const base = (o: Partial<ProjectileStats> & { color: string; tech: TechFx }): ProjectileStats => ({
@@ -99,6 +120,7 @@ export const KIND_LABEL: Record<SpellKind, string> = {
   modifier: "修飾",
   multicast: "修飾",
   trigger: "修飾",
+  duet: "合体",
 };
 
 export const SPELLS: Record<string, SpellDef> = {
@@ -273,10 +295,67 @@ export const SPELLS: Record<string, SpellDef> = {
   },
   chain: {
     id: "chain", name: "つづけて", kind: "trigger", mana: 8, glyph: "連", color: "#d6336c",
-    desc: "右の技が当たった所から、さらに右の技を出す",
+    desc: "左の技が当たった所から、右の技を出す（例: ひっかき→つづけて→ぶんぶん＝当たった所でぶんぶん）",
+  },
+  hitoiki: {
+    id: "hitoiki", name: "ひと呼吸", kind: "trigger", mana: 6, glyph: "時", color: "#7048e8", timer: 0.45,
+    desc: "左の技が飛んで0.45秒たった所から、右の技を出す（当たらなくても出る）",
+  },
+  issho: {
+    id: "issho", name: "いっしょに", kind: "duet", mana: 10, glyph: "合", color: "#e8590c",
+    desc: "合体。左の技を右の技に混ぜて1つにする（左の攻撃力・多段・貫通・はね返り・範囲・属性を右の技に足す）",
+  },
+  // ---- 左・両側・全体の修飾 ----
+  okawari: {
+    id: "okawari", name: "おかわり", kind: "modifier", dir: "left", mana: 6, glyph: "皿", color: "#f76707",
+    desc: "左の技が同じ虫に＋1回当たり、攻撃力×1.15", modifier: { hitsAdd: 1, damageMul: 1.15 },
+  },
+  oikake: {
+    id: "oikake", name: "おいかけっこ", kind: "modifier", dir: "left", mana: 6, glyph: "追", color: "#1971c2",
+    desc: "左の技が虫を追いかける", modifier: { homing: 0.7 },
+  },
+  tsurutsuru: {
+    id: "tsurutsuru", name: "つるつるの床", kind: "modifier", dir: "left", mana: 5, glyph: "滑", color: "#0b7285",
+    desc: "ワックスがけの床。左の技が壁で2回はね返り、1.3倍遠くまで届く", modifier: { bounce: 2, lifeMul: 1.3 },
+  },
+  dryer: {
+    id: "dryer", name: "ドライヤー", kind: "modifier", dir: "both", mana: 10, glyph: "風", color: "#e64980",
+    desc: "左右の技が1.4倍速く・攻撃力＋2になり、2つをいっしょに出す", modifier: { speedMul: 1.4, damageAdd: 2 },
+  },
+  catnipBag: {
+    id: "catnipBag", name: "またたび袋", kind: "modifier", dir: "both", mana: 12, glyph: "袋", color: "#2b8a3e",
+    desc: "左右の技の攻撃力×1.3、2つをいっしょに出す", modifier: { damageMul: 1.3 },
+  },
+  kotatsu: {
+    id: "kotatsu", name: "こたつ布団", kind: "modifier", dir: "both", mana: 10, glyph: "炬", color: "#c2255c",
+    desc: "左右の技が大きく（×1.3）長くいる（×1.25）。2つをいっしょに出す", modifier: { sizeMul: 1.3, lifeMul: 1.25 },
+  },
+  maigofuda: {
+    id: "maigofuda", name: "迷子札", kind: "modifier", dir: "all", mana: 15, glyph: "札", color: "#868e96",
+    desc: "全体修飾。どこに置いても、このおもちゃの全部の技の攻撃力＋2（やる気の最大−15）", modifier: { damageAdd: 2 },
+  },
+  hidamari: {
+    id: "hidamari", name: "ひだまり", kind: "modifier", dir: "all", mana: 10, glyph: "陽", color: "#f59f00",
+    desc: "全体修飾。このおもちゃの全部の技が少し大きい（×1.15）（やる気の最大−10）", modifier: { sizeMul: 1.15 },
+  },
+  sensor: {
+    id: "sensor", name: "人感センサーライト", kind: "modifier", dir: "all", mana: 15, glyph: "感", color: "#fcc419",
+    desc: "全体修飾。このおもちゃの全部の技が少し虫を追う（やる気の最大−15）", modifier: { homing: 0.25 },
+  },
+  kezukuroi: {
+    id: "kezukuroi", name: "毛づくろい", kind: "modifier", dir: "all", mana: 20, glyph: "繕", color: "#d9480f",
+    desc: "全体修飾。このおもちゃの全部の技の攻撃力×1.15（やる気の最大−20）", modifier: { damageMul: 1.15 },
   },
 };
 
+/** レア度（書いていないものはふつう）。 */
+const RAR: Record<string, number> = {
+  hairball: 1, swing: 1, yarn: 1, laser: 1, pounce: 1, hammer: 1, shabon: 1, flash: 1, danbo: 1, korokoro: 1,
+  stare: 1, pushy: 1, kajikaji: 1, static: 1, spray: 1, double: 1, chain: 1, okawari: 1, oikake: 1, hitoiki: 1, hidamari: 1,
+  post: 2, kabocha: 2, roomba: 2, big: 2, kenko: 2, dryer: 2, catnipBag: 2, kotatsu: 2, maigofuda: 2, sensor: 2,
+  friend: 3, issho: 3, kezukuroi: 3,
+};
+for (const d of Object.values(SPELLS)) d.rar = RAR[d.id] ?? 0;
 export const SPELL_IDS = Object.keys(SPELLS);
 
 /** 説明欄に出す数値（ラベル・値）。Magicraft の魔法説明のように、選ぶ判断に使う数字をそろえて見せる。 */
@@ -300,6 +379,7 @@ export function spellStats(def: SpellDef): [string, string][] {
     if (p.knock >= 3) out.push(["はじき飛ばし", "あり"]);
     if (p.bounce) out.push(["はね返り", `${p.bounce}回`]);
     if (p.element !== "none") out.push(["属性", ELEMENT_INFO[p.element].name]);
+    out.push(["レア度", SPELL_RAR_NAME[def.rar ?? 0]]);
     return out;
   }
   out.push(["やる気", `${def.mana}`]);
@@ -315,7 +395,11 @@ export function spellStats(def: SpellDef): [string, string][] {
   if (m?.slowAdd) out.push(["すくみ", `＋${m.slowAdd}秒`]);
   if (m?.lifeMul) out.push(["とどく距離", `×${m.lifeMul}`]);
   if (def.kind === "multicast") out.push(["同時に出す", `右の${def.count}つ`]);
-  if (def.kind === "trigger") out.push(["命中で", "さらに右の技"]);
+  if (def.kind === "trigger") out.push(def.timer ? ["出てから", `${def.timer}秒で右の技`] : ["左の技が当たると", "そこから右の技"]);
+  if (def.kind === "duet") out.push(["合体", "左の技＋右の技 → 1つ"]);
+  if (def.kind === "modifier") out.push(["かかる向き", `${DIR_INFO[def.dir ?? "right"].arrow} ${DIR_INFO[def.dir ?? "right"].label}`]);
+  if (def.dir === "all") out[0] = ["やる気の最大", `−${def.mana}`];
+  out.push(["レア度", SPELL_RAR_NAME[def.rar ?? 0]]);
   return out;
 }
 
@@ -353,3 +437,6 @@ export function spellDef(id: string): SpellDef {
   starred.set(id, d);
   return d;
 }
+
+/** 技のレア度（★はもとの技と同じ）。 */
+export const rarOf = (id: string) => SPELLS[baseId(id)]?.rar ?? 0;

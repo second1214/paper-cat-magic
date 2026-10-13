@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Cell, cellAt, cellCenter, reach } from "../src/game/stage";
 import { ROOMS_PER_ACT, World } from "../src/game/world";
 import { NO_META } from "../src/core/meta";
+import { rarOf } from "../src/core/spells";
 
 /** 目標のマスへ向かう1歩の方向（壁・家具を避けた最短路）。 */
 function stepToward(w: World, target: { x: number; z: number }) {
@@ -33,10 +34,12 @@ describe("playthrough", () => {
       if (++roomSteps > 30 * 240) throw new Error(`stuck in ${w.title} ${JSON.stringify({ p: w.player.pos, e: w.enemies.map((e) => [e.type, e.pos, e.hp, e.spawn]), m: w.player.mana, cur: w.player.cursor })}`);
       if (w.phase === "reward") { w.takeReward(w.choices[0]); continue; }
       if (w.phase === "shop") { w.shop!.items.forEach((_, i) => w.buy(i)); w.closeShop(); continue; }
+      if (w.phase === "bench") { while (w.fusable().length) { const r = w.fusable()[0]; w.fuse(w.bag.map((id, i) => [id, i] as const).filter(([id]) => rarOf(id) === r).slice(0, 4).map(([, i]) => i)); } w.closeShop(); continue; }
       expect(w.phase).toBe("play");
       const foe = w.nearestEnemy(w.player.pos);
       const door = w.room.doors[rooms % w.room.doors.length];
-      const target = w.doorOpen ? door.pos : foe?.pos;
+      const al = w.room.altar;
+      const target = al && !al.used && al.kind !== "fusion" ? al.pos : w.doorOpen ? door.pos : foe?.pos;
       const move = target ? stepToward(w, target) : { x: 0, z: 0 };
       w.update(dt, { move, aim: null, fire: !!foe, dash: false });
       const L = w.room.layout;
