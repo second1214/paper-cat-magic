@@ -7,9 +7,14 @@ const canvas = document.getElementById("game") as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
 let world = new World(Number(params.get("seed")) || Date.now() % 100000);
 const view = new GameView(canvas);
-const hud = new Hud(() => world, () => { world = new World(Date.now() % 100000); world.start(); hud.bagOpen = false; });
+const hud = new Hud(
+  () => world,
+  () => { world = new World(Date.now() % 100000); world.start(); hud.bagOpen = false; },
+  () => { world = new World(Date.now() % 100000); },
+);
 const controls = new Controls(canvas, document.getElementById("stick")!, document.getElementById("atkBtn")!, document.getElementById("dashBtn")!);
 controls.onToggleBag = () => hud.toggleBag();
+controls.onPause = () => hud.togglePause();
 
 const fit = () => view.resize(innerWidth, innerHeight);
 addEventListener("resize", fit); fit();
@@ -21,7 +26,7 @@ let last = performance.now();
 function frame(now: number) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   const input = controls.read(view.camera, world.player.pos);
-  if (!hud.bagOpen) world.update(dt, input);
+  if (!hud.bagOpen && !hud.paused) world.update(dt, input);
   view.render(world, dt);
   hud.update();
   requestAnimationFrame(frame);

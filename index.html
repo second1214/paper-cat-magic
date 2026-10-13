@@ -23,7 +23,10 @@
       #manaFill { height: 100%; background: linear-gradient(90deg, #3fa7ff, #9fd8ff); }
       #roomBox { top: 8px; right: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
       #room { color: #fff; font-weight: 700; background: #0006; padding: 4px 12px; border-radius: 999px; font-size: 14px; }
-      #bagBtn { pointer-events: auto; font-weight: 700; }
+      #roomBox .row { display: flex; gap: 6px; }
+      #bagBtn, #pauseBtn { pointer-events: auto; font-weight: 700; }
+      #pauseBtn { width: 40px; padding: 8px 0; }
+      body.titling #status, body.titling #slots, body.titling #roomBox, body.titling #help, body.titling .tbtn, body.titling #hint { visibility: hidden; }
       #slots { left: 50%; top: 6px; transform: translateX(-50%); display: flex; align-items: flex-start; gap: 8px; background: #0007; padding: 6px 10px 2px; border-radius: 14px; }
       #slots .toyIcon { width: 40px; height: 40px; margin-top: 3px; }
       #slots .rest { color: #ffd8a8; font-size: 11px; align-self: center; }
@@ -97,6 +100,32 @@
       .example { display: flex; gap: 12px; align-items: center; font-size: 12px; margin: 6px 0; }
       .example .cell { pointer-events: none; }
 
+      /* タイトル */
+      #intro { background: radial-gradient(ellipse at center, #2b243388 0%, #1c1622ee 75%); }
+      .title { display: flex; flex-direction: column; align-items: center; gap: 10px; color: #fff; text-align: center; width: min(560px, 100%); }
+      .logo { font-size: clamp(28px, 7vw, 46px); font-weight: 900; letter-spacing: 1px; line-height: 1.1; color: #fff4dc;
+        text-shadow: 0 3px 0 #e8772b, 0 6px 0 #6b3a1a, 0 10px 18px #0008; }
+      .logo small { display: block; font-size: 0.42em; color: #ffd8a8; text-shadow: 0 2px 0 #6b3a1a; margin-bottom: 4px; letter-spacing: 3px; }
+      .hero { display: flex; align-items: flex-end; justify-content: center; gap: 6px; height: clamp(110px, 26vh, 210px); }
+      .hero img { height: 100%; width: auto; filter: drop-shadow(0 6px 8px #0007); }
+      .hero .mom { height: 82%; }
+      .menu { display: flex; flex-direction: column; gap: 8px; width: min(260px, 80vw); }
+      .menu button { font-size: 17px; font-weight: 800; padding: 10px; margin: 0; }
+      .record { font-size: 12px; color: #fffc; background: #0006; border-radius: 999px; padding: 4px 12px; }
+      .record b { color: #ffd43b; }
+      .back { margin-top: 10px; }
+      .pausePanel { width: min(360px, 100%); } .pausePanel .menu { margin: 10px auto 4px; }
+      #result .menu { flex-direction: row; justify-content: center; width: auto; margin-top: 8px; }
+      #result .menu button { font-size: 15px; padding: 8px 18px; }
+
+      /* ずかん */
+      .zgroups { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+      .zgroup { margin-bottom: 2px; }
+      .zukan .boardHead .back { margin: 0 0 0 auto; padding: 4px 14px; }
+      .ztitle { font-size: 12px; font-weight: 800; color: var(--muted); margin-bottom: 3px; }
+      .zcells { display: flex; flex-wrap: wrap; gap: var(--gap); }
+      .cell.toy { border-color: #9c36b5; }
+
       /* おもちゃの編集 */
       .edit { display: grid; grid-template-columns: 240px 1fr; gap: 14px; align-items: start; text-align: left; }
       .boardHead { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 8px; }
@@ -127,6 +156,11 @@
         .rules p { font-size: 11.5px; line-height: 1.45; } .howto { font-size: 11.5px; }
         .edit { grid-template-columns: 200px 1fr; gap: 10px; }
         .go, .close, .skip, .again { margin-top: 6px; padding: 6px 16px; }
+        .title { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 6px 18px; width: min(820px, 100%); }
+        .logo { width: 100%; font-size: 30px; }
+        .hero { height: 46vh; } .menu { width: 220px; } .menu button { padding: 7px; font-size: 15px; }
+        .record { width: 100%; max-width: max-content; }
+        .zgroup { margin-bottom: 3px; } .ztitle { font-size: 11px; }
       }
       @media (max-width: 700px) {
         .intro .cols, .edit { grid-template-columns: 1fr; }
@@ -140,7 +174,7 @@
     <div id="loading">読み込み中…</div>
     <div class="hud" id="status"><div id="hearts"></div><div id="manaWrap"><span>やる気</span><div id="mana"><div id="manaFill"></div></div><span id="manaNum"></span></div></div>
     <div class="hud" id="slots"></div>
-    <div class="hud" id="roomBox"><div id="room"></div><button id="bagBtn">おもちゃ</button></div>
+    <div class="hud" id="roomBox"><div id="room"></div><div class="row"><button id="bagBtn">おもちゃ</button><button id="pauseBtn" aria-label="一時停止">Ⅱ</button></div></div>
     <div class="hud" id="hint" hidden></div>
     <div class="hud" id="toast" hidden></div>
     <div class="hud" id="help">WASD 移動 ／ クリック長押し 攻撃 ／ J 自動で狙う<br />Space ダッシュ ／ Tab おもちゃ</div>
@@ -150,6 +184,7 @@
     <div class="overlay" id="reward" hidden></div>
     <div class="overlay" id="result" hidden></div>
     <div id="stick" hidden><div></div></div>
+    <div class="overlay" id="pause" hidden></div>
     <div class="overlay" id="intro" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
