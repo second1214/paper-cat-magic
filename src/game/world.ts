@@ -6,6 +6,7 @@
 import { planCast, starterToy, TOYS, type Shot, type ToyDef } from "../core/wand";
 import { SPELL_IDS, SPELLS, type Element, type Motion, type TechFx } from "../core/spells";
 import { makeRng, type Rng } from "../core/rng";
+import { GEAR, GEAR_IDS, NO_BONUS, RELIC_IDS, RELICS, totalBonus, type Bonus, type Gear } from "../core/items";
 import {
   BOSS_TEMPLATE, buildLayout, Cell, cellAt, cellCenter, cellValue, SEASON_NAME, SEASONS, TEMPLATES, THEME_NAME, THEMES,
   type Layout, type Season, type Theme,
@@ -104,15 +105,23 @@ export interface Player {
   target: number | null;
   /** ねこジャンプの残り秒（見た目用）。 */
   pounce: number;
+  /** ダッシュのあと攻撃力が上がっている残り秒（忍者猫セット）。 */
+  power: number;
 }
 
+/** 持っているおもちゃ。やる気と、次に使うスロットはおもちゃごと（Magicraft の杖と同じ）。 */
+export interface HeldToy { def: ToyDef; mana: number; cursor: number }
+export const MAX_TOYS = 3;
+
 /** 扉のごほうび。部屋をクリアすると受け取れる。 */
-export type RewardKind = "hp" | "mp" | "spell" | "toy" | "boss" | "next";
+export type RewardKind = "hp" | "mp" | "spell" | "toy" | "relic" | "gear" | "boss" | "next";
 export const REWARD_INFO: Record<RewardKind, { icon: string; label: string; color: string }> = {
   hp: { icon: "♥", label: "最大HP アップ", color: "#ff5f7e" },
   mp: { icon: "⚡", label: "やる気 アップ", color: "#3fa7ff" },
   spell: { icon: "★", label: "技・修飾をもらう", color: "#ffb52e" },
   toy: { icon: "🧸", label: "おもちゃをもらう", color: "#c77dff" },
+  relic: { icon: "◆", label: "レリックをもらう", color: "#20c997" },
+  gear: { icon: "👒", label: "装備をもらう", color: "#f783ac" },
   boss: { icon: "☠", label: "ボス", color: "#e03131" },
   next: { icon: "➜", label: "次の季節へ", color: "#2f9e44" },
 };
@@ -138,7 +147,7 @@ export interface Room {
 
 export type Phase = "intro" | "play" | "reward" | "dead" | "win";
 
-export type Choice = { kind: "spell"; id: string } | { kind: "toy"; id: string };
+export type Choice = { kind: "spell" | "toy" | "relic" | "gear"; id: string };
 
 export interface Input {
   move: Vec;
@@ -156,8 +165,17 @@ export class World {
   time = 0;
   phase: Phase = "intro";
   player: Player;
-  toy: ToyDef;
+  /** 持っているおもちゃ（最大3つ）と、今使っているもの。 */
+  toys: HeldToy[];
+  cur = 0;
   bag: string[] = [];
+  relics: string[] = [];
+  gear: Gear = { hat: null, body: null, collar: null };
+  /** レリックと装備の効果の合計。 */
+  bonus: Bonus = NO_BONUS;
+  /** ごほうびで上がった分（新しいおもちゃにも引き継ぐ）。 */
+  private manaUp = { max: 0, regen: 0 };
+  private baseMaxHp = 6;
   enemies: Enemy[] = [];
   projectiles: Projectile[] = [];
   fx: Fx[] = [];
@@ -174,17 +192,44 @@ export class World {
 
   constructor(seed = 1) {
     this.rng = makeRng(seed);
-    this.toy = starterToy();
+    const first = starterToy();
+    this.toys = [{ def: first, mana: first.manaMax, cursor: 0 }];
     this.bag = ["swing", "water", "static"];
     this.player = {
       pos: { x: 0, z: 0 }, vel: { x: 0, z: 0 }, hp: 6, maxHp: 6, radius: 0.32,
       aim: { x: 1, z: 0 }, facing: 1, iframes: 0, dash: 0, dashCd: 0, hurt: 0,
-      mana: this.toy.manaMax, cursor: 0, castCd: 0, recharging: false, target: null, pounce: 0,
+      mana: first.manaMax, cursor: 0, castCd: 0, recharging: false, target: null, pounce: 0, power: 0,
     };
     this.enterRoom(0, 0, null);
   }
 
   start() { if (this.phase === "intro") this.phase = "play"; }
+
+  /** 今使っているおもちゃ。 */
+  get toy(): ToyDef { return this.toys[this.cur].def; }
+  /** やる気の最大（おもちゃ＋レリック・装備）。 */
+  manaMaxOf(t: ToyDef) { return t.manaMax + this.bonus.manaMax; }
+  get manaMax() { return this.manaMaxOf(this.toy); }
+
+  /** おもちゃを持ち替える（やる気・次のスロットはおもちゃごとに覚えておく）。 */
+  switchToy(i: number) {
+    if (i === this.cur || i < 0 || i >= this.toys.length || this.phase !== "play") return;
+    const p = this.player, now = this.toys[this.cur];
+    now.mana = p.mana; now.cursor = p.cursor;
+    this.cur = i;
+    p.mana = this.toys[i].mana; p.cursor = this.toys[i].cursor;
+    p.castCd = Math.max(p.castCd, 0.15); p.recharging = false;
+    this.events.push("switch");
+  }
+
+  /** レリック・装備を変えたら効果を計算し直す。 */
+  private recalc() {
+    this.bonus = totalBonus(this.relics, this.gear);
+    const p = this.player, before = p.maxHp;
+    p.maxHp = this.baseMaxHp + this.bonus.maxHp;
+    p.hp = Math.min(p.maxHp, p.hp + Math.max(0, p.maxHp - before));
+    p.mana = Math.min(p.mana, this.manaMax);
+  }
 
   get title() {
     const r = this.room;
@@ -217,7 +262,7 @@ export class World {
       : Array.from({ length: waveCount }, () => Array.from({ length: 3 + index + act }, () => this.rng.pick(pool)));
 
     // 次の扉のごほうび（重ならないように）
-    const kinds: RewardKind[] = ["hp", "mp", "spell", "spell", "toy"];
+    const kinds: RewardKind[] = ["hp", "mp", "spell", "spell", "toy", "relic", "gear"];
     const used = new Set<RewardKind>();
     const doors: Door[] = layout.exits.map((e) => {
       let k: RewardKind;
@@ -277,18 +322,23 @@ export class World {
     p.hurt = Math.max(0, p.hurt - dt);
     p.dashCd = Math.max(0, p.dashCd - dt);
     p.pounce = Math.max(0, p.pounce - dt);
-    p.mana = Math.min(toy.manaMax, p.mana + toy.manaRegen * dt);
+    p.power = Math.max(0, p.power - dt);
+    const B = this.bonus, still = Math.hypot(input.move.x, input.move.z) < 0.1 ? 1 + B.stillRegen : 1;
+    p.mana = Math.min(this.manaMax, p.mana + toy.manaRegen * B.regenMul * still * dt);
+    // 持っているだけのおもちゃも、やる気は戻る
+    this.toys.forEach((h, i) => { if (i !== this.cur) h.mana = Math.min(this.manaMaxOf(h.def), h.mana + h.def.manaRegen * B.regenMul * dt); });
 
     let mv = input.move;
     const len = Math.hypot(mv.x, mv.z);
     if (len > 1) mv = { x: mv.x / len, z: mv.z / len };
     if (input.dash && p.dashCd <= 0) {
       const dir = len > 0.1 ? norm(mv) : { x: p.facing, z: 0 };
-      p.dash = 0.18; p.dashCd = 0.7; p.iframes = Math.max(p.iframes, 0.3);
+      p.dash = 0.18; p.dashCd = 0.7 * B.dashCdMul; p.iframes = Math.max(p.iframes, 0.3);
+      if (B.dashPower) p.power = B.dashPower;
       p.vel = { x: dir.x * 13, z: dir.z * 13 };
       this.fx.push({ kind: "puff", pos: { ...p.pos }, radius: 0.5, color: "#ffffff", t: 0, life: 0.35 });
     }
-    const speed = p.dash > 0 ? 13 : 5.2;
+    const speed = p.dash > 0 ? 13 : 5.2 * B.speedMul;
     p.dash = Math.max(0, p.dash - dt);
     if (p.dash <= 0) {
       const k = Math.min(1, dt * 14);
@@ -347,7 +397,13 @@ export class World {
   }
 
   fire(shot: Shot, from: Vec, dir: Vec, owner: "player" | "enemy", angleOffset = 0) {
-    const s = shot.stats, L = this.room.layout;
+    const L = this.room.layout;
+    let s = shot.stats;
+    if (owner === "player") {
+      // レリック・装備: 攻撃力・とどく距離
+      const B = this.bonus, moving = s.motion === "shot" || (s.motion === "beam" && s.speed > 0);
+      s = { ...s, damage: s.damage * B.dmgMul * (this.player.power > 0 ? 1.5 : 1), life: moving ? s.life * B.rangeMul : s.life };
+    }
     const a = Math.atan2(dir.z, dir.x) + (s.motion === "orbit" ? 0 : angleOffset) + (this.rng.next() - 0.5) * 2 * s.spread;
     const d = { x: Math.cos(a), z: Math.sin(a) };
     const pr: Projectile = {
@@ -373,7 +429,7 @@ export class World {
       if (s.tech !== "roomba") pr.vel = { x: 0, z: 0 };
       // 上限で呼ぶと一番古い仲間が帰る（Magicraft の召喚上限）
       const mine = this.projectiles.filter((q) => q.motion === "summon" && q.tech === s.tech);
-      const limit = SUMMON_LIMIT[s.tech] ?? 1;
+      const limit = (SUMMON_LIMIT[s.tech] ?? 1) + this.bonus.summonAdd;
       if (mine.length >= limit) {
         const old = mine[0];
         this.fx.push({ kind: "puff", pos: { ...old.pos }, radius: 0.6, color: "#ffffff", t: 0, life: 0.4 });
@@ -492,7 +548,11 @@ export class World {
   private hurtPlayer(n: number, from: Vec) {
     const p = this.player;
     if (p.iframes > 0) return;
-    p.hp -= n; p.iframes = 1.0; p.hurt = 0.45;
+    if (this.bonus.guard && this.rng.next() < this.bonus.guard) {   // 騎士猫: 当たりを防ぐ
+      p.iframes = 0.5; this.fx.push({ kind: "puff", pos: { ...p.pos }, radius: 0.6, color: "#dee2e6", t: 0, life: 0.35 });
+      this.notify("ふせいだ！"); return;
+    }
+    p.hp -= n; p.iframes = 1.0 + this.bonus.iframes; p.hurt = 0.45;
     const away = norm({ x: p.pos.x - from.x, z: p.pos.z - from.z });
     p.vel = { x: away.x * 9, z: away.z * 9 };
     this.events.push("hurt");
@@ -600,7 +660,10 @@ export class World {
       this.fx.push({ kind: "puff", pos: { ...e.pos }, radius: e.radius * 2, color: "#ffffff", t: 0, life: 0.5 });
       return false;
     });
-    if (this.enemies.length < before) this.events.push("kill");
+    if (this.enemies.length < before) {
+      this.events.push("kill");
+      if (this.bonus.killMana) this.player.mana = Math.min(this.manaMax, this.player.mana + this.bonus.killMana * (before - this.enemies.length));
+    }
   }
 
   /** 召喚した仲間の動き。ルンバは壁ではね返りながら走る。友達猫は近くの虫を追ってひっかく（いなければ猫のそばへ）。 */
@@ -645,12 +708,12 @@ export class World {
     if (mark) this.fx.push({ kind: "tech", tech: h.tech, pos: { ...e.pos }, radius: 0.55, color: h.color, t: 0, life: 0.3 });
     if (h.knock) { const k = h.knock * (e.type === "hornet" ? 0.15 : 1); e.push.x += dir.x * k; e.push.z += dir.z * k; }
     switch (h.element) {
-      case "wet": e.wet = 4; break;
-      case "sticky": e.sticky = e.type === "hornet" ? 0.6 : 1.6; break;
-      case "repel": e.repelDps = Math.max(e.repel > 0 ? e.repelDps : 0, 2 + dmg * 0.4); e.repel = 3; break;
+      case "wet": e.wet = 4 * this.bonus.elemMul; break;
+      case "sticky": e.sticky = (e.type === "hornet" ? 0.6 : 1.6) * this.bonus.elemMul; break;
+      case "repel": e.repelDps = Math.max(e.repel > 0 ? e.repelDps : 0, 2 + dmg * 0.4); e.repel = 3 * this.bonus.elemMul; break;
       case "static": {
         // 近くの虫へ飛び移る（びしょぬれなら2倍・4匹）
-        const n = e.wet > 0 ? 4 : 2;
+        const n = (e.wet > 0 ? 4 : 2) + this.bonus.zapAdd;
         const near = this.enemies.filter((q) => q !== e && q.spawn <= 0 && q.hp > 0 && dist(q.pos, e.pos) < 3.5)
           .sort((a, b) => dist(a.pos, e.pos) - dist(b.pos, e.pos)).slice(0, n);
         for (const q of near) {
@@ -682,19 +745,33 @@ export class World {
     this.projectiles = this.projectiles.filter((p) => p.owner === "player");
     this.events.push("clear");
     const p = this.player;
-    if (r.kind === "boss") { p.hp = p.maxHp; this.offer("spell"); return; }
+    if (this.bonus.clearHeal) p.hp = Math.min(p.maxHp, p.hp + this.bonus.clearHeal);
+    if (r.kind === "boss") { p.hp = p.maxHp; this.offer("relic"); return; }
     const reward = r.reward;
-    if (reward === "hp") { p.maxHp += 2; p.hp = Math.min(p.maxHp, p.hp + 2); this.notify("最大HP ＋1♥"); }
-    else if (reward === "mp") { this.toy.manaMax += 20; this.toy.manaRegen += 4; p.mana = this.toy.manaMax; this.notify("やる気 最大＋20・回復＋4"); }
-    else if (reward === "spell" || reward === "toy") { this.offer(reward); return; }
+    if (reward === "hp") { this.baseMaxHp += 2; p.maxHp += 2; p.hp = Math.min(p.maxHp, p.hp + 2); this.notify("最大HP ＋1♥"); }
+    else if (reward === "mp") {
+      this.manaUp.max += 20; this.manaUp.regen += 4;
+      for (const h of this.toys) { h.def.manaMax += 20; h.def.manaRegen += 4; h.mana = this.manaMaxOf(h.def); }
+      p.mana = this.manaMax; this.notify("やる気 最大＋20・回復＋4（全部のおもちゃ）");
+    }
+    else if (reward === "spell" || reward === "toy" || reward === "relic" || reward === "gear") { this.offer(reward); return; }
     this.doorOpen = true;
   }
 
-  private offer(kind: "spell" | "toy") {
+  private offer(kind: "spell" | "toy" | "relic" | "gear") {
+    const n = 3 + this.bonus.choiceAdd;
     if (kind === "toy") {
-      const toys = Object.keys(TOYS).filter((t) => t !== this.toy.id);
-      this.choices = toys.map((id): Choice => ({ kind: "toy", id }));
-    } else this.choices = pickN(this.rng, SPELL_IDS, 3).map((id): Choice => ({ kind: "spell", id }));
+      const held = new Set(this.toys.map((h) => h.def.id));
+      const left = Object.keys(TOYS).filter((t) => !held.has(t));
+      this.choices = (left.length ? left : Object.keys(TOYS)).map((id): Choice => ({ kind: "toy", id }));
+    } else if (kind === "relic") {
+      const left = RELIC_IDS.filter((r) => !this.relics.includes(r));
+      if (!left.length) { this.offer("spell"); return; }
+      this.choices = pickN(this.rng, left, n).map((id): Choice => ({ kind: "relic", id }));
+    } else if (kind === "gear") {
+      const left = GEAR_IDS.filter((g) => this.gear[GEAR[g].slot] !== g);
+      this.choices = pickN(this.rng, left, n).map((id): Choice => ({ kind: "gear", id }));
+    } else this.choices = pickN(this.rng, SPELL_IDS, n).map((id): Choice => ({ kind: "spell", id }));
     this.phase = "reward";
   }
 
@@ -704,34 +781,41 @@ export class World {
   takeReward(c: Choice | null) {
     if (this.phase !== "reward") return;
     if (c?.kind === "spell") this.bag.push(c.id);
-    if (c?.kind === "toy") this.equipToy(c.id);
+    if (c?.kind === "toy") this.addToy(c.id);
+    if (c?.kind === "relic") { this.relics.push(c.id); this.recalc(); this.notify(`${RELICS[c.id].name} を手に入れた`); }
+    if (c?.kind === "gear") { this.gear[GEAR[c.id].slot] = c.id; this.recalc(); this.notify(`${GEAR[c.id].name} を装備した`); }
     this.choices = [];
     this.phase = "play";
     this.doorOpen = true;
   }
 
-  /** おもちゃを持ち替える。はめていた技は左から詰め直し、あふれた分は手持ちへ。やる気アップは引き継ぐ。 */
-  equipToy(id: string) {
-    const old = this.toy.slots.filter((s): s is string => !!s);
-    const base = TOYS[this.toy.id];
-    const bonusMax = this.toy.manaMax - base.manaMax, bonusRegen = this.toy.manaRegen - base.manaRegen;
+  /** 新しいおもちゃ: 3つまでは追加で持つ。いっぱいなら今のおもちゃと交換（はめていた技は左から詰め直し、あふれた分は手持ちへ）。 */
+  addToy(id: string) {
     const t = structuredClone(TOYS[id]);
-    t.manaMax += bonusMax; t.manaRegen += bonusRegen;
+    t.manaMax += this.manaUp.max; t.manaRegen += this.manaUp.regen;
+    if (this.toys.length < MAX_TOYS) {
+      this.toys.push({ def: t, mana: this.manaMaxOf(t), cursor: 0 });
+      this.notify(`${t.name} を持った（${this.toys.length}つ目）`);
+      return;
+    }
+    const old = this.toy.slots.filter((s): s is string => !!s);
     t.slots = t.slots.map((_, i) => old[i] ?? null);
     this.bag.push(...old.slice(t.slots.length));
-    this.toy = t;
+    this.toys[this.cur] = { def: t, mana: Math.min(this.player.mana, this.manaMaxOf(t)), cursor: 0 };
     this.player.cursor = 0;
-    this.player.mana = Math.min(this.player.mana, t.manaMax);
+    this.player.mana = this.toys[this.cur].mana;
   }
 
-  /** 置き場所どうしで入れ替える（スロット⇔スロット、スロット⇔手持ち、手持ち⇔手持ち）。 */
-  move(from: { where: "slot" | "bag"; i: number }, to: { where: "slot" | "bag"; i: number }) {
-    const get = (p: typeof from) => (p.where === "slot" ? this.toy.slots[p.i] : this.bag[p.i]) ?? null;
-    const set = (p: typeof from, v: string | null) => { if (p.where === "slot") this.toy.slots[p.i] = v; else this.bag[p.i] = v as string; };
+  /** 置き場所どうしで入れ替える（スロット⇔スロット、スロット⇔手持ち、手持ち⇔手持ち）。toy は編集しているおもちゃの番号。 */
+  move(from: { where: "slot" | "bag"; i: number }, to: { where: "slot" | "bag"; i: number }, toy = this.cur) {
+    const slots = this.toys[toy].def.slots;
+    const get = (p: typeof from) => (p.where === "slot" ? slots[p.i] : this.bag[p.i]) ?? null;
+    const set = (p: typeof from, v: string | null) => { if (p.where === "slot") slots[p.i] = v; else this.bag[p.i] = v as string; };
     const a = get(from), b = get(to);
     set(from, b); set(to, a);
     this.bag = this.bag.filter(Boolean);
-    this.player.cursor = 0;
+    this.toys[toy].cursor = 0;
+    if (toy === this.cur) this.player.cursor = 0;
   }
 
   // ---------- 当たり判定 ----------
