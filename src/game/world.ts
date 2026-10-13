@@ -4,7 +4,7 @@
 // 構成（Magicraft 風）: 季節ごとの「章」= 部屋8つ＋ボス。部屋を片付けると出口が2〜3個開き、
 // 扉の上のアイコンで「次の部屋をクリアしたときのごほうび」（または特別な部屋）を選んで進む。
 import { castAll, MAX_BATT, passiveCost, planCast, starterToy, TOYS, type Shot, type ToyDef } from "../core/wand";
-import { MAX_STARS, rarOf, SPELL_IDS, SPELLS, spellDef, starsOf, type Element, type Motion, type TechFx } from "../core/spells";
+import { MAX_STARS, rarOf, SPELL_IDS, SPELLS, spellDef, starsOf, type Element, type Motion, type ProjectileStats, type TechFx, type TriggerOn } from "../core/spells";
 import { CURSE_IDS, CURSES, curseBonus } from "../core/curses";
 import { makeRng, type Rng } from "../core/rng";
 import { addBonus, GEAR, GEAR_IDS, NO_BONUS, RELIC_IDS, RELICS, rollGear, totalBonus, type Bonus, type Gear, type GearItem, type Rarity } from "../core/items";
@@ -137,7 +137,15 @@ export interface Projectile {
   anchor: Vec | null;
   /** ひと呼吸: この秒数で payload を出す（0 なら当たったとき）。 */
   payloadAt: number;
+  /** payload を出すきっかけと、何度でも の次に出せる時刻。 */
+  trig: TriggerOn;
+  trigNext: number;
+  /** 消えるときに割れる数。 */
+  split: number;
 }
+
+/** 画面を埋め尽くしても重くならないよう、猫の技が同時に出ていられる数。 */
+export const MAX_PLAYER_SHOTS = 400;
 
 /** 当たったときの性質（遅れて当たる多段にも使う）。 */
 interface HitInfo { slow: number; element: Element; tech: TechFx; color: string; knock: number }
@@ -475,6 +483,12 @@ export class World {
         const w: EnemyType[] = Array.from({ length: per }, () => this.rng.pick(pool));
         return w.flatMap((t) => (t === "ant" ? [t, t] : [t]));   // アリは群れで来る
       });
+    // 虫の大群: 季節が進むと、弱い虫が20匹以上で押し寄せる波がまざる（連鎖で一掃する気持ちよさ）
+    if (!boss && !quiet && waves.length && (act >= 1 || index >= 4) && index >= 2 && this.rng.next() < 0.3 + act * 0.08) {
+      const weak = bugs.pool.reduce((a, b) => (ENEMY[a].hp <= ENEMY[b].hp ? a : b));
+      const n = Math.min(30, Math.round((90 + act * 40) / ENEMY[weak].hp));
+      waves[waves.length - 1] = Array.from({ length: Math.max(14, n) }, () => weak);
+    }
 
     // 次の扉のごほうび（重ならないように）。ときどき特別な部屋、章の真ん中では必ずお店を1つ
     const kinds: RewardKind[] = quiet ? ["hp", "mp", "spell", "toy", "relic", "gear"] : ["hp", "mp", "spell", "spell", "toy", "relic", "gear", "shop"];
@@ -531,6 +545,7 @@ export class World {
     const far = floors.filter((p) => dist(p, this.player.pos) > 7);
     // 強い虫: 強い虫の部屋は半分、ふつうの部屋はときどき1匹
     const wave = r.waves[r.wave];
+    if (wave.length >= 14) this.notify(`${ENEMY[wave[0]].name}の大群だ！`);
     const elite = new Set<number>();
     if (r.challenge) wave.forEach((_, k) => { if (k % 2 === 0) elite.add(k); });
     else if (this.rng.next() < this.eliteChance()) elite.add(Math.floor(this.rng.next() * wave.length));
@@ -670,13 +685,15 @@ export class World {
       if (input.fire && p.castCd <= 0) { this.fire({ stats: { ...SPELLS.punch.projectile!, damage: 0 }, payload: [] }, p.pos, p.aim, "player"); p.castCd = 0.3; this.events.push("cast"); }
     } else if (input.fire && p.castCd <= 0) {
       // 鈴入りボールは全部いっぺんに出す
-      const res = toy.castAll ? { ...castAll(toy, p.mana), nextCursor: 0, wrapped: true, fizzled: false } : planCast(toy, p.cursor, p.mana);
+      const budget = p.mana / B.manaCostMul;   // 自動給餌器: 消費が少ない
+      const res = toy.castAll ? { ...castAll(toy, budget), nextCursor: 0, wrapped: true, fizzled: false } : planCast(toy, p.cursor, budget);
       if (res.shots.length) {
-        p.mana -= res.manaUsed;
-        const extra = this.bonus.extraShot > 0 && this.rng.next() < this.bonus.extraShot;
+        p.mana = Math.min(this.manaMax, p.mana - res.manaUsed * B.manaCostMul);   // ちゅ〜る休憩は戻る
+        const extra = B.extraShot > 0 && this.rng.next() < B.extraShot;
         this.fireShots(extra ? [...res.shots, ...res.shots] : res.shots, p.aim);   // もう1発（少しずらして）
         p.cursor = res.nextCursor;
-        p.castCd = res.wrapped ? toy.recharge : toy.castDelay;
+        // 振る間隔・休けい（まっしぐら・キャットウォークで短く）
+        p.castCd = res.wrapped ? Math.max(0.08, (toy.recharge + res.rechargeAdd) * B.castMul) : Math.max(0.05, (toy.castDelay + res.delayAdd) * B.castMul);
         p.recharging = res.wrapped;
         this.events.push("cast");
       } else if (res.fizzled) {
@@ -824,9 +841,9 @@ export class World {
       h.mana = Math.min(this.manaMaxOf(h.def), h.mana + h.def.manaRegen * this.bonus.regenMul * dt);
       h.autoCd -= dt;
       if (h.autoCd > 0 || !t || this.room.kind === "final") continue;
-      const res = planCast(h.def, h.cursor, h.mana);
+      const res = planCast(h.def, h.cursor, h.mana / this.bonus.manaCostMul);
       if (!res.shots.length) { h.autoCd = 0.3; if (!res.fizzled) h.cursor = 0; continue; }
-      h.mana -= res.manaUsed; h.cursor = res.nextCursor;
+      h.mana = Math.min(this.manaMaxOf(h.def), h.mana - res.manaUsed * this.bonus.manaCostMul); h.cursor = res.nextCursor;
       h.autoCd = (h.def.auto ?? 2) + (res.wrapped ? h.def.recharge : 0);
       this.fireShots(res.shots, norm({ x: t.pos.x - p.pos.x, z: t.pos.z - p.pos.z }));
       this.events.push("cast");
@@ -874,6 +891,7 @@ export class World {
 
   fire(shot: Shot, from: Vec, dir: Vec, owner: "player" | "enemy", angleOffset = 0, anchored = false) {
     const L = this.room.layout;
+    if (owner === "player" && shot.stats.motion !== "summon" && this.projectiles.length >= MAX_PLAYER_SHOTS) return;   // 出すぎたら新しい分は出さない
     let s = shot.stats;
     if (owner === "player") {
       // レリック・装備: 攻撃力・とどく距離
@@ -888,7 +906,7 @@ export class World {
       explode: s.explode, slow: s.slow, color: s.color, tech: s.tech, payload: shot.payload,
       motion: s.motion, hits: s.hits, hitEvery: s.hitEvery, reach: s.reach, element: s.element, knock: s.knock,
       t: 0, life0: s.life, origin: { ...from }, ang: a + angleOffset, angVel: s.speed, dir: d, hitLog: new Map(), payloadDone: false, cd: 0,
-      anchor: anchored ? { ...from } : null, payloadAt: shot.timer ?? 0,
+      anchor: anchored ? { ...from } : null, payloadAt: shot.timer ?? 0, trig: shot.on ?? "hit", trigNext: 0, split: s.split ?? 0,
     };
     if (s.motion === "orbit") { pr.vel = { x: 0, z: 0 }; pr.pos = { x: from.x + Math.cos(pr.ang) * s.reach, z: from.z + Math.sin(pr.ang) * s.reach }; }
     if (s.motion === "ring" || s.motion === "melee") pr.vel = { x: 0, z: 0 };
@@ -1119,7 +1137,7 @@ export class World {
 
   private updateProjectiles(dt: number) {
     const keep: Projectile[] = [];
-    const spawned: { shot: Shot; pos: Vec; dir: Vec }[] = [];
+    const spawned: { shot: Shot; pos: Vec; dir: Vec; skip?: number[] }[] = [];
     const L = this.room.layout, p = this.player;
     const blocks = (x: number, z: number) => { const c = cellAt(L, x, z), v = cellValue(L, c.c, c.r); return v !== Cell.Floor; };
 
@@ -1184,13 +1202,17 @@ export class World {
           if (!touch) continue;
           pr.hitLog.set(e.id, { n: (rec?.n ?? 0) + (pr.motion === "shot" ? pr.hits : 1), next: pr.t + pr.hitEvery });
           if (pr.explode <= 0) this.hitEnemy(e, pr.damage, info, push);
+          const out = pr.motion === "shot" ? norm(pr.vel) : pr.dir;
+          const emit = () => { for (const s of pr.payload) spawned.push({ shot: s, pos: { ...e.pos }, dir: out }); };
+          // つづけて系: 当たったら（1回）／当たるたびに／倒したら
+          if (pr.payload.length && !pr.payloadAt) {
+            if (pr.trig === "kill") { if (e.hp <= 0) emit(); }
+            else if (pr.trig === "every") { if (pr.t >= pr.trigNext) { pr.trigNext = pr.t + 0.15; emit(); } }
+            else if (pr.trig === "hit" && (pr.motion === "shot" || pr.motion === "summon" || !pr.payloadDone)) { pr.payloadDone = true; emit(); }
+          }
           if (pr.motion === "shot") {
             for (let k = 1; k < pr.hits; k++) this.later.push({ t: k * pr.hitEvery, eid: e.id, dmg: pr.damage, info, dir: push }); // かじかじ: 食い込んで削る
-            if (pr.payload.length && !pr.payloadAt) for (const s of pr.payload) spawned.push({ shot: s, pos: { ...e.pos }, dir: norm(pr.vel) });
             if (pr.pierce > 0) pr.pierce--; else { dead = true; break; }
-          } else if ((pr.motion === "summon" || !pr.payloadDone) && pr.payload.length && !pr.payloadAt) {
-            pr.payloadDone = true;
-            for (const s of pr.payload) spawned.push({ shot: s, pos: { ...e.pos }, dir: pr.dir });
           }
         }
       }
@@ -1203,18 +1225,24 @@ export class World {
           if (hx || !hz) pr.vel.x *= -1;
           if (hz || !hx) pr.vel.z *= -1;
           pr.pos.x = ox; pr.pos.z = oz;
+          if (pr.trig === "bounce" && pr.owner === "player") for (const s of pr.payload) spawned.push({ shot: s, pos: { x: ox, z: oz }, dir: norm(pr.vel) });   // ぴょんぴょん
         } else dead = true;
       }
       if (dead) {
-        if (pr.owner === "player" && pr.explode > 0) this.explode(pr);
-        if (pr.owner === "player" && pr.payload.length && pr.hitLog.size === 0 && pr.motion === "shot" && !pr.payloadAt)
+        if (pr.owner === "player" && pr.explode > 0) this.explode(pr, spawned);
+        if (pr.owner === "player" && pr.payload.length && pr.hitLog.size === 0 && pr.motion === "shot" && !pr.payloadAt && pr.trig === "hit")
           for (const s of pr.payload) spawned.push({ shot: s, pos: { x: ox, z: oz }, dir: norm(pr.vel) });
+        if (pr.owner === "player" && pr.split > 0 && pr.motion === "shot") this.splitShot(pr, { x: ox, z: oz }, spawned, pr.hitLog.size === 0);
         continue;
       }
       keep.push(pr);
     }
     this.projectiles = keep;
-    for (const s of spawned) this.fire(s.shot, s.pos, s.dir, "player", 0, true);
+    for (const s of spawned) {
+      const n = this.projectiles.length;
+      this.fire(s.shot, s.pos, s.dir, "player", 0, true);
+      if (s.skip && this.projectiles.length > n) for (const id of s.skip) this.projectiles[n].hitLog.set(id, { n: 99, next: 1e9 });   // 割れた元の虫には当たらない
+    }
     const before = this.enemies.length, dead: Enemy[] = [];
     this.enemies = this.enemies.filter((e) => {
       if (e.hp > 0) return true;
@@ -1280,13 +1308,31 @@ export class World {
     this.fire({ stats: { ...enemyShot("#a9e34b", 0), radius: r, life: 2.6, tech: "gas" as TechFx }, payload: [] }, pos, { x: 1, z: 0 }, "enemy");
   }
 
-  private explode(pr: Projectile) {
+  /** 毛糸のほつれ: 消えた弾が、まわりへ割れて飛び散る（割れた弾はもう割れない）。 */
+  private splitShot(pr: Projectile, at: Vec, spawned: { shot: Shot; pos: Vec; dir: Vec; skip?: number[] }[], wall: boolean) {
+    // 虫に当たったら全方向へ（その虫には当たらない）、壁なら跳ね返る向きへ扇状に
+    const n = pr.split, back = Math.atan2(-pr.vel.z, -pr.vel.x), skip = [...pr.hitLog.keys()];
+    const stats: ProjectileStats = {
+      damage: (pr.damage * 0.5) / this.bonus.dmgMul, speed: Math.max(8, Math.hypot(pr.vel.x, pr.vel.z)), radius: pr.radius * 0.8, life: 0.55,
+      pierce: 0, bounce: 0, homing: pr.homing, explode: pr.explode * 0.6, slow: pr.slow, spread: 0, color: pr.color, tech: pr.tech,
+      motion: "shot", hits: 1, hitEvery: pr.hitEvery, reach: 0, element: pr.element, knock: pr.knock * 0.5, split: 0,
+    };
+    for (let k = 0; k < n; k++) {
+      const a = wall ? back + (n > 1 ? (k / (n - 1) - 0.5) * 2.1 : 0) : back + Math.PI + ((k + 0.5) / n) * Math.PI * 2;
+      spawned.push({ shot: { stats, payload: [] }, pos: { ...at }, dir: { x: Math.cos(a), z: Math.sin(a) }, skip });
+    }
+  }
+
+  private explode(pr: Projectile, spawned: { shot: Shot; pos: Vec; dir: Vec }[] = []) {
     this.fx.push({ kind: "tech", tech: pr.tech, pos: { ...pr.pos }, radius: pr.explode, color: pr.color, t: 0, life: 0.45 });
     const info: HitInfo = { slow: pr.slow, element: pr.element, tech: pr.tech, color: pr.color, knock: pr.knock };
     for (const e of this.enemies) {
-      if (e.spawn > 0 || isKid(e.type)) continue;
+      if (e.spawn > 0 || e.hp <= 0 || isKid(e.type)) continue;
       const d = dist(e.pos, pr.pos);
-      if (d < pr.explode + e.radius) this.hitEnemy(e, pr.damage * (1 - 0.4 * Math.min(1, d / pr.explode)), info, norm({ x: e.pos.x - pr.pos.x, z: e.pos.z - pr.pos.z }), false);
+      if (d < pr.explode + e.radius) {
+        this.hitEnemy(e, pr.damage * (1 - 0.4 * Math.min(1, d / pr.explode)), info, norm({ x: e.pos.x - pr.pos.x, z: e.pos.z - pr.pos.z }), false);
+        if (pr.trig === "kill" && e.hp <= 0) for (const s of pr.payload) spawned.push({ shot: s, pos: { ...e.pos }, dir: pr.dir });   // とどめ
+      }
     }
   }
 
@@ -1304,7 +1350,7 @@ export class World {
     const crit = this.bonus.crit > 0 && this.rng.next() < this.bonus.crit;
     if (crit) dmg *= 2;
     this.damageEnemy(e, dmg, h.slow, crit ? "#ffd43b" : "#ffffff");
-    if (mark) this.fx.push({ kind: "tech", tech: h.tech, pos: { ...e.pos }, radius: 0.55, color: h.color, t: 0, life: 0.3 });
+    if (mark && this.fx.length < 260) this.fx.push({ kind: "tech", tech: h.tech, pos: { ...e.pos }, radius: 0.55, color: h.color, t: 0, life: 0.3 });
     if (h.knock) { const k = h.knock * (isBoss(e.type) ? 0.15 : 1); e.push.x += dir.x * k; e.push.z += dir.z * k; }
     switch (h.element) {
       case "wet": e.wet = 4 * this.bonus.elemMul; break;
@@ -1328,7 +1374,7 @@ export class World {
     if (isKid(e.type)) return;
     e.hp -= dmg; e.hurt = 0.15;
     if (slow > 0) e.slow = Math.max(e.slow, slow);
-    this.fx.push({ kind: "num", value: Math.max(1, Math.round(dmg)), pos: { x: e.pos.x, z: e.pos.z }, radius: 0.5, color, t: 0, life: 0.7 });
+    if (this.fx.length < 260) this.fx.push({ kind: "num", value: Math.max(1, Math.round(dmg)), pos: { x: e.pos.x, z: e.pos.z }, radius: 0.5, color, t: 0, life: 0.7 });
   }
 
   private updateFx(dt: number) {
@@ -1530,7 +1576,7 @@ function makeEnemy(id: number, type: EnemyType, pos: Vec, act: number, difficult
 
 const enemyShot = (color: string, speed: number) => ({
   damage: 1, speed, radius: 0.16, life: 4, pierce: 0, bounce: 0, homing: 0, explode: 0, slow: 0, spread: 0.03, color, tech: "enemy" as TechFx,
-  motion: "shot" as Motion, hits: 1, hitEvery: 0.1, reach: 0, element: "none" as Element, knock: 0,
+  motion: "shot" as Motion, hits: 1, hitEvery: 0.1, reach: 0, element: "none" as Element, knock: 0, split: 0,
 });
 
 function pickN<T>(rng: Rng, arr: readonly T[], n: number): T[] {

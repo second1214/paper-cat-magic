@@ -116,6 +116,29 @@ describe("planCast", () => {
   });
 });
 
+describe("弾を増やす・速さ・やる気", () => {
+  it("ねこ団子は3つ、多頭飼いは4つ同時", () => {
+    expect(planCast(toy(["nekodango", "claw", "claw", "claw"]), 0, 999).shots).toHaveLength(3);
+    expect(planCast(toy(["tatougai", "claw", "claw", "claw", "claw"]), 0, 999).shots).toHaveLength(4);
+  });
+  it("ぶちまけは1発を5発に、重ねると掛け算（多頭飼い×ぶちまけ×ぶちまけ＝100発）", () => {
+    expect(planCast(toy(["butimake", "claw"]), 0, 999).shots).toHaveLength(5);
+    expect(planCast(toy(["butimake", "butimake", "claw"]), 0, 999).shots).toHaveLength(25);
+    const t = toy(["tatougai", "butimake", "butimake", "claw", "butimake", "butimake", "claw", "butimake", "butimake", "claw", "butimake", "butimake", "claw"]);
+    expect(planCast(t, 0, 999).shots).toHaveLength(100);
+  });
+  it("ほつれは割れる数、つづけて系は発動のきっかけを持つ", () => {
+    expect(planCast(toy(["hotsure", "claw"]), 0, 999).shots[0].stats.split).toBe(3);
+    expect(planCast(toy(["claw", "todome", "hairball"]), 0, 999).shots[0].on).toBe("kill");
+    expect(planCast(toy(["claw", "nandodemo", "hairball"]), 0, 999).shots[0].on).toBe("every");
+  });
+  it("まっしぐらは振る間隔・休けいを短く、ちゅ〜る休憩はやる気が戻る", () => {
+    const r = planCast(toy(["massigura", "claw"]), 0, 999);
+    expect(r.delayAdd).toBeLessThan(0); expect(r.rechargeAdd).toBeLessThan(0);
+    expect(planCast(toy(["churu", "claw"]), 0, 999).manaUsed).toBe(SPELLS.churu.mana + SPELLS.claw.mana);
+  });
+});
+
 describe("castGroups", () => {
   it("修飾と、それがかかる技をひとまとめにする", () => {
     const t = toy(["claw", "matatabi", "stare", "bite", null, "double", "claw", "hiss"]);

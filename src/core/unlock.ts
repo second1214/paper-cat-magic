@@ -53,6 +53,11 @@ export const UNLOCKS: Unlock[] = [
   { kind: "toy", id: "kurukuru", stat: "wins", n: 1 },
   { kind: "spell", id: "kezukuroi", stat: "wins", n: 1 },
   { kind: "relic", id: "biidama", stat: "kills", n: 600 },
+  { kind: "spell", id: "nandodemo", stat: "elites", n: 10 },
+  { kind: "spell", id: "tatougai", stat: "bosses", n: 2 },
+  { kind: "toy", id: "fukubukuro", stat: "bosses", n: 2 },
+  { kind: "relic", id: "kyujiki", stat: "rooms", n: 40 },
+  { kind: "relic", id: "catwalk", stat: "kills", n: 200 },
 ];
 
 export const isOpen = (u: Unlock, s: Stats) => s[u.stat] >= u.n;

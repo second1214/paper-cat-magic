@@ -33,7 +33,8 @@ const mama = (img: "scared" | "relief" | "pet" | "scream", line: string, small =
 /** 修飾のかかる向きの矢印（▶右・◀左・◀▶両側・全 全体・つづけて/ふたつ持ちは左右をつなぐ）。 */
 const arrowOf = (s: SpellDef) => s.kind === "attack" ? "" : s.kind === "modifier" ? DIR_INFO[s.dir ?? "right"].arrow : s.kind === "multicast" ? "▶" : "◀▶";
 /** 修飾の説明の札（カード用）。 */
-const modTag = (s: SpellDef) => s.kind === "trigger" ? (s.timer ? "つづけて ◀左の技から時間で右の技" : "つづけて ◀左の技が当たると右の技▶")
+const TRIG_TAG = { hit: "当たると", every: "当たるたびに", bounce: "はね返るたびに", kill: "虫を倒すと" } as const;
+const modTag = (s: SpellDef) => s.kind === "trigger" ? (s.timer ? "つづけて ◀左の技から時間で右の技" : `つづけて ◀左の技が${TRIG_TAG[s.on ?? "hit"]}右の技▶`)
   : s.kind === "duet" ? "ふたつ持ち ◀左と右のおもちゃを同時に扱い、1つの技に▶" : s.kind === "multicast" ? "修飾 ▶右の技を同時に"
   : `${s.modifier?.element ? "属性" : s.dir === "all" ? "全体修飾" : "修飾"} ${DIR_INFO[s.dir ?? "right"].arrow}${DIR_INFO[s.dir ?? "right"].label}`;
 
@@ -117,7 +118,7 @@ function subRow(h: HeldToy, cellOf: (i: number) => string) {
 function slotRow(toy: ToyDef, cellOf: (i: number) => string, next = -1) {
   const groups = groupSummary(toy);
   const lines = groups.map((g) => `<div class="gline ${g.start === next ? "next" : ""}" style="--s:${g.start};--n:${g.end - g.start}"><span>⚔${g.damage} ⚡${g.mana}</span></div>`).join("");
-  return `<div class="slotrow" style="--count:${toy.slots.length}"><div class="cells">${toy.slots.map((_, i) => cellOf(i)).join("")}</div><div class="glines">${lines}</div></div>`;
+  return `<div class="slotrow ${toy.slots.length > 10 ? "many" : ""}" style="--count:${toy.slots.length}"><div class="cells">${toy.slots.map((_, i) => cellOf(i)).join("")}</div><div class="glines">${lines}</div></div>`;
 }
 
 /** ずかんの並び（Magicraft の図鑑のように種類ごとに見せる）。 */
@@ -126,10 +127,12 @@ const ZUKAN: { title: string; ids: string[]; kind?: "toy" | "relic" | "gear" }[]
   { title: "近く・置く技", ids: ["swing", "pounce", "punch", "post"] },
   { title: "召喚", ids: ["friend", "roomba"] },
   { title: "買ってきた物の技", ids: ["mizudeppo", "ahiru", "shabon", "kabocha", "korokoro", "hammer", "flash", "danbo"] },
-  { title: "▶修飾（右の技に）", ids: ["matatabi", "kajikaji", "big", "small", "quick", "stare", "bouncy", "pushy", "rame", "suzu", "kenko", "jidori", "double"] },
+  { title: "弾を増やす（重ねると掛け算）", ids: ["double", "nekodango", "tatougai", "butimake", "hotsure"] },
+  { title: "▶修飾（右の技に）", ids: ["matatabi", "kajikaji", "big", "small", "quick", "stare", "bouncy", "pushy", "rame", "suzu", "kenko", "jidori"] },
+  { title: "速さ・やる気", ids: ["massigura", "churu"] },
   { title: "◀修飾（左の技に）・◀▶修飾（左右の技に）", ids: ["okawari", "oikake", "tsurutsuru", "dryer", "catnipBag", "kotatsu"] },
   { title: "全体修飾（どこに置いても）", ids: ["maigofuda", "hidamari", "sensor", "kezukuroi"] },
-  { title: "つづけて・ふたつ持ち", ids: ["chain", "hitoiki", "issho"] },
+  { title: "つづけて・ふたつ持ち", ids: ["chain", "nandodemo", "pyonpyon", "todome", "hitoiki", "issho"] },
   { title: "属性", ids: ["static", "water", "tape", "spray"] },
   { title: "おもちゃ", ids: Object.keys(TOYS).filter((t) => !TOYS[t].auto), kind: "toy" },
   { title: "電池式のおもちゃ（自動で動く）", ids: Object.keys(TOYS).filter((t) => TOYS[t].auto), kind: "toy" },

@@ -79,7 +79,7 @@ describe("おもちゃの複数持ち", () => {
 
 function shot() {
   return { damage: 10, speed: 10, radius: 0.2, life: 1, pierce: 0, bounce: 0, homing: 0, explode: 0, slow: 0, spread: 0, color: "#fff", tech: "claw" as const,
-    motion: "shot" as const, hits: 1, hitEvery: 0.1, reach: 0, element: "none" as const, knock: 0 };
+    motion: "shot" as const, hits: 1, hitEvery: 0.1, reach: 0, element: "none" as const, knock: 0, split: 0 };
 }
 
 describe("装備のレアリティ", () => {

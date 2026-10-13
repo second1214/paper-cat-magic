@@ -4,6 +4,7 @@
 // 修飾で強さ・大きさ・属性（おうちのもの属性）を足していく。
 
 export type SpellKind = "attack" | "modifier" | "multicast" | "trigger" | "duet";
+export type TriggerOn = "hit" | "every" | "bounce" | "kill";
 
 /**
  * 修飾がかかる向き（Magicraft の右・左・両側・全体修飾）。
@@ -64,6 +65,8 @@ export interface ProjectileStats {
   element: Element;
   /** 当たった虫を押し出す強さ。 */
   knock: number;
+  /** 消えるとき（当たる・壁・時間切れ）に、この数に割れて飛び散る。 */
+  split: number;
 }
 
 /**
@@ -87,6 +90,13 @@ export interface Modifier {
   element?: Element;
   slowAdd?: number; // 当たった虫がすくむ秒数を足す
   lifeMul?: number; // とどく距離（出ている時間）
+  /** 1発をこの数に増やして扇状に出す（重ねると掛け算）。 */
+  copies?: number;
+  /** 消えるときに割れる数を足す。 */
+  split?: number;
+  /** この修飾を読んだ回の振る間隔・休けいを足す（マイナスで速く）。 */
+  castDelayAdd?: number;
+  rechargeAdd?: number;
 }
 
 export interface SpellDef {
@@ -105,13 +115,15 @@ export interface SpellDef {
   dir?: ModDir;
   /** つづけて系: 当たったときではなく、出てからこの秒数で右の技を出す。 */
   timer?: number;
+  /** つづけて系の発動: hit=当たったら（1回）/ every=当たるたびに / bounce=はね返るたびに / kill=虫を倒したら。 */
+  on?: TriggerOn;
   /** レア度（下の RAR で決める）。 */
   rar?: number;
 }
 
 const base = (o: Partial<ProjectileStats> & { color: string; tech: TechFx }): ProjectileStats => ({
   damage: 5, speed: 12, radius: 0.2, life: 1.4, pierce: 0, bounce: 0, homing: 0, explode: 0, slow: 0, spread: 0.04,
-  motion: "shot", hits: 1, hitEvery: 0.12, reach: 0, element: "none", knock: 0, ...o,
+  motion: "shot", hits: 1, hitEvery: 0.12, reach: 0, element: "none", knock: 0, split: 0, ...o,
 });
 
 /** 種類ごとの表示名（UI の凡例に使う）。 */
@@ -289,6 +301,30 @@ export const SPELLS: Record<string, SpellDef> = {
     id: "jidori", name: "自撮り棒", kind: "modifier", mana: 6, glyph: "伸", color: "#228be6",
     desc: "右の技が1.5倍遠くまで届く（置く技・仲間は1.5倍長くいる）", modifier: { lifeMul: 1.5 },
   },
+  nekodango: {
+    id: "nekodango", name: "ねこ団子", kind: "multicast", mana: 10, glyph: "×3", color: "#d9480f", count: 3,
+    desc: "猫が3匹かたまって遊ぶ。右に続く3つの技を同時に出す",
+  },
+  tatougai: {
+    id: "tatougai", name: "多頭飼い", kind: "multicast", mana: 14, glyph: "×4", color: "#a61e4d", count: 4,
+    desc: "おうちに猫がたくさん。右に続く4つの技を同時に出す",
+  },
+  butimake: {
+    id: "butimake", name: "カリカリぶちまけ", kind: "modifier", mana: 8, glyph: "散", color: "#c8873a",
+    desc: "袋をひっくり返したみたいに、右の技が扇状に5つに分かれて飛ぶ（1つの攻撃力×0.55）。重ねると掛け算", modifier: { copies: 5, damageMul: 0.55 },
+  },
+  hotsure: {
+    id: "hotsure", name: "毛糸のほつれ", kind: "modifier", mana: 8, glyph: "割", color: "#e64980",
+    desc: "右の技が消えるとき（当たる・壁・時間切れ）、3つにほどけて飛び散る（攻撃力×0.5）", modifier: { split: 3 },
+  },
+  massigura: {
+    id: "massigura", name: "まっしぐら", kind: "modifier", mana: 4, glyph: "急", color: "#1098ad",
+    desc: "ごはんにまっしぐら。この技を出す回は、振る間隔−0.08秒・休けい−0.25秒", modifier: { castDelayAdd: -0.08, rechargeAdd: -0.25 },
+  },
+  churu: {
+    id: "churu", name: "ちゅ〜る休憩", kind: "modifier", mana: -15, glyph: "回", color: "#f783ac",
+    desc: "ひとなめして元気回復。読むとやる気が15戻る（ほかの技のやる気を肩代わり）", modifier: {},
+  },
   double: {
     id: "double", name: "二刀流", kind: "multicast", mana: 6, glyph: "×2", color: "#e67700", count: 2,
     desc: "右に続く2つの技を同時に出す",
@@ -296,6 +332,18 @@ export const SPELLS: Record<string, SpellDef> = {
   chain: {
     id: "chain", name: "つづけて", kind: "trigger", mana: 8, glyph: "連", color: "#d6336c",
     desc: "左の技が当たった所から、右の技を出す（例: ひっかき→つづけて→ぶんぶん＝当たった所でぶんぶん）",
+  },
+  nandodemo: {
+    id: "nandodemo", name: "何度でも", kind: "trigger", on: "every", mana: 12, glyph: "毎", color: "#c2255c",
+    desc: "左の技が当たるたびに、その場所から右の技を出す（回る・置く・多段の技と組むと何度も出る）",
+  },
+  pyonpyon: {
+    id: "pyonpyon", name: "ぴょんぴょん", kind: "trigger", on: "bounce", mana: 8, glyph: "跳", color: "#0ca678",
+    desc: "左の技が壁ではね返るたびに、そこから右の技を出す",
+  },
+  todome: {
+    id: "todome", name: "とどめ", kind: "trigger", on: "kill", mana: 8, glyph: "止", color: "#862e9c",
+    desc: "左の技で虫を倒したら、その場所から右の技を出す（群れの中で次々つながる）",
   },
   hitoiki: {
     id: "hitoiki", name: "ひと呼吸", kind: "trigger", mana: 6, glyph: "時", color: "#7048e8", timer: 0.45,
@@ -352,11 +400,13 @@ export const SPELLS: Record<string, SpellDef> = {
 const RAR: Record<string, number> = {
   hairball: 1, swing: 1, yarn: 1, laser: 1, pounce: 1, hammer: 1, shabon: 1, flash: 1, danbo: 1, korokoro: 1,
   stare: 1, pushy: 1, kajikaji: 1, static: 1, spray: 1, double: 1, chain: 1, okawari: 1, oikake: 1, hitoiki: 1, hidamari: 1,
-  post: 2, kabocha: 2, roomba: 2, big: 2, kenko: 2, dryer: 2, catnipBag: 2, kotatsu: 2, maigofuda: 2, sensor: 2,
-  friend: 3, issho: 3, kezukuroi: 3,
+  butimake: 1, hotsure: 1, pyonpyon: 1, todome: 1, massigura: 1, churu: 1,
+  post: 2, kabocha: 2, roomba: 2, big: 2, kenko: 2, dryer: 2, catnipBag: 2, kotatsu: 2, maigofuda: 2, sensor: 2, nekodango: 2, nandodemo: 2,
+  friend: 3, issho: 3, kezukuroi: 3, tatougai: 3,
 };
 for (const d of Object.values(SPELLS)) d.rar = RAR[d.id] ?? 0;
 export const SPELL_IDS = Object.keys(SPELLS);
+const TRIGGER_TEXT: Record<TriggerOn, string> = { hit: "左の技が当たると", every: "左の技が当たるたびに", bounce: "左の技がはね返るたびに", kill: "左の技で虫を倒すと" };
 
 /** 説明欄に出す数値（ラベル・値）。Magicraft の魔法説明のように、選ぶ判断に使う数字をそろえて見せる。 */
 export function spellStats(def: SpellDef): [string, string][] {
@@ -394,8 +444,13 @@ export function spellStats(def: SpellDef): [string, string][] {
   if (m?.speedMul && m.speedMul !== 1) out.push(["速さ", `×${m.speedMul}`]);
   if (m?.slowAdd) out.push(["すくみ", `＋${m.slowAdd}秒`]);
   if (m?.lifeMul) out.push(["とどく距離", `×${m.lifeMul}`]);
+  if (m?.copies) out.push(["弾の数", `×${m.copies}（扇状）`]);
+  if (m?.split) out.push(["消えるとき", `${m.split}つに割れる`]);
+  if (m?.castDelayAdd) out.push(["振る間隔", `${m.castDelayAdd}秒`]);
+  if (m?.rechargeAdd) out.push(["休けい", `${m.rechargeAdd}秒`]);
+  if (def.mana < 0) out[0] = ["やる気", `＋${-def.mana}（戻る）`];
   if (def.kind === "multicast") out.push(["同時に出す", `右の${def.count}つ`]);
-  if (def.kind === "trigger") out.push(def.timer ? ["出てから", `${def.timer}秒で右の技`] : ["左の技が当たると", "そこから右の技"]);
+  if (def.kind === "trigger") out.push(def.timer ? ["出てから", `${def.timer}秒で右の技`] : [TRIGGER_TEXT[def.on ?? "hit"], "そこから右の技"]);
   if (def.kind === "duet") out.push(["ふたつ持ち", "左の技＋右の技を同時に → 1つの技"]);
   if (def.kind === "modifier") out.push(["かかる向き", `${DIR_INFO[def.dir ?? "right"].arrow} ${DIR_INFO[def.dir ?? "right"].label}`]);
   if (def.dir === "all") out[0] = ["やる気の最大", `−${def.mana}`];
