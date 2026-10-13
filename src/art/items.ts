@@ -313,13 +313,17 @@ const MOD_DRAW: Record<string, (g: CanvasRenderingContext2D) => void> = {
     g.fillStyle = "#f59f00"; g.beginPath(); g.moveTo(75, 150); g.lineTo(125, 150); g.lineTo(100, 115); g.closePath(); g.fill();
     g.fillStyle = "#a0522d"; for (const y of [22, 170]) { g.beginPath(); g.roundRect(40, y, 120, 14, 6); g.fill(); g.stroke(); }
   },
-  issho: (g) => {   // 2匹の猫の手がハイタッチ
-    for (const [x, a, c] of [[70, 0.5, "#ffb3c1"], [130, -0.5, "#ffd8a8"]] as const) {
-      g.save(); g.translate(x, 110); g.rotate(a); g.fillStyle = c; g.strokeStyle = INK; g.lineWidth = 6;
-      g.beginPath(); g.roundRect(-22, -10, 44, 80, 20); g.fill(); g.stroke();
-      g.beginPath(); g.ellipse(0, -20, 34, 30, 0, 0, 7); g.fill(); g.stroke(); g.restore();
+  issho: (g) => {   // ふたつ持ち: 左右の前足でねこじゃらしとボールを同時に
+    g.fillStyle = "#ff9ec4"; g.strokeStyle = INK; g.lineWidth = 5;
+    g.save(); g.translate(48, 40); g.rotate(-0.5); g.beginPath(); g.ellipse(0, 0, 34, 10, 0, 0, 7); g.fill(); g.stroke(); g.restore();
+    g.strokeStyle = INK; g.lineWidth = 6; g.beginPath(); g.moveTo(62, 60); g.lineTo(70, 110); g.stroke();
+    g.fillStyle = "#ffe066"; g.lineWidth = 6; g.beginPath(); g.arc(140, 70, 26, 0, 7); g.fill(); g.stroke();
+    for (const [x, c] of [[70, "#ffd8a8"], [138, "#ffd8a8"]] as const) {
+      g.fillStyle = c; g.strokeStyle = INK; g.lineWidth = 6;
+      g.beginPath(); g.roundRect(x - 22, 120, 44, 70, 18); g.fill(); g.stroke();
+      g.beginPath(); g.ellipse(x, 116, 30, 24, 0, 0, 7); g.fill(); g.stroke();
+      g.fillStyle = "#ffb3c1"; for (const dx of [-14, 0, 14]) { g.beginPath(); g.arc(x + dx, 104, 6, 0, 7); g.fill(); }
     }
-    g.fillStyle = "#ffd43b"; g.strokeStyle = INK; g.lineWidth = 5; spikyBlob(g, 100, 55, 10, 26, 6); g.fill(); g.stroke();
   },
   okawari: (g) => {   // ごはん皿に山盛りカリカリ
     g.fillStyle = "#c8873a"; g.strokeStyle = INK; g.lineWidth = 5;
@@ -760,12 +764,18 @@ const REWARD_DRAW: Record<RewardKind, (g: CanvasRenderingContext2D) => void> = {
     g.fillStyle = "#fff"; g.beginPath(); g.ellipse(80, 62, 10, 6, -0.6, 0, 7); g.fill();
   },
   gear: (g) => GEAR_DRAW.mikan(g),
-  shop: (g) => {   // お店（ボス猫の顔と小銭袋）
-    g.fillStyle = "#adb5bd"; g.strokeStyle = INK; g.lineWidth = 7;
-    g.beginPath(); g.moveTo(40, 90); g.lineTo(50, 30); g.lineTo(85, 60); g.lineTo(115, 60); g.lineTo(150, 30); g.lineTo(160, 90); g.bezierCurveTo(175, 165, 25, 165, 40, 90); g.closePath(); g.fill(); g.stroke();
-    g.fillStyle = INK; g.beginPath(); g.moveTo(68, 100); g.lineTo(92, 100); g.moveTo(108, 100); g.lineTo(132, 100); g.lineWidth = 6; g.stroke();
-    g.fillStyle = "#fab005"; g.beginPath(); g.arc(145, 150, 30, 0, 7); g.fill(); g.stroke();
-    g.fillStyle = INK; g.font = "bold 30px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("¥", 145, 152);
+  shop: (g) => {   // ママの顔（黒いボブ・赤いめがね）と裁縫の糸巻き
+    g.fillStyle = "#2b2118"; g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.moveTo(35, 150); g.bezierCurveTo(20, 20, 160, 10, 155, 150); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "#ffd8be"; g.beginPath(); g.ellipse(95, 100, 48, 54, 0, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#2b2118"; g.beginPath(); g.moveTo(48, 85); g.bezierCurveTo(60, 35, 130, 35, 143, 85); g.bezierCurveTo(110, 60, 80, 60, 48, 85); g.fill();
+    g.strokeStyle = "#c92a2a"; g.lineWidth = 6; for (const x of [76, 116]) { g.beginPath(); g.roundRect(x - 17, 90, 34, 24, 7); g.stroke(); }
+    g.beginPath(); g.moveTo(93, 100); g.lineTo(99, 100); g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 5; g.beginPath(); g.arc(96, 128, 13, 0.3, Math.PI - 0.3); g.stroke();
+    g.fillStyle = "rgba(255,130,150,.5)"; for (const x of [62, 130]) { g.beginPath(); g.ellipse(x, 125, 10, 6, 0, 0, 7); g.fill(); }
+    g.fillStyle = "#e0b552"; g.strokeStyle = INK; g.lineWidth = 6; g.beginPath(); g.roundRect(140, 140, 44, 46, 6); g.fill(); g.stroke();
+    g.fillStyle = "#ff6b9d"; g.beginPath(); g.roundRect(144, 150, 36, 26, 4); g.fill();
+    g.strokeStyle = "#868e96"; g.lineWidth = 4; g.beginPath(); g.moveTo(130, 190); g.lineTo(190, 130); g.stroke();
   },
   boss: (g) => {
     g.fillStyle = "#ffcf3a"; g.strokeStyle = INK; g.lineWidth = 8;

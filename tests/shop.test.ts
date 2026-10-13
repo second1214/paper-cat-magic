@@ -1,4 +1,4 @@
-// お店（Magicraft のお店と鍛冶）・カリカリ・さいごのママ。
+// ママのところ（Magicraft のお店と鍛冶）・カリカリ・さいごのママ。
 import { describe, expect, it } from "vitest";
 import { spellDef, SPELLS } from "../src/core/spells";
 import { ACTS, ROOMS_PER_ACT, World } from "../src/game/world";
@@ -6,7 +6,7 @@ import { ACTS, ROOMS_PER_ACT, World } from "../src/game/world";
 const shopWorld = () => { const w = new World(3); w.start(); w.enterRoom(0, 1, "shop"); return w; };
 
 describe("お店", () => {
-  it("お店の部屋は虫が出ず、ボス猫に近づくと開く", () => {
+  it("ママのところは虫が出ず、ママに近づくと開く", () => {
     const w = shopWorld();
     expect(w.room.kind).toBe("shop");
     w.update(1 / 60, { move: { x: 0, z: 0 }, aim: null, fire: false, dash: false });
@@ -25,7 +25,7 @@ describe("お店", () => {
     expect(w.coins).toBe(100 - it0.price); expect(w.bag.length).toBe(bag + 1); expect(w.buy(i)).toBe(false);
     const c = w.shop!.rerollCost; expect(w.reroll()).toBe(true); expect(w.shop!.rerollCost).toBe(c + 2);
   });
-  it("鍛冶: 同じ技3つで★の技1つ。★は強い", () => {
+  it("ママのお直し: 同じ技3つで★の技1つ。★は強い", () => {
     const w = shopWorld();
     w.bag = ["claw", "claw", "claw", "bite"];
     expect(w.forgeable()).toEqual(["claw"]);

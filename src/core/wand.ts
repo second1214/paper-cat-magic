@@ -80,7 +80,7 @@ export function passiveMods(t: ToyDef): Modifier[] {
 /** 全体修飾で減るやる気の最大。 */
 export const passiveCost = (t: ToyDef) => t.slots.reduce((a, id) => a + (id && isPassive(spellDef(id)) ? spellDef(id).mana : 0), 0);
 
-/** 合体（いっしょに）: 左の技 a を右の技 b に混ぜる。動き・見た目は b。 */
+/** ふたつ持ち: 2つのおもちゃを同時に扱い、左の技 a を右の技 b にまとめる。動き・見た目は b。 */
 function fuse(a: ProjectileStats, b: ProjectileStats): ProjectileStats {
   return {
     ...b, damage: a.damage + b.damage, hits: Math.max(a.hits, b.hits), pierce: a.pierce + b.pierce, bounce: a.bounce + b.bounce,
@@ -94,7 +94,7 @@ function fuse(a: ProjectileStats, b: ProjectileStats): ProjectileStats {
  * - ▶修飾は右の技に溜まる。◀修飾は左の技にかかる。◀▶修飾は左右の技にかかり、右の技もいっしょに出す。全体修飾は読まない。
  * - 二刀流は、続く技を count 個ぶん追加で引く。
  * - [A][つづけて][B]: A が当たった所から B を出す（B は A の payload）。
- * - [A][いっしょに][B]: A を B に合体させて1発にする。
+ * - [A][ふたつ持ち][B]: A と B を同時に扱い、1発にまとめる。
  * - スロットの端に達したら打ち切って wrapped を立てる。
  */
 export function planCast(toy: ToyDef, cursor: number, mana: number, slots: (string | null)[] = toy.slots): CastResult {
@@ -118,7 +118,7 @@ export function planCast(toy: ToyDef, cursor: number, mana: number, slots: (stri
     return def;
   };
 
-  /** 技の右にあるもの（◀・◀▶・つづけて・いっしょに）を読んで、out[0]（今の技）に効かせる。 */
+  /** 技の右にあるもの（◀・◀▶・つづけて・ふたつ持ち）を読んで、out[0]（今の技）に効かせる。 */
   const after = (out: Shot[]) => {
     for (;;) {
       const nx = peek();
@@ -134,7 +134,7 @@ export function planCast(toy: ToyDef, cursor: number, mana: number, slots: (stri
       const right = drawOne([]);
       if (!right?.length) return;
       if (nx.kind === "trigger") { out[0].payload.push(...right); if (nx.timer) out[0].timer = nx.timer; return; }
-      // 合体: 左の技は右の技の中へ
+      // ふたつ持ち: 左の技は右の技といっしょに1発に
       right[0].stats = fuse(out[0].stats, right[0].stats);
       right[0].payload.unshift(...out[0].payload);
       out.splice(0, 1, ...right);

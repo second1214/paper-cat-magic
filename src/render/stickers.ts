@@ -86,7 +86,49 @@ const KINGS: Record<"stinkKing" | "camelKing" | "queen", ["stinkbug" | "camel" |
   stinkKing: ["stinkbug", "#ffd43b"], camelKing: ["camel", "#ffd43b"], queen: ["caterpillar", "#f783ac"],
 };
 
+/**
+ * 子ども（仮の絵。public/kids/*.png があればそちらを使う）。右向き。hug は猫をだっこしている絵（猫は描かず、腕で輪を作る）。
+ * お兄ちゃん6さい: 短い黒髪・青いTシャツ・半ズボン。妹3さい: ふたつ結び・ピンクのワンピース。
+ */
+export function kidCanvas(type: "boy" | "girl", hug = false): HTMLCanvasElement {
+  const girl = type === "girl", W = 220, H = girl ? 300 : 360;
+  return stickerCanvas(W, H, (g) => {
+    const head = girl ? 62 : 64, hy = head + 14, bodyTop = hy + head - 6, legs = H - 18;
+    g.strokeStyle = INK; g.lineWidth = 7;
+    // 足
+    g.fillStyle = girl ? "#ffe3d3" : "#ffd8be";
+    for (const x of [88, 128]) { g.beginPath(); g.roundRect(x - 13, legs - (girl ? 70 : 95), 26, girl ? 70 : 95, 10); g.fill(); g.stroke(); }
+    g.fillStyle = girl ? "#ff8fab" : "#495057"; for (const x of [88, 128]) { g.beginPath(); g.ellipse(x + 8, legs, 22, 12, 0, 0, 7); g.fill(); g.stroke(); }
+    // 服
+    g.fillStyle = girl ? "#ffafcc" : "#4dabf7";
+    if (girl) { g.beginPath(); g.moveTo(80, bodyTop); g.lineTo(140, bodyTop); g.lineTo(178, legs - 60); g.lineTo(42, legs - 60); g.closePath(); g.fill(); g.stroke(); }
+    else {
+      g.beginPath(); g.roundRect(62, bodyTop, 96, legs - 95 - bodyTop + 10, 18); g.fill(); g.stroke();
+      g.fillStyle = "#364fc7"; g.beginPath(); g.roundRect(64, legs - 115, 92, 34, 8); g.fill(); g.stroke();
+      g.fillStyle = "#fff"; g.font = "bold 30px sans-serif"; g.textAlign = "center"; g.fillText("★", 110, bodyTop + 50);
+    }
+    // 腕（だっこは前で輪、ふだんは前へのばす）
+    g.strokeStyle = INK; g.lineWidth = 22; g.lineCap = "round";
+    const sy = bodyTop + 22;
+    if (hug) { g.beginPath(); g.arc(150, sy + 40, 34, -1.6, 1.6); g.stroke(); g.strokeStyle = "#ffd8be"; g.lineWidth = 13; g.stroke(); }
+    else { g.beginPath(); g.moveTo(120, sy); g.lineTo(195, sy + 18); g.stroke(); g.strokeStyle = "#ffd8be"; g.lineWidth = 13; g.stroke(); }
+    // 頭
+    g.fillStyle = "#ffe0c8"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.arc(110, hy, head, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#2b2118";
+    if (girl) {
+      g.beginPath(); g.arc(110, hy - 6, head, Math.PI * 1.05, Math.PI * 1.95); g.fill();
+      for (const x of [40, 180]) { g.beginPath(); g.arc(x, hy - 10, 22, 0, 7); g.fill(); g.stroke(); }
+      g.fillStyle = "#ff6b9d"; for (const x of [52, 168]) { g.beginPath(); g.arc(x, hy - 22, 9, 0, 7); g.fill(); }
+    } else { g.beginPath(); g.arc(110, hy - 8, head, Math.PI * 1.0, Math.PI * 2.0); g.fill(); g.beginPath(); g.moveTo(60, hy - 20); g.lineTo(90, hy - 4); g.lineTo(120, hy - 22); g.lineTo(150, hy - 2); g.lineTo(170, hy - 20); g.fill(); }
+    // 顔（にこにこ）
+    g.fillStyle = INK; for (const x of [122, 156]) { g.beginPath(); g.ellipse(x, hy + 8, 6, 9, 0, 0, 7); g.fill(); }
+    blush(g, 162, hy + 28, 11);
+    g.strokeStyle = INK; g.lineWidth = 5; g.beginPath(); g.arc(142, hy + 26, 12, 0.2, Math.PI - 0.2); g.stroke();
+  }, 0.03);
+}
+
 export function enemyTexture(type: EnemyType): THREE.CanvasTexture {
+  if (type === "boy" || type === "girl") return canvasTexture(kidCanvas(type));
   if (type === "roach") return sticker(300, 240, (g) => {   // まるいおまんじゅう型のゴキちゃん
     stubs(g, [95, 150, 205], 175, 30, 12);
     g.strokeStyle = INK; g.lineWidth = 6; g.lineCap = "round";                          // くるんとした触角

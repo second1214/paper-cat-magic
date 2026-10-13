@@ -29,11 +29,11 @@ const spellImg = (id: string) => urlOf(spellCanvas(baseId(id), spellDef(id).proj
 const mama = (img: "scared" | "relief" | "pet" | "scream", line: string, small = false) =>
   `<div class="mama ${small ? "small" : ""}"><img src="${import.meta.env.BASE_URL}mama/${img}.png" alt="ママ"><div class="say">${line}</div></div>`;
 
-/** 修飾のかかる向きの矢印（▶右・◀左・◀▶両側・全 全体・つづけて/いっしょには左右をつなぐ）。 */
+/** 修飾のかかる向きの矢印（▶右・◀左・◀▶両側・全 全体・つづけて/ふたつ持ちは左右をつなぐ）。 */
 const arrowOf = (s: SpellDef) => s.kind === "attack" ? "" : s.kind === "modifier" ? DIR_INFO[s.dir ?? "right"].arrow : s.kind === "multicast" ? "▶" : "◀▶";
 /** 修飾の説明の札（カード用）。 */
 const modTag = (s: SpellDef) => s.kind === "trigger" ? (s.timer ? "つづけて ◀左の技から時間で右の技" : "つづけて ◀左の技が当たると右の技▶")
-  : s.kind === "duet" ? "合体 ◀左の技を右の技に混ぜる▶" : s.kind === "multicast" ? "修飾 ▶右の技を同時に"
+  : s.kind === "duet" ? "ふたつ持ち ◀左と右のおもちゃを同時に扱い、1つの技に▶" : s.kind === "multicast" ? "修飾 ▶右の技を同時に"
   : `${s.modifier?.element ? "属性" : s.dir === "all" ? "全体修飾" : "修飾"} ${DIR_INFO[s.dir ?? "right"].arrow}${DIR_INFO[s.dir ?? "right"].label}`;
 
 /** スロット・手持ちの1マス。修飾にはかかる向きの矢印、レア度は下の帯。 */
@@ -128,7 +128,7 @@ const ZUKAN: { title: string; ids: string[]; kind?: "toy" | "relic" | "gear" }[]
   { title: "▶修飾（右の技に）", ids: ["matatabi", "kajikaji", "big", "small", "quick", "stare", "bouncy", "pushy", "rame", "suzu", "kenko", "jidori", "double"] },
   { title: "◀修飾（左の技に）・◀▶修飾（左右の技に）", ids: ["okawari", "oikake", "tsurutsuru", "dryer", "catnipBag", "kotatsu"] },
   { title: "全体修飾（どこに置いても）", ids: ["maigofuda", "hidamari", "sensor", "kezukuroi"] },
-  { title: "つづけて・合体", ids: ["chain", "hitoiki", "issho"] },
+  { title: "つづけて・ふたつ持ち", ids: ["chain", "hitoiki", "issho"] },
   { title: "属性", ids: ["static", "water", "tape", "spray"] },
   { title: "おもちゃ", ids: Object.keys(TOYS).filter((t) => !TOYS[t].auto), kind: "toy" },
   { title: "電池式のおもちゃ（自動で動く）", ids: Object.keys(TOYS).filter((t) => TOYS[t].auto), kind: "toy" },
@@ -319,7 +319,7 @@ export class Hud {
           <h3>おもちゃのしくみ</h3>
           <p>おもちゃを振ると、スロットに入れた<b>技（爪・牙など）が出る</b>。スロットは<b>左から順に</b>使われる。</p>
           <div class="example">${cell("matatabi")}${cell("bite")}<span>修飾の ▶ は<b>右の技</b>、◀ は<b>左の技</b>、◀▶ は<b>左右の技</b>にかかる。<b>全</b>はどこに置いても全部の技に</span></div>
-          <div class="example">${cell("claw")}${cell("chain")}${cell("swing")}<span><b>つづけて</b>: ひっかきが当たった所で、ぶんぶんが回る。<b>いっしょに</b>は左の技を右の技に合体</span></div>
+          <div class="example">${cell("claw")}${cell("chain")}${cell("swing")}<span><b>つづけて</b>: ひっかきが当たった所で、ぶんぶんが回る。<b>ふたつ持ち</b>は左右の技を同時に扱って1つの技に</span></div>
           <p>スロットの下の線が「1回で一緒に出る範囲」。⚔は攻撃力の合計、⚡は使うやる気。サブスロットのあるおもちゃは、条件がたまると全部いっぺんに出る。電池式のおもちゃは持っているだけで自動で動く。</p>
           <p><b>属性</b>（静電気・水のみ皿・ガムテープ・虫よけ）を技の左に置くと効果がつく。<b>ぬれた虫にビリビリ</b>、<b>ねばねばの虫に虫よけ</b>はよく効く。</p>
           <p>部屋を片付けると扉が開く。扉の上の絵が<b>次の部屋のごほうび</b>（♥最大HP／⚡やる気／★技／おもちゃ）や<b>特別な部屋</b>（宝箱・ママのおひざ・秘密の隠し場所・強い虫・あやしい箱）。季節ごとに8部屋＋ボス、秋から始まり夏が最後。</p>
@@ -452,7 +452,7 @@ export class Hud {
     el.querySelector<HTMLButtonElement>(".skip")!.onclick = () => w.takeReward(null);
   }
 
-  /** ボス猫のお店（Magicraft のお店: 買う・品ぞろえを入れ替える・鍛冶で合成。売ることはできない）。 */
+  /** ママのところ（Magicraft のお店: カリカリと交換でおねだり・ほかのを見せてもらう・お直し。売ることはできない）。 */
   private renderShop(w: World) {
     const el = this.el("shopPanel");
     el.hidden = w.phase !== "shop" || !w.shop;
@@ -468,12 +468,13 @@ export class Hud {
     }).join("");
     const forge = w.forgeable();
     el.innerHTML = `<div class="panel shopPanel">
-      <div class="shead"><h2>ボス猫のお店</h2><span class="wallet"><img src="${urlOf(kibbleCanvas())}" alt="">${w.coins}</span>
-        <button class="reroll" ${w.coins >= sh.rerollCost ? "" : "disabled"}>品ぞろえを入れ替える <img src="${urlOf(kibbleCanvas())}" alt="">${sh.rerollCost}</button><button class="close">閉じる</button></div>
+      <div class="shead"><h2>ママのところ</h2><span class="wallet"><img src="${urlOf(kibbleCanvas())}" alt="">${w.coins}</span>
+        <button class="reroll" ${w.coins >= sh.rerollCost ? "" : "disabled"}>ほかのも見せて <img src="${urlOf(kibbleCanvas())}" alt="">${sh.rerollCost}</button><button class="close">閉じる</button></div>
+      <p class="muted mamaLine">ママ「拾ってきたカリカリと交換ね♪ こわれたおもちゃも直してあげる」</p>
       <div class="sitems">${items}</div>
-      <div class="forge"><b>鍛冶（合成）</b><span class="muted">手持ちの同じ技3つ → ★の技1つ（強くなる）</span>
-        <div class="fcells">${forge.length ? forge.map((id) => `<div class="fbtn" role="button" tabindex="0" data-forge="${id}">${cell(id, "tabindex=-1")}<span>×3 → ${spellDef(id + "+").name}</span></div>`).join("") : `<span class="muted">合成できる技はまだない（同じ技を3つ集めよう）</span>`}</div></div>
-      ${this.fusionHtml(w)}
+      <div class="forge"><b>ママのお直し</b><span class="muted">同じ物3つを、ママが縫い合わせて丈夫な★の物1つに直してくれる</span>
+        <div class="fcells">${forge.length ? forge.map((id) => `<div class="fbtn" role="button" tabindex="0" data-forge="${id}">${cell(id, "tabindex=-1")}<span>×3 → ${spellDef(id + "+").name}</span></div>`).join("") : `<span class="muted">直せる物はまだない（同じ物を3つ集めよう）</span>`}</div></div>
+      ${this.fusionHtml(w, "ソファの下（秘密の隠し場所）")}
     </div>`;
     el.querySelectorAll<HTMLButtonElement>("[data-buy]").forEach((b) => b.onclick = () => { w.buy(Number(b.dataset.buy)); this.lastKey = ""; });
     el.querySelectorAll<HTMLElement>("[data-forge]").forEach((b) => b.onclick = () => { w.forge(b.dataset.forge!); this.fusePick = []; this.lastKey = ""; });
@@ -483,7 +484,7 @@ export class Hud {
   }
 
   /** 秘密の隠し場所（ソファの下）: 同じレア度の物を4つ隠す → 奥から1つ上のレア度の物が1つ出てくる。 */
-  private fusionHtml(w: World, title = "ボス猫の隠し場所") {
+  private fusionHtml(w: World, title = "秘密の隠し場所") {
     const pick = this.fusePick.filter((i) => i < w.bag.length), r = pick.length ? rarOf(w.bag[pick[0]]) : -1;
     const ok = w.fusable();
     const cells = w.bag.map((id, i) => {

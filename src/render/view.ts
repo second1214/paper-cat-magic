@@ -2,7 +2,7 @@
 import * as THREE from "three";
 import { ELITE_INFO, ENEMY, type AltarKind, type World, type EnemyType, type Room } from "../game/world";
 import { CatDoll, type CatState } from "./catDoll";
-import { canvasTexture, enemyTexture, glowTexture, orbTexture } from "./stickers";
+import { canvasTexture, enemyTexture, glowTexture, kidCanvas, orbTexture } from "./stickers";
 import { buildRoom, type BuiltRoom } from "./roomBuilder";
 import { elementCanvas, INK, kibbleCanvas, rewardCanvas, stickerCanvas, techCanvas } from "../art/items";
 import type { Element, TechFx } from "../core/spells";
@@ -13,7 +13,7 @@ const LEAN = 0.42;
 const ENEMY_H: Record<EnemyType, number> = {
   roach: 0.95, mosquito: 0.95, spider: 1.0, hornet: 2.4, stinkbug: 0.95, camel: 1.0, ant: 0.7, caterpillar: 0.95,
   stinkKing: 3.4, camelKing: 3.4, queen: 3.2,   // 王冠のぶん絵が縦長なので大きめ
-  mama: 3.8,
+  mama: 3.8, boy: 2.3, girl: 1.8,
 };
 const FLY: Partial<Record<EnemyType, number>> = { mosquito: 0.55, hornet: 0.35 };
 
@@ -98,6 +98,14 @@ export class GameView {
     for (const t of Object.keys(ENEMY) as EnemyType[]) if (t !== "mama") this.enemyTex.set(t, enemyTexture(t));
     const mamaTex = await new THREE.TextureLoader().loadAsync(`${base}mama/walk.png`);   // ニコニコでキャリーを持って歩いてくるママ
     mamaTex.colorSpace = THREE.SRGBColorSpace; this.enemyTex.set("mama", mamaTex);
+    // 子どもの絵（public/kids にあればそれを、なければ仮の絵）。hug は猫をだっこしている絵
+    const load = async (url: string) => { try { const t = await new THREE.TextureLoader().loadAsync(url); t.colorSpace = THREE.SRGBColorSpace; return t; } catch { return null; } };
+    for (const k of ["boy", "girl"] as const) {
+      const walk = await load(`${base}kids/${k}_walk.png`); if (walk) this.enemyTex.set(k, walk);
+      const hug = await load(`${base}kids/${k}_hug.png`);
+      this.hugTex.set(k, hug ? { tex: hug, drawsCat: true } : { tex: canvasTexture(kidCanvas(k, true)), drawsCat: false });
+    }
+    const shop = await load(`${base}mama/shop.png`); if (shop) this.mamaShopTex = shop;
     this.kibble = canvasTexture(kibbleCanvas());
     for (const t of ["claw", "bite", "hairball", "hiss", "swing", "yarn", "laser", "pounce", "punch", "post", "friend", "roomba", "squirt", "duck", "hammer", "bubble", "flash", "pumpkin", "box", "roller"] as const) this.techTex.set(t, canvasTexture(techCanvas(t)));
     this.friendTex = await Promise.all([1, 2, 3, 4].map((i) => grayCat(`${base}cat/A01_walk_${i}.png`)));
@@ -137,6 +145,10 @@ export class GameView {
   }
 
   private altarTexs = new Map<AltarKind, THREE.Texture>();
+  /** 子どもが猫をだっこしている絵（drawsCat: 絵に猫が描いてある＝猫の人形は隠す）。 */
+  private hugTex = new Map<"boy" | "girl", { tex: THREE.Texture; drawsCat: boolean }>();
+  /** お店のママ（mama/shop.png があればそれ、なければ歩くママ）。 */
+  private mamaShopTex: THREE.Texture | null = null;
   private altarTex(k: AltarKind) {
     let t = this.altarTexs.get(k);
     if (!t) { t = canvasTexture(rewardCanvas(k)); this.altarTexs.set(k, t); }
@@ -220,7 +232,11 @@ export class GameView {
     if (p.hurt > 0) state = "hurt";
     if (world.phase === "reward" || world.phase === "win") state = "happy";
     if (world.phase === "dead") state = "down";
-    this.cat.group.position.set(p.pos.x, 0, p.pos.z);
+    // 子どもにだっこされているとき: 絵に猫が描いてあれば人形は隠し、なければ腕の高さに持ち上げる
+    const holder = p.held > 0 ? world.enemies.find((e) => e.id === p.holder) : undefined;
+    const hug = holder && (holder.type === "boy" || holder.type === "girl") ? this.hugTex.get(holder.type) : undefined;
+    this.cat.group.visible = !hug?.drawsCat;
+    this.cat.group.position.set(p.pos.x, hug ? ENEMY_H[holder!.type] * 0.42 : 0, p.pos.z + (hug ? 0.15 : 0));
     this.cat.group.rotation.x = -LEAN;
     this.cat.update(world.time + 0.0001, state, p.facing, speed, p.iframes > 0 && world.phase === "play" && p.hurt <= 0, 1 - p.pounce / 0.4);
     this.aimMark.position.set(p.pos.x + p.aim.x * 1.6, 0.03, p.pos.z + p.aim.z * 1.6);
@@ -242,10 +258,19 @@ export class GameView {
       g.position.set(e.pos.x, bob, e.pos.z);
       g.rotation.x = -LEAN;
       const face = (e.vel.x < -0.1 ? -1 : 1) * (e.type === "mama" ? -1 : 1);   // ママの絵は左向き
-      g.rotation.z = e.type === "mama" && Math.hypot(e.vel.x, e.vel.z) > 0.2 ? Math.sin(e.t * 9) * 0.05 : 0;   // てくてく揺れる
+      const walker = e.type === "mama" || e.type === "boy" || e.type === "girl";
+      g.rotation.z = walker && Math.hypot(e.vel.x, e.vel.z) > 0.2 ? Math.sin(e.t * (e.type === "mama" ? 9 : 12)) * 0.05 : 0;   // てくてく揺れる
+      let wide = 1;
+      if (e.type === "boy" || e.type === "girl") {   // だっこ中は、だっこの絵に差し替える
+        const base = this.enemyTex.get(e.type)!, h = this.hugTex.get(e.type)!, holding = p.holder === e.id && p.held > 0;
+        const tex = holding ? h.tex : base, mat = (g.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
+        if (mat.map !== tex) { mat.map = tex; mat.needsUpdate = true; }
+        const ar = (t: THREE.Texture) => { const im = t.image as { width: number; height: number }; return im.width / im.height; };
+        if (holding) wide = ar(h.tex) / ar(base);
+      }
       const appear = e.spawn > 0 ? Math.max(0.05, 1 - e.spawn / 1.0) : 1;
       const squash = e.hurt > 0 ? 0.88 : 1, big = e.elite ? 1.3 : 1;   // 強い虫は大きく、足元が光る
-      g.scale.set(face * (2 - squash) * appear * big, squash * appear * big, 1);
+      g.scale.set(face * (2 - squash) * appear * big * wide, squash * appear * big, 1);
       if (e.elite) {
         const a = this.sprite("aura", nAura++, () => new THREE.SpriteMaterial({ map: this.glow, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
         const r = ENEMY_H[e.type] * 1.5 * (1 + Math.sin(world.time * 6 + e.id) * 0.08);
@@ -357,7 +382,7 @@ export class GameView {
       }
     }
 
-    // カリカリ（お金）とお店のボス猫
+    // カリカリ（お金）とお店のママ
     let nKib = 0;
     for (const c of world.pickups) {
       const s = this.sprite("kib", nKib++, () => new THREE.SpriteMaterial({ map: this.kibble, transparent: true, depthWrite: false, alphaTest: 0.1 }));
@@ -366,12 +391,14 @@ export class GameView {
     this.hideRest("kib", nKib);
     const shop = world.shop;
     const boss = this.sprite("merchant", 0, () => new THREE.SpriteMaterial({ transparent: true, alphaTest: 0.4 }));
-    boss.visible = !!shop && !!this.friendTex[0];
-    if (shop && this.friendTex[0]) {
-      if (boss.material.map !== this.friendTex[0]) { boss.material.map = this.friendTex[0]; boss.material.needsUpdate = true; }
-      boss.center.set(0.5, 0); boss.position.set(shop.pos.x, 0, shop.pos.z); boss.scale.set(-1.9, 1.6, 1);
+    const mamaT = this.mamaShopTex ?? this.enemyTex.get("mama");
+    boss.visible = !!shop && !!mamaT;
+    if (shop && mamaT) {   // お店はママ（おねだり・お直し）
+      if (boss.material.map !== mamaT) { boss.material.map = mamaT; boss.material.needsUpdate = true; }
+      const im = mamaT.image as { width: number; height: number }, H = 3.2;
+      boss.center.set(0.5, 0); boss.position.set(shop.pos.x, 0, shop.pos.z); boss.scale.set(H * im.width / im.height, H, 1);
       const sign = this.sprite("sign", 0, () => new THREE.SpriteMaterial({ map: canvasTexture(signCanvas()), transparent: true, depthWrite: false }));
-      sign.position.set(shop.pos.x, 2.0 + Math.sin(world.time * 2) * 0.05, shop.pos.z); sign.scale.set(1.9, 0.6, 1);
+      sign.position.set(shop.pos.x, 6.1 + Math.sin(world.time * 2) * 0.05, shop.pos.z); sign.scale.set(1.9, 0.6, 1);
     } else this.hideRest("sign", 0);
     // 特別な部屋の置き物（使ったものは薄く）
     const al = world.room.altar;
@@ -454,6 +481,6 @@ export class GameView {
 function signCanvas() {
   return stickerCanvas(320, 100, (g) => {
     g.fillStyle = "#fab005"; g.strokeStyle = INK; g.lineWidth = 6; g.beginPath(); g.roundRect(10, 10, 300, 80, 16); g.fill(); g.stroke();
-    g.fillStyle = INK; g.font = "bold 38px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("ボス猫のお店", 160, 52);
+    g.fillStyle = INK; g.font = "bold 38px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("ママのところ", 160, 52);
   }, 0.03);
 }
