@@ -257,6 +257,33 @@ export interface Input {
 }
 
 export const ROOMS_PER_ACT = 8; // ＋ボス
+
+/**
+ * 途中セーブ（部屋に入るたびに自動）。部屋に入る直前の状態と乱数を覚えておき、再開するとその部屋の入口からやり直す。
+ * 部屋の中の虫や弾までは保存しない（同じ乱数で同じ部屋が作り直される）。
+ */
+export interface SaveData {
+  v: 1;
+  seed: number;
+  rng: number;
+  at: { final: true } | { final: false; act: number; index: number; reward: RewardKind | null };
+  opts: RunOptions;
+  toys: HeldToy[];
+  cur: number;
+  batt: HeldToy[];
+  bag: string[];
+  relics: string[];
+  gear: Gear;
+  curses: string[];
+  coins: number;
+  hp: number;
+  baseMaxHp: number;
+  manaUp: { max: number; regen: number };
+  usedThemes: Theme[];
+  stats: { kills: number; elites: number; specials: number; cleared: number; bosses: number };
+  nextId: number;
+  time: number;
+}
 export const ACTS = SEASONS.length;
 
 export class World {
@@ -311,7 +338,13 @@ export class World {
   /** 虫が猫へ向かう道順（地面用・飛ぶ虫用）。猫のいるマスが変わったら作り直す。 */
   private flow: { ground: Int16Array; air: Int16Array; key: number } | null = null;
 
+  /** 部屋に入るたびに更新される途中セーブと、その番号（変わったら保存し直す）。 */
+  checkpoint: SaveData | null = null;
+  saveNo = 0;
+  private seed: number;
+
   constructor(seed = 1, opts: RunOptions = DEFAULT_RUN) {
+    this.seed = seed;
     this.rng = makeRng(seed);
     this.opts = opts;
     this.locked = new Set(opts.locked ?? []);
@@ -332,6 +365,35 @@ export class World {
   }
 
   start() { if (this.phase === "intro") this.phase = "play"; }
+
+  /** 部屋に入る直前の状態を途中セーブとして覚える。 */
+  private capture(at: SaveData["at"]) {
+    const p = this.player;
+    this.checkpoint = structuredClone({
+      v: 1 as const, seed: this.seed, rng: this.rng.state(), at, opts: this.opts,
+      toys: this.toys.map((h, i) => (i === this.cur ? { ...h, mana: p.mana, cursor: p.cursor } : h)), cur: this.cur, batt: this.batt,
+      bag: this.bag, relics: this.relics, gear: this.gear, curses: this.curses, coins: this.coins, hp: p.hp,
+      baseMaxHp: this.baseMaxHp, manaUp: this.manaUp, usedThemes: this.usedThemes,
+      stats: { kills: this.kills, elites: this.elites, specials: this.specials, cleared: this.cleared, bosses: this.bosses },
+      nextId: this.nextId, time: this.time,
+    });
+    this.saveNo++;
+  }
+
+  /** 途中セーブから再開する（その部屋の入口から）。 */
+  static load(d: SaveData): World {
+    const w = new World(d.seed, d.opts);
+    w.toys = d.toys; w.cur = Math.min(d.cur, d.toys.length - 1); w.batt = d.batt; w.bag = d.bag; w.relics = d.relics; w.gear = d.gear;
+    w.curses = d.curses; w.coins = d.coins; w.baseMaxHp = d.baseMaxHp; w.manaUp = d.manaUp; w.usedThemes = d.usedThemes;
+    Object.assign(w, d.stats);
+    w.nextId = d.nextId; w.time = d.time;
+    w.recalc();
+    const p = w.player, h = w.toys[w.cur];
+    p.hp = Math.min(d.hp, p.maxHp); p.mana = h.mana; p.cursor = h.cursor;
+    w.rng.setState(d.rng);
+    if (d.at.final) w.enterFinal(); else w.enterRoom(d.at.act, d.at.index, d.at.reward);
+    return w;
+  }
 
   /** 今使っているおもちゃ。 */
   get toy(): ToyDef { return this.toys[this.cur].def; }
@@ -375,6 +437,7 @@ export class World {
 
   // ---------- 部屋 ----------
   enterRoom(act: number, index: number, reward: RewardKind | null) {
+    this.capture({ final: false, act, index, reward });
     const boss = index === ROOMS_PER_ACT;
     const season = SEASONS[act];
     if (index === 0) this.usedThemes = [];
@@ -788,6 +851,7 @@ export class World {
 
   /** さいごの部屋: ママが猫を病院へ連れて行こうと近づいてくる。猫は肉球ペシペシしかできない。つかまったらクリア。 */
   private enterFinal() {
+    this.capture({ final: true });
     const layout = buildLayout(FINAL_TEMPLATE, "living", this.rng, { doors: [] });
     this.room = {
       act: ACTS - 1, index: ROOMS_PER_ACT + 1, season: "summer", theme: "living", kind: "final", layout,
