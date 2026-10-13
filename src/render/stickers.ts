@@ -88,7 +88,7 @@ const KINGS: Record<"stinkKing" | "camelKing" | "queen", ["stinkbug" | "camel" |
 
 /**
  * 子ども（仮の絵。public/kids/*.png があればそちらを使う）。右向き。hug は猫をだっこしている絵（猫は描かず、腕で輪を作る）。
- * お兄ちゃん6さい: 短い黒髪・青いTシャツ・半ズボン。妹3さい: ふたつ結び・ピンクのワンピース。
+ * お兄ちゃん6さい: 短い黒髪・青いTシャツ・半ズボン。妹3さい: 黒髪のボブ・ピンクのワンピース。
  */
 export function kidCanvas(type: "boy" | "girl", hug = false): HTMLCanvasElement {
   const girl = type === "girl", W = 220, H = girl ? 300 : 360;
