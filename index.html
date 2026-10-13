@@ -106,9 +106,14 @@
       .logo { font-size: clamp(34px, 10vw, 56px); font-weight: 900; letter-spacing: 1px; line-height: 1.0; color: #fff4dc; font-family: "Arial Rounded MT Bold", "Hiragino Maru Gothic ProN", system-ui, sans-serif;
         text-shadow: 0 3px 0 #e8772b, 0 6px 0 #6b3a1a, 0 10px 18px #0008; }
       .logo small { display: block; font-size: 0.42em; color: #ffd8a8; text-shadow: 0 2px 0 #6b3a1a; margin-bottom: 4px; letter-spacing: 3px; }
-      .hero { display: flex; align-items: flex-end; justify-content: center; gap: 6px; height: clamp(110px, 26vh, 210px); }
-      .hero img { height: 100%; width: auto; filter: drop-shadow(0 6px 8px #0007); }
-      .hero .mom { height: 82%; }
+      /* ママ（奥・大きく）の前に猫が座り、虫がやってくる。猫はママの腰くらいの大きさ */
+      .hero { position: relative; height: clamp(150px, 30vh, 250px); aspect-ratio: 1.25; }
+      .hero img { position: absolute; width: auto; filter: drop-shadow(0 6px 8px #0007); }
+      .hero .mom { height: 100%; left: 2%; bottom: 0; }
+      .hero .cat { height: 52%; left: 38%; bottom: 0; z-index: 2; }   /* ママの前で虫に立ちはだかる */
+      .hero .bug { height: 15%; z-index: 3; }
+      .hero .b1 { right: 0; bottom: 2%; transform: scaleX(-1); }
+      .hero .b2 { right: 4%; top: 18%; height: 17%; transform: scaleX(-1) rotate(-8deg); }
       .menu { display: flex; flex-direction: column; gap: 8px; width: min(260px, 80vw); }
       .menu button { font-size: 17px; font-weight: 800; padding: 10px; margin: 0; }
       .record { font-size: 12px; color: #fffc; background: #0006; border-radius: 999px; padding: 4px 12px; }
@@ -158,7 +163,7 @@
         .go, .close, .skip, .again { margin-top: 6px; padding: 6px 16px; }
         .title { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 6px 18px; width: min(820px, 100%); }
         .logo { width: 100%; font-size: 34px; } .logo br { display: none; }
-        .hero { height: 46vh; } .menu { width: 220px; } .menu button { padding: 7px; font-size: 15px; }
+        .hero { height: 52vh; } .menu { width: 220px; } .menu button { padding: 7px; font-size: 15px; }
         .record { width: 100%; max-width: max-content; }
         .zgroup { margin-bottom: 3px; } .ztitle { font-size: 11px; }
       }
