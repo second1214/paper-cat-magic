@@ -1,4 +1,6 @@
-# paper-cat-magic
+# My Cat Is So Cute
+
+（リポジトリ名: paper-cat-magic）
 
 ママは虫が大の苦手。おうちに入りこんだ虫を、猫がおもちゃで追い払う見下ろし型アクション（ブラウザ / three.js）。
 
