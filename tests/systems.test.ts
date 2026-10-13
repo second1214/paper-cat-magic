@@ -206,12 +206,12 @@ describe("リビングに来る子どもたち", () => {
     w.update(1 / 60, { move: { x: -1, z: 0 }, aim: null, fire: false, dash: false });
     expect(w.player.scared).toBe(true);
   });
-  it("虫がいなくなれば、子どもがいても部屋は片付く（子どもは帰る）", () => {
+  it("虫がいなくなれば、子どもがいても部屋は片付く（子どもは残って追いかけてくる）", () => {
     const w = arena(null);
     kid(w, "girl", 6).phase = 99;
     run(w, 0.1);
     expect(w.room.cleared).toBe(true);
-    expect(w.enemies).toHaveLength(0);
+    expect(w.enemies.filter((e) => e.type === "girl")).toHaveLength(1);
   });
 });
 
