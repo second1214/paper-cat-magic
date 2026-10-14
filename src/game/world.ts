@@ -1569,8 +1569,21 @@ export class World {
 
   private relicPool() { return RELIC_IDS.filter((r) => !this.relics.includes(r) && !this.isLocked("relic", r)); }
 
+  /** 今の選択肢の出し方（広告で1回だけ引き直せる。呪いの箱は引き直せない）。 */
+  private lastOffer: "spell" | "toy" | "relic" | "gear" | "treasure" | null = null;
+  rerolled = false;
+  get canReroll() { return this.phase === "reward" && !!this.lastOffer && !this.rerolled; }
+  /** 選択肢を同じ種類で引き直す（1画面1回）。 */
+  rerollChoices() {
+    if (!this.canReroll) return;
+    const k = this.lastOffer!;
+    if (k === "treasure") this.offerTreasure(); else this.offer(k);
+    this.rerolled = true;
+  }
+
   private offer(kind: "spell" | "toy" | "relic" | "gear") {
     const n = 3 + this.bonus.choiceAdd;
+    this.lastOffer = kind; this.rerolled = false;
     if (kind === "toy") {
       const have = new Set(this.held.map((h) => h.def.id));
       const left = Object.keys(TOYS).filter((t) => !have.has(t) && !this.isLocked("toy", t));
@@ -1587,6 +1600,7 @@ export class World {
 
   /** 宝箱: レリック・いい装備・レアな技から1つ。 */
   private offerTreasure() {
+    this.lastOffer = "treasure"; this.rerolled = false;
     const relic = this.relicPool(), out: Choice[] = [];
     if (relic.length) out.push({ kind: "relic", id: this.rng.pick(relic) });
     const g = this.rng.pick(GEAR_IDS), item = rollGear(g, () => this.rng.next(), this.bonus.luck + 1, this.room.act);
@@ -1597,6 +1611,7 @@ export class World {
 
   /** あやしい箱: 呪いと引きかえの、強いごほうび（3つから1つ。いらないも選べる）。 */
   private offerPacts() {
+    this.lastOffer = null;
     const curses = pickN(this.rng, CURSE_IDS.filter((c) => !this.curses.includes(c)), 3);
     if (!curses.length) { this.notify(L("箱は空っぽだった", "The box was empty")); return; }
     const relic = this.relicPool();

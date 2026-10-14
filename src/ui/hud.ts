@@ -574,7 +574,9 @@ export class Hud {
       <div class="rhead">${mama("relief", boss ? L("すごい！ありがとう！", "Amazing! Thank you!") : L("ふぅ…ありがとう。", "Phew… thank you."), true)}<div><h2>${title}</h2>
         <p class="muted">${note}</p></div></div>
       <div class="choices">${w.choices.map(card).join("")}</div>
-      <button class="skip">${L("いらない", "Skip")}</button></div>`;
+      <div class="rbtns">${adsAvailable() && w.canReroll ? `<button class="go rerollAd" ${this.adBusy ? "disabled" : ""}>${L("▶ 広告を見て選びなおす", "▶ Watch ad to reroll")}</button>` : ""}<button class="skip">${L("いらない", "Skip")}</button></div></div>`;
+    const rr = el.querySelector<HTMLButtonElement>(".rerollAd");
+    if (rr) rr.onclick = () => this.watchAd(() => w.rerollChoices());
     el.querySelectorAll<HTMLElement>("[data-i]").forEach((b) => b.onclick = () => w.takeReward(w.choices[Number(b.dataset.i)]));
     el.querySelector<HTMLButtonElement>(".skip")!.onclick = () => w.takeReward(null);
   }
