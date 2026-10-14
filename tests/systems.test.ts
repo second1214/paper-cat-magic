@@ -149,7 +149,7 @@ describe("特別な部屋・強い虫・呪い", () => {
 describe("解放（負けても積み上がる）", () => {
   it("解放していないものは、ごほうび・お店に出てこない", () => {
     const locked = lockedKeys(NO_STATS);
-    const w = new World(4, { difficulty: 1, meta: { hp: 0, atk: 0, mana: 0, speed: 0, luck: 0, gift: 0 }, locked });
+    const w = new World(4, { difficulty: 1, meta: { hp: 0, atk: 0, mana: 0, speed: 0, luck: 0, gift: 0, fav: 0 }, locked });
     w.start();
     const seen = new Set<string>();
     for (let k = 0; k < 60; k++) {
@@ -292,7 +292,7 @@ describe("画面を埋め尽くす連鎖", () => {
 
 describe("エンドレスモード", () => {
   it("夏のボスのあとも季節がめぐり、2年目へ進む（ママの部屋にならない）", () => {
-    const w = new World(7, { difficulty: 1, meta: { hp: 0, atk: 0, mana: 0, speed: 0, luck: 0, gift: 0 }, endless: true });
+    const w = new World(7, { difficulty: 1, meta: { hp: 0, atk: 0, mana: 0, speed: 0, luck: 0, gift: 0, fav: 0 }, endless: true });
     w.start();
     w.enterRoom(3, 8, null);   // 夏のボス
     w.enemies = []; w.room.waves = [[]];
@@ -316,5 +316,24 @@ describe("エンドレスモード", () => {
     expect(cleanName("  ミケ  ")).toBe("ミケ");
     expect(cleanName("http://example.com")).toBeNull();
     expect(cleanName("09012345678")).toBeNull();
+  });
+});
+
+describe("おきにいり（クリアしたときに選んだ技を引き継ぐ）", () => {
+  const meta = (fav: number) => ({ hp: 0, atk: 0, mana: 0, speed: 0, luck: 0, gift: 0, fav });
+  it("おきにいりは最初から手持ちに入る（枠の数まで。★もそのまま）", () => {
+    const w = new World(3, { difficulty: 1, meta: meta(0), favorites: ["friend++", "kezukuroi"] });
+    expect(w.bag).toContain("friend++");
+    expect(w.bag).not.toContain("kezukuroi");
+    const w2 = new World(3, { difficulty: 1, meta: meta(1), favorites: ["friend++", "kezukuroi"] });
+    expect(w2.bag).toEqual(expect.arrayContaining(["friend++", "kezukuroi"]));
+  });
+  it("選べるのは、持っている技すべて（手持ち・スロット・サブスロット・電池式）", () => {
+    const w = new World(3); w.start();
+    w.addToy("kamibukuro"); w.toys[1].def.sub!.slots = ["hiss", null];
+    w.addToy("denmouse");
+    const owned = w.ownedSpells();
+    expect(owned).toEqual(expect.arrayContaining(["claw", "matatabi", "bite", "swing", "hiss"]));
+    expect(owned.filter((x) => x === "claw").length).toBeGreaterThanOrEqual(3);   // 電動ねずみの中のひっかきも
   });
 });

@@ -9,7 +9,7 @@ import { CURSE_IDS, CURSES, curseBonus } from "../core/curses";
 import { scoreOf } from "../core/score";
 import { makeRng, type Rng } from "../core/rng";
 import { addBonus, GEAR, GEAR_IDS, NO_BONUS, RELIC_IDS, RELICS, rollGear, totalBonus, type Bonus, type Gear, type GearItem, type Rarity } from "../core/items";
-import { DEFAULT_RUN, DIFFS, metaBonus, type RunOptions } from "../core/meta";
+import { DEFAULT_RUN, DIFFS, favSlots, metaBonus, type RunOptions } from "../core/meta";
 import {
   BOSS_TEMPLATE, buildLayout, Cell, cellAt, cellCenter, cellValue, FINAL_TEMPLATE, OUTDOOR, OUTDOOR_TEMPLATES, SEASON_NAME, SEASONS,
   SHOP_TEMPLATE, TEMPLATES, THEME_NAME, THEMES,
@@ -364,7 +364,7 @@ export class World {
     this.locked = new Set(opts.locked ?? []);
     const first = starterToy();
     this.toys = [held(first, first.manaMax)];
-    this.bag = ["swing", "water", "static"];
+    this.bag = ["swing", "water", "static", ...(opts.favorites ?? []).slice(0, favSlots(opts.meta))];   // おきにいりは最初から手持ちに
     this.player = {
       pos: { x: 0, z: 0 }, vel: { x: 0, z: 0 }, hp: 6, maxHp: 6, radius: 0.32,
       aim: { x: 1, z: 0 }, facing: 1, iframes: 0, dash: 0, dashCd: 0, hurt: 0,
@@ -809,6 +809,11 @@ export class World {
     this.events.push("forge");
     this.notify(`隠し場所の奥から ${spellDef(got).name} が出てきた`);
     return got;
+  }
+
+  /** 今持っている技すべて（手持ち・おもちゃのスロット・サブスロット・電池式）。おきにいり選びに使う。 */
+  ownedSpells(): string[] {
+    return [...this.bag, ...this.held.flatMap((h) => [...h.def.slots, ...(h.def.sub?.slots ?? [])])].filter((x): x is string => !!x && !!SPELLS[x.replace(/\+*$/, "")]);
   }
 
   /** 解放ずみの技。 */
