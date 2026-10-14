@@ -7,7 +7,7 @@ export type SpellKind = "attack" | "modifier" | "multicast" | "trigger" | "duet"
 export type TriggerOn = "hit" | "every" | "bounce" | "kill";
 
 /**
- * 修飾がかかる向き（Magicraft の右・左・両側・全体修飾）。
+ * 修飾がかかる向き（右・左・両側・全体）。
  * right=右の技 / left=左の技 / both=左右の技（2つをいっしょに出す） / all=置いたおもちゃの全部の技（読まれない・やる気の最大が減る）。
  */
 export type ModDir = "right" | "left" | "both" | "all";
@@ -70,7 +70,7 @@ export interface ProjectileStats {
 }
 
 /**
- * 召喚（Magicraft と同じ仕様）: 仲間を呼び出し、出ている間ずっと戦わせる。
+ * 召喚: 仲間を呼び出し、出ている間ずっと戦わせる。
  * 召喚ごとに呼べる数の上限があり、上限で呼ぶと一番古い仲間が帰って新しい仲間に入れ替わる。
  * 左に置いた修飾・属性は、仲間の攻撃にそのままかかる（攻撃力・多段・属性・大きさ・速さ）。
  */
@@ -408,7 +408,7 @@ for (const d of Object.values(SPELLS)) d.rar = RAR[d.id] ?? 0;
 export const SPELL_IDS = Object.keys(SPELLS);
 const TRIGGER_TEXT: Record<TriggerOn, string> = { hit: "左の技が当たると", every: "左の技が当たるたびに", bounce: "左の技がはね返るたびに", kill: "左の技で虫を倒すと" };
 
-/** 説明欄に出す数値（ラベル・値）。Magicraft の魔法説明のように、選ぶ判断に使う数字をそろえて見せる。 */
+/** 説明欄に出す数値（ラベル・値）。選ぶ判断に使う数字をそろえて見せる。 */
 export function spellStats(def: SpellDef): [string, string][] {
   const out: [string, string][] = [];
   if (def.kind === "attack" && def.projectile) {
@@ -458,7 +458,7 @@ export function spellStats(def: SpellDef): [string, string][] {
   return out;
 }
 
-// ---------- ママのお直し（Magicraft の鍛冶: 同じ物3つで★の物に） ----------
+// ---------- ママのお直し（同じ物3つで★の物に） ----------
 /** id の末尾の「+」の数が★の数（"claw+" = ひっかき★）。 */
 export const baseId = (id: string) => id.replace(/\+*$/, "");
 export const starsOf = (id: string) => id.length - baseId(id).length;

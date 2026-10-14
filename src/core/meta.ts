@@ -46,5 +46,6 @@ export function runReward(roomsCleared: number, bossesBeaten: number, win: boole
 }
 
 /** locked: まだ解放していないもの（"spell:id" / "toy:id" / "relic:id"）。 */
-export interface RunOptions { difficulty: number; meta: MetaLv; locked?: string[] }
+/** endless: エンドレスモード（夏のあとも季節がめぐり続け、だんだん強くなる。ポイントでランキング）。 */
+export interface RunOptions { difficulty: number; meta: MetaLv; locked?: string[]; endless?: boolean }
 export const DEFAULT_RUN: RunOptions = { difficulty: 1, meta: NO_META };

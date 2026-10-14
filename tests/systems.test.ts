@@ -26,7 +26,7 @@ function run(w: World, sec: number, o: { fire?: boolean; move?: { x: number; z: 
   for (let t = 0; t < sec; t += 1 / 60) { w.player.hp = w.player.maxHp; w.update(1 / 60, { move: o.move ?? { x: 0, z: 0 }, aim: { x: 1, z: 0 }, fire: !!o.fire, dash: !!o.dash }); }
 }
 
-describe("つづけて（Magicraft のトリガー）", () => {
+describe("つづけて", () => {
   it("ひっかき→つづけて→ぶんぶん: ひっかきの当たった所を中心にぶんぶんが回る", () => {
     const w = arena({ dx: 4, dz: 0 });
     w.toy.slots = ["claw", "chain", "swing", null, null, null];
@@ -287,5 +287,34 @@ describe("画面を埋め尽くす連鎖", () => {
       found = w.room.waves.some((wv) => wv.length >= 14);
     }
     expect(found).toBe(true);
+  });
+});
+
+describe("エンドレスモード", () => {
+  it("夏のボスのあとも季節がめぐり、2年目へ進む（ママの部屋にならない）", () => {
+    const w = new World(7, { difficulty: 1, meta: { hp: 0, atk: 0, mana: 0, speed: 0, luck: 0, gift: 0 }, endless: true });
+    w.start();
+    w.enterRoom(3, 8, null);   // 夏のボス
+    w.enemies = []; w.room.waves = [[]];
+    w.update(1 / 30, { move: { x: 0, z: 0 }, aim: null, fire: false, dash: false });
+    if (w.phase === "reward") w.takeReward(null);
+    (w as unknown as { goThrough(d: unknown): void }).goThrough(w.room.doors[0]);
+    expect(w.room.kind).not.toBe("final");
+    expect(w.room.act).toBe(4);
+    expect(w.room.season).toBe("autumn");
+    expect(w.title).toContain("2年目の秋");
+    // 何年目でも虫の速さ・ボスの弾は上限つき
+    w.enterRoom(20, 8, null);
+    expect(w.enemies[0].speed).toBeLessThan(5);
+  });
+  it("ポイントは部屋・ボス・強い虫・倒した虫から計算し、ありえない記録ははじく", async () => {
+    const { scoreOf, plausible, cleanName } = await import("../src/core/score");
+    expect(scoreOf({ rooms: 10, bosses: 1, elites: 2, kills: 50 })).toBe(10 * 100 + 500 + 60 + 250);
+    expect(plausible({ rooms: 10, bosses: 1, elites: 2, kills: 50 })).toBe(true);
+    expect(plausible({ rooms: 10, bosses: 9, elites: 2, kills: 50 })).toBe(false);
+    expect(plausible({ rooms: 1, bosses: 0, elites: 0, kills: 99999 })).toBe(false);
+    expect(cleanName("  ミケ  ")).toBe("ミケ");
+    expect(cleanName("http://example.com")).toBeNull();
+    expect(cleanName("09012345678")).toBeNull();
   });
 });

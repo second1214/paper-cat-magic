@@ -158,6 +158,17 @@
       .hero .b2 { right: 4%; top: 18%; height: 17%; transform: scaleX(-1) rotate(-8deg); }
       .menu { display: flex; flex-direction: column; gap: 8px; width: min(260px, 80vw); }
       .menu button { font-size: 17px; font-weight: 800; padding: 10px; margin: 0; }
+      #coins .pts { margin-left: 10px; color: #ffd43b; }
+      .rankPanel { width: min(560px, 100%); }
+      table.rank { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 14px; }
+      table.rank th { font-size: 11px; color: var(--muted); font-weight: 700; padding: 2px 4px; }
+      table.rank td { padding: 5px 4px; border-top: 1px dashed var(--line); } table.rank td.nm { text-align: left; font-weight: 700; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      table.rank tr:nth-child(2) td:first-child { color: #f59f00; font-weight: 900; } table.rank tr.me td { background: #fff3bf; }
+      .endlessBox { background: #fff3bf; border: 2px solid #fab005; border-radius: 12px; padding: 8px 10px; margin: 6px 0; }
+      .bigScore { font-size: 26px; font-weight: 900; color: #e8590c; }
+      .sendRow { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; } .nameIn { font-size: 16px; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--line); width: min(240px, 60vw); }
+      .sendBtn { padding: 8px 12px; } .sendMsg { min-height: 1.2em; margin: 4px 0 0; font-size: 13px; }
+      .menu.center { margin: 10px auto 0; }
       .menu button small { display: block; font-size: 11px; font-weight: 700; opacity: .85; } .warn { color: #c92a2a; font-weight: 700; }
       .record { font-size: 12px; color: #fffc; background: #0006; border-radius: 999px; padding: 4px 12px; }
       .record b { color: #ffd43b; }
@@ -225,7 +236,7 @@
       .tab small { font-size: 9px; color: #fff; background: var(--accent); border-radius: 5px; padding: 0 4px; margin-left: 2px; }
       .tab.on { background: #fff; border-color: var(--accent); box-shadow: 0 0 0 2px #e8772b55; }
       .tabs .close { margin: 0 0 0 auto; padding: 4px 14px; }
-      @media (max-width: 600px) { .tab:not(.on) { font-size: 0; gap: 0; padding: 3px; } .tab:not(.on) small { display: none; } }
+      @media (max-width: 600px) { #bag .tab:not(.on) { font-size: 0; gap: 0; padding: 3px; } #bag .tab:not(.on) small { display: none; } }
       .gearRow { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
       .gslot { display: flex; flex-direction: column; align-items: center; font-size: 10px; color: var(--muted); gap: 2px; }
       .sets { display: grid; gap: 3px; flex: 1; min-width: 180px; }
@@ -258,6 +269,7 @@
 
       /* 低い画面（スマホ横持ち） */
       @media (max-height: 520px) {
+        .title .menu { display: grid; grid-template-columns: 1fr 1fr; width: min(460px, 60vw); gap: 6px; } .title .menu button { padding: 7px; font-size: 15px; } .title .menu .go { grid-column: 1 / -1; }
         :root { --cell: 36px; --cellBase: 36px; --gap: 5px; }
         #hearts { font-size: 18px; } #mana { width: 100px; height: 8px; } #room { font-size: 12px; }
         #slots .toyIcon { width: 30px; height: 30px; }

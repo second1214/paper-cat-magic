@@ -1,10 +1,12 @@
 // HTML の HUD と各画面（はじめに・ごほうび選び・おもちゃの編集・結果）。
-// Magicraft の説明欄のように、アイテムは「絵・名前・種類・数値・説明」をいつも同じ形で見せる。
+// アイテムは「絵・名前・種類・数値・説明」をいつも同じ形で見せる。
 import { baseId, DIR_INFO, ELEMENT_INFO, KIND_LABEL, MOTION_LABEL, rarOf, SPELL_RAR_NAME, SPELLS, spellDef, spellStats, starsOf, type SpellDef } from "../core/spells";
 import { groupSummary, SUB_LABEL, TOYS, toyStats, type ToyDef } from "../core/wand";
 import { CURSES } from "../core/curses";
 import { findUnlock, isOpen, UNLOCKS, unlockText, type Unlock, type UnlockKind } from "../core/unlock";
-import { buyUpgrade, canPick, loadRecord, recordRun, recordText } from "./record";
+import { buyUpgrade, canPick, loadRecord, nameEndless, recordEndless, recordRun, recordText } from "./record";
+import { fetchBoard, saveName, savedName, submitScore, type Board } from "./ranking";
+import { cleanName, POINTS } from "../core/score";
 import { loadRun, runLabel } from "./save";
 import { DIFFS, runReward, UPGRADES } from "../core/meta";
 import { enemyTexture } from "../render/stickers";
@@ -20,6 +22,9 @@ const bugUrl = (t: EnemyType) => {
 import { ALTAR_NAME, REWARD_INFO, type Choice, type HeldToy, type Spot, type World } from "../game/world";
 import { elementCanvas, gearCanvas, kibbleCanvas, relicCanvas, rewardCanvas, spellCanvas, toyCanvas, urlOf } from "../art/items";
 import { bonusRows, GEAR, GEAR_FX, GEAR_IDS, GEAR_SLOTS, gearBonus, RARITY, RELIC_IDS, RELICS, SETS, setCounts, SLOT_NAME, type Gear, type GearItem } from "../core/items";
+
+/** 名前などを HTML に入れるときの文字の置きかえ。 */
+const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 export const isTouch = () => matchMedia("(pointer: coarse)").matches;
 
@@ -57,7 +62,7 @@ const itemCell = (kind: "toy" | "relic" | "gear", id: string | null, attrs = "",
 const statsTable = (rows: [string, string][]) =>
   `<table class="stats">${rows.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("")}</table>`;
 
-/** アイテムの説明カード（Magicraft の魔法説明のような形）。 */
+/** アイテムの説明カード（絵・名前・種類・数値・説明）。 */
 function spellCard(id: string, attrs = "") {
   const s = spellDef(id), mod = isMod(id);
   return `<div class="card" ${attrs}>
@@ -121,7 +126,7 @@ function slotRow(toy: ToyDef, cellOf: (i: number) => string, next = -1) {
   return `<div class="slotrow ${toy.slots.length > 10 ? "many" : ""}" style="--count:${toy.slots.length}"><div class="cells">${toy.slots.map((_, i) => cellOf(i)).join("")}</div><div class="glines">${lines}</div></div>`;
 }
 
-/** ずかんの並び（Magicraft の図鑑のように種類ごとに見せる）。 */
+/** ずかんの並び（種類ごとに見せる）。 */
 const ZUKAN: { title: string; ids: string[]; kind?: "toy" | "relic" | "gear" }[] = [
   { title: "飛ぶ技", ids: ["claw", "bite", "hairball", "hiss", "yarn", "laser"] },
   { title: "近く・置く技", ids: ["swing", "pounce", "punch", "post"] },
@@ -141,7 +146,7 @@ const ZUKAN: { title: string; ids: string[]; kind?: "toy" | "relic" | "gear" }[]
 ];
 
 /** タイトルまわりの画面。null ならゲーム中。 */
-type Screen = "title" | "howto" | "zukan" | "diff" | "grow" | null;
+type Screen = "title" | "howto" | "zukan" | "diff" | "grow" | "endless" | "rank" | null;
 
 export class Hud {
   private el = (id: string) => document.getElementById(id)!;
@@ -161,12 +166,18 @@ export class Hud {
   private fusePick: number[] = [];
   /** 今回の冒険で新しく解放されたもの。 */
   private opened: Unlock[] = [];
+  /** ランキング: 見ているタブ・読みこんだみんなの記録・エンドレスの結果（じぶんの順位・送った結果）。 */
+  private rankTab: "all" | "mine" = "all";
+  private board: Board | null | "loading" | "error" = null;
+  private localRank = 0;
+  private endedAt = 0;
+  private sent: null | "sending" | { rank: number } | { error: string } = null;
   /** 持ち物画面のタブ（おもちゃの番号、または装備・レリック）と、そこで選んでいるもの。 */
   private tab: number | "gear" = 0;
   private pick: string | null = null;
   private lastKey = "";
 
-  constructor(private world: () => World, private onRestart: () => void, private onTitle: () => void, private onStart: (difficulty: number) => void, private onContinue: () => void) {
+  constructor(private world: () => World, private onRestart: () => void, private onTitle: () => void, private onStart: (difficulty: number, endless?: boolean) => void, private onContinue: () => void) {
     this.el("bagBtn").addEventListener("click", () => this.toggleBag());
     this.el("pauseBtn").addEventListener("click", () => this.togglePause());
     this.el("muteBtn").addEventListener("click", () => { this.onMute(); this.lastKey = ""; });
@@ -194,7 +205,7 @@ export class Hud {
     }).join("");
     this.el("manaFill").style.width = `${(p.mana / w.manaMax) * 100}%`;
     this.el("manaNum").textContent = `${Math.floor(p.mana)}/${w.manaMax}`;
-    this.el("coins").innerHTML = `<img src="${urlOf(kibbleCanvas())}" alt="">${w.coins}`;
+    this.el("coins").innerHTML = `<img src="${urlOf(kibbleCanvas())}" alt="">${w.coins}${w.opts.endless ? `<span class="pts">★${w.score}</span>` : ""}`;
     document.body.classList.toggle("final", w.room.kind === "final" && w.phase === "play");
     this.el("muteBtn").textContent = this.muted() ? "♪×" : "♪";
     this.el("room").textContent = w.title;
@@ -206,10 +217,13 @@ export class Hud {
       this.recorded.add(w);
       this.earned = runReward(w.cleared, w.bosses, w.phase === "win", w.opts.difficulty, w.curses.length);
       this.opened = recordRun(w.room.act, w.room.index, w.phase === "win", w.opts.difficulty, this.earned,
-        { kills: w.kills, elites: w.elites, bosses: w.bosses, rooms: w.cleared, specials: w.specials, curses: w.curses.length });
+        { kills: w.kills, elites: w.elites, bosses: w.bosses, rooms: w.cleared, specials: w.specials, curses: w.curses.length }, !!w.opts.endless);
+      this.sent = null;
+      this.endedAt = Date.now();
+      this.localRank = w.opts.endless && w.cleared > 0 ? recordEndless({ name: savedName(), score: w.score, rooms: w.cleared, bosses: w.bosses, elites: w.elites, kills: w.kills, at: this.endedAt, act: w.room.act }) : 0;
     }
     this.meters(w);
-    const key = JSON.stringify([w.coins, w.shop?.items, w.shop?.rerollCost, w.room.kind, w.held.map((h) => h.def), w.cur, w.relics, w.gear, w.curses, this.tab, this.pick, this.fusePick, w.bag, p.cursor, p.recharging, this.bagOpen, this.paused, this.screen, this.zukanSel, this.sel, w.phase, w.choices, w.doorOpen, w.room.act, w.room.index, w.room.altar?.used]);
+    const key = JSON.stringify([w.coins, w.shop?.items, w.shop?.rerollCost, w.room.kind, w.held.map((h) => h.def), w.cur, w.relics, w.gear, w.curses, this.tab, this.pick, this.fusePick, w.bag, p.cursor, p.recharging, this.bagOpen, this.paused, this.screen, this.zukanSel, this.sel, w.phase, w.choices, w.doorOpen, w.room.act, w.room.index, w.room.altar?.used, this.rankTab, this.board, this.sent, this.localRank]);
     if (key === this.lastKey) return;
     this.lastKey = key;
 
@@ -284,6 +298,25 @@ export class Hud {
       el.querySelector<HTMLButtonElement>(".back")!.onclick = go("title");
       return;
     }
+    if (this.screen === "endless") {   // エンドレスの説明とはじめる
+      const saved = loadRun();
+      el.innerHTML = `<div class="panel diffPanel"><h2>エンドレス</h2>
+        <p>夏のあとも季節がめぐり続け、虫はどんどん強くなる。どこまで守れるか、ポイントで競おう。難易度は「ふつう」。</p>
+        <p class="muted">ポイント: 片付けた部屋 ×${POINTS.rooms}・ボス ×${POINTS.bosses}・強い虫 ×${POINTS.elites}・倒した虫 ×${POINTS.kills}</p>
+        ${saved ? `<p class="muted warn">はじめると、前の冒険のつづき（${runLabel(saved)}）は消えます</p>` : ""}
+        <div class="menu center"><button class="go startEndless">はじめる</button><button class="back">もどる</button></div></div>`;
+      el.querySelector<HTMLButtonElement>(".startEndless")!.onclick = () => { this.screen = null; this.lastKey = ""; this.onStart(1, true); };
+      el.querySelector<HTMLButtonElement>(".back")!.onclick = go("title");
+      return;
+    }
+    if (this.screen === "rank") {
+      el.innerHTML = `<div class="panel rankPanel"><h2>エンドレスのランキング</h2>
+        <div class="tabs"><button class="tab ${this.rankTab === "all" ? "on" : ""}" data-rt="all">みんな</button><button class="tab ${this.rankTab === "mine" ? "on" : ""}" data-rt="mine">じぶん</button></div>
+        ${this.rankHtml()}<button class="back">もどる</button></div>`;
+      el.querySelectorAll<HTMLButtonElement>("[data-rt]").forEach((b) => b.onclick = () => { this.rankTab = b.dataset.rt as "all" | "mine"; this.lastKey = ""; });
+      el.querySelector<HTMLButtonElement>(".back")!.onclick = go("title");
+      return;
+    }
     if (this.screen === "zukan") {
       el.innerHTML = `<div class="panel zukan">${this.zukanHtml()}</div>`;
       el.querySelectorAll<HTMLButtonElement>("[data-z]").forEach((b) => b.onclick = () => { this.zukanSel = b.dataset.z!; this.lastKey = ""; });
@@ -298,6 +331,8 @@ export class Hud {
       <div class="menu">
         ${saved ? `<button class="go cont">つづきから<small>${runLabel(saved)}</small></button>` : ""}
         <button class="${saved ? "" : "go "}start">はじめる</button>
+        <button class="endlessBtn">エンドレス</button>
+        <button class="rankBtn">ランキング</button>
         <button class="growBtn">ねこの成長</button>
         <button class="howtoBtn">あそびかた</button>
         <button class="zukanBtn">ずかん</button>
@@ -308,8 +343,41 @@ export class Hud {
     const cont = el.querySelector<HTMLButtonElement>(".cont");
     if (cont) cont.onclick = () => { this.screen = null; this.lastKey = ""; this.onContinue(); };
     el.querySelector<HTMLButtonElement>(".growBtn")!.onclick = go("grow");
+    el.querySelector<HTMLButtonElement>(".endlessBtn")!.onclick = go("endless");
+    el.querySelector<HTMLButtonElement>(".rankBtn")!.onclick = () => { this.screen = "rank"; this.lastKey = ""; this.loadBoard(); };
     el.querySelector<HTMLButtonElement>(".howtoBtn")!.onclick = go("howto");
     el.querySelector<HTMLButtonElement>(".zukanBtn")!.onclick = go("zukan");
+  }
+
+  /** みんなのランキングを読みこむ（終わったら描き直す）。 */
+  private loadBoard() {
+    this.board = "loading";
+    void fetchBoard().then((b) => { this.board = b ?? "error"; this.lastKey = ""; });
+  }
+
+  private rankHtml() {
+    const row = (i: number, name: string, score: number, rooms: number, mark = false) =>
+      `<tr class="${mark ? "me" : ""}"><td>${i + 1}</td><td class="nm">${esc(name || "ななしの猫")}</td><td>★${score}</td><td>${rooms}部屋</td></tr>`;
+    if (this.rankTab === "mine") {
+      const mine = loadRecord().endless;
+      return mine.length ? `<table class="rank"><tr><th>順位</th><th>名前</th><th>ポイント</th><th>部屋</th></tr>${mine.map((e, i) => row(i, e.name, e.score, e.rooms)).join("")}</table>`
+        : `<p class="muted">まだ記録がありません。エンドレスで遊ぶとここに残ります。</p>`;
+    }
+    if (this.board === "loading" || this.board === null) return `<p class="muted">読みこみ中…</p>`;
+    if (this.board === "error") return `<p class="muted">みんなのランキングは準備中です（つながりません）。</p>`;
+    return this.board.top.length ? `<table class="rank"><tr><th>順位</th><th>名前</th><th>ポイント</th><th>部屋</th></tr>${this.board.top.map((e, i) => row(i, e.name, e.score, e.rooms)).join("")}</table>`
+      : `<p class="muted">まだだれも記録を送っていません。一番乗りのチャンス！</p>`;
+  }
+
+  /** エンドレスの結果: ポイント・じぶんの順位・名前を入れてみんなのランキングへ送る。 */
+  private endlessResult(w: World) {
+    const s = this.sent;
+    const status = s === null ? "" : s === "sending" ? "送っています…" : "rank" in s ? `みんなのランキングで <b>${s.rank}位</b>！` : s.error;
+    return `<div class="endlessBox"><div class="bigScore">★ ${w.score} ポイント</div>
+      <p class="muted">片付けた部屋 ${w.cleared}×${POINTS.rooms}・ボス ${w.bosses}×${POINTS.bosses}・強い虫 ${w.elites}×${POINTS.elites}・倒した虫 ${w.kills}×${POINTS.kills}</p>
+      ${this.localRank ? `<p>じぶんの記録で <b>${this.localRank}位</b></p>` : ""}
+      ${w.cleared > 0 ? `<div class="sendRow"><input class="nameIn" maxlength="12" placeholder="名前（本名は入れないでね）" value="${esc(savedName())}">
+        <button class="sendBtn" ${s === "sending" || (s !== null && typeof s === "object" && "rank" in s) ? "disabled" : ""}>ランキングに送る</button></div><p class="sendMsg">${status}</p>` : ""}</div>`;
   }
 
   private howtoHtml() {
@@ -460,7 +528,7 @@ export class Hud {
     el.querySelector<HTMLButtonElement>(".skip")!.onclick = () => w.takeReward(null);
   }
 
-  /** ママのところ（Magicraft のお店: カリカリと交換でおねだり・ほかのを見せてもらう・お直し。売ることはできない）。 */
+  /** ママのところ（カリカリと交換でおねだり・ほかのを見せてもらう・お直し。売ることはできない）。 */
   private renderShop(w: World) {
     const el = this.el("shopPanel");
     el.hidden = w.phase !== "shop" || !w.shop;
@@ -527,7 +595,7 @@ export class Hud {
     const el = this.el("result");
     el.hidden = !(w.phase === "dead" || w.phase === "win");
     if (el.hidden) return;
-    el.innerHTML = `<div class="panel"><h2>${w.phase === "win" ? "ママにつかまった！" : "虫にやられた…"}</h2>
+    el.innerHTML = `<div class="panel"><h2>${w.phase === "win" ? "ママにつかまった！" : "虫にやられた…"}</h2>${w.opts.endless ? this.endlessResult(w) : ""}
       ${w.phase === "win" ? mama("pet", "つかまえた〜♪<br>病院でワクチン打とうね。<br>1年間ありがとう！") : mama("scream", "いやぁぁぁ！<br>虫がーっ！")}
       <p class="muted">${w.phase === "win" ? "秋から夏まで、ぜんぶの虫を追い払った。さいごは病院へ…（おしまい）" : `${w.title} で力尽きた。`}</p>
       <p class="nibline">にぼし <b>+${this.earned}</b>（${DIFFS[w.opts.difficulty].name}・片付けた部屋 ${w.cleared}・倒した虫 ${w.kills}${w.curses.length ? `・呪い ${w.curses.length}` : ""}）　タイトルの「ねこの成長」で使える</p>
@@ -536,5 +604,12 @@ export class Hud {
       <div class="menu"><button class="go again">もう一度</button><button class="toTitle">タイトルへ</button></div></div>`;
     el.querySelector<HTMLButtonElement>(".again")!.onclick = () => this.onRestart();
     el.querySelector<HTMLButtonElement>(".toTitle")!.onclick = () => this.toTitle();
+    const send = el.querySelector<HTMLButtonElement>(".sendBtn");
+    if (send) send.onclick = () => {
+      const name = cleanName(el.querySelector<HTMLInputElement>(".nameIn")!.value);
+      if (!name) { this.sent = { error: "その名前は使えません（12文字まで・連絡先や長い数字はだめ）" }; this.lastKey = ""; return; }
+      saveName(name); nameEndless(this.endedAt, name); this.sent = "sending"; this.lastKey = "";
+      void submitScore({ name, score: w.score, rooms: w.cleared, bosses: w.bosses, elites: w.elites, kills: w.kills }).then((r) => { this.sent = r; this.lastKey = ""; });
+    };
   }
 }

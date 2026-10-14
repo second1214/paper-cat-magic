@@ -22,7 +22,7 @@ export interface ToyDef {
   recharge: number; // 最後のスロットまで使った後の休み（秒）
   /** このおもちゃで出す技すべてにかかる性質。 */
   baseMod?: Modifier;
-  /** サブスロット: 条件がたまると、やる気を使わずに全部いっぺんに出る（Magicraft の副スロット）。 */
+  /** サブスロット: 条件がたまると、やる気を使わずに全部いっぺんに出る。 */
   sub?: { slots: (string | null)[]; charge: SubCharge; need: number };
   /** 全部のスロットを1回でいっぺんに出す。 */
   castAll?: boolean;

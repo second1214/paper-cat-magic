@@ -11,7 +11,7 @@ const canvas = document.getElementById("game") as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
 const seed = () => Date.now() % 100000;
 /** 難易度と、ねこの成長（保存してあるレベル）・解放ずみのもので新しい冒険を作る。 */
-const newWorld = (difficulty: number, s = seed()) => { const r = loadRecord(); return new World(s, { difficulty, meta: r.meta, locked: lockedKeys(r.stats) }); };
+const newWorld = (difficulty: number, s = seed(), endless = false) => { const r = loadRecord(); return new World(s, { difficulty: endless ? 1 : difficulty, meta: r.meta, locked: lockedKeys(r.stats), endless }); };
 let world = newWorld(1, Number(params.get("seed")) || seed());
 const view = new GameView(canvas);
 const sound = new Sound();
@@ -19,9 +19,9 @@ const sound = new Sound();
 for (const ev of ["pointerdown", "keydown", "touchstart"]) addEventListener(ev, () => sound.unlock(), { passive: true });
 const hud = new Hud(
   () => world,
-  () => { world = newWorld(world.opts.difficulty); world.start(); hud.bagOpen = false; },
+  () => { world = newWorld(world.opts.difficulty, seed(), world.opts.endless); world.start(); hud.bagOpen = false; },
   () => { world = newWorld(1); },
-  (difficulty) => { world = newWorld(difficulty, Number(params.get("seed")) || seed()); world.start(); },
+  (difficulty, endless) => { world = newWorld(difficulty, Number(params.get("seed")) || seed(), endless); world.start(); },
   () => { const d = loadRun(); if (!d) return; world = World.load(d); world.start(); savedNo = world.saveNo; },
 );
 /** 途中セーブ: 部屋に入るたびに保存し、冒険が終わったら消す。 */

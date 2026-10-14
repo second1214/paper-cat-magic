@@ -1,11 +1,12 @@
 // ゲームの状態と1フレームの更新。描画・入力・DOM には依存しない（x,z の2D平面で計算）。
 //
 // 物語: ママは虫が大の苦手。家に入りこんだ虫を、猫がおもちゃで追い払う。
-// 構成（Magicraft 風）: 季節ごとの「章」= 部屋8つ＋ボス。部屋を片付けると出口が2〜3個開き、
+// 構成: 季節ごとの「章」= 部屋8つ＋ボス。部屋を片付けると出口が2〜3個開き、
 // 扉の上のアイコンで「次の部屋をクリアしたときのごほうび」（または特別な部屋）を選んで進む。
 import { castAll, MAX_BATT, passiveCost, planCast, starterToy, TOYS, type Shot, type ToyDef } from "../core/wand";
 import { MAX_STARS, rarOf, SPELL_IDS, SPELLS, spellDef, starsOf, type Element, type Motion, type ProjectileStats, type TechFx, type TriggerOn } from "../core/spells";
 import { CURSE_IDS, CURSES, curseBonus } from "../core/curses";
+import { scoreOf } from "../core/score";
 import { makeRng, type Rng } from "../core/rng";
 import { addBonus, GEAR, GEAR_IDS, NO_BONUS, RELIC_IDS, RELICS, rollGear, totalBonus, type Bonus, type Gear, type GearItem, type Rarity } from "../core/items";
 import { DEFAULT_RUN, DIFFS, metaBonus, type RunOptions } from "../core/meta";
@@ -182,7 +183,7 @@ export interface Player {
   scared: boolean;
 }
 
-/** 持っているおもちゃ。やる気と、次に使うスロットはおもちゃごと（Magicraft の杖と同じ）。 */
+/** 持っているおもちゃ。やる気と、次に使うスロットはおもちゃごと（おもちゃを持ち替えても覚えている）。 */
 export interface HeldToy { def: ToyDef; mana: number; cursor: number; /** サブスロットのたまり具合 */ charge: number; /** 電池式の次の自動まで */ autoCd: number }
 export const MAX_TOYS = 3;
 const held = (def: ToyDef, mana: number): HeldToy => ({ def, mana, cursor: 0, charge: 0, autoCd: def.auto ?? 0 });
@@ -245,7 +246,7 @@ export type Phase = "intro" | "play" | "reward" | "shop" | "bench" | "dead" | "w
 /** 落ちているカリカリ（お金）。 */
 export interface Pickup { id: number; pos: Vec; value: number; t: number }
 
-/** ママのところの品物（Magicraft のお店: カリカリと交換で技とおやつをもらい、ほかのも見せてもらえる。売れない）。 */
+/** ママのところの品物（カリカリと交換で技とおやつをもらい、ほかのも見せてもらえる。売れない）。 */
 export interface ShopItem { kind: "spell" | "potion"; id: string; price: number; sold: boolean }
 export const POTIONS: Record<string, { name: string; desc: string; price: number }> = {
   milk: { name: "猫用ミルク", desc: "♥1 回復", price: 6 },
@@ -293,6 +294,8 @@ export interface SaveData {
   time: number;
 }
 export const ACTS = SEASONS.length;
+/** 季節が進むほど強くなる計算に使う上限（エンドレスで何年目になっても、弾が出っぱなし等にならない）。 */
+const capAct = (act: number, max: number) => Math.min(act, max);
 
 export class World {
   rng: Rng;
@@ -437,17 +440,22 @@ export class World {
   get title() {
     const r = this.room;
     if (r.kind === "final") return "さいご・ママ";
-    if (r.kind === "shop") return `${SEASON_NAME[r.season]}・ママのところ`;
-    if (r.altar) return `${SEASON_NAME[r.season]}・${ALTAR_NAME[r.altar.kind]} ${r.index + 1}/${ROOMS_PER_ACT}`;
-    if (r.challenge) return `${SEASON_NAME[r.season]}・強い虫の部屋 ${r.index + 1}/${ROOMS_PER_ACT}`;
-    return `${SEASON_NAME[r.season]}・${r.kind === "boss" ? "ボス" : `${THEME_NAME[r.theme]} ${r.index + 1}/${ROOMS_PER_ACT}`}`;
+    // エンドレスは2年目から「2年目の秋」のように
+    const S = `${this.opts.endless && r.act >= ACTS ? `${Math.floor(r.act / ACTS) + 1}年目の` : ""}${SEASON_NAME[r.season]}`;
+    if (r.kind === "shop") return `${S}・ママのところ`;
+    if (r.altar) return `${S}・${ALTAR_NAME[r.altar.kind]} ${r.index + 1}/${ROOMS_PER_ACT}`;
+    if (r.challenge) return `${S}・強い虫の部屋 ${r.index + 1}/${ROOMS_PER_ACT}`;
+    return `${S}・${r.kind === "boss" ? "ボス" : `${THEME_NAME[r.theme]} ${r.index + 1}/${ROOMS_PER_ACT}`}`;
   }
+
+  /** エンドレスモードのポイント。 */
+  get score() { return scoreOf({ rooms: this.cleared, bosses: this.bosses, elites: this.elites, kills: this.kills }); }
 
   // ---------- 部屋 ----------
   enterRoom(act: number, index: number, reward: RewardKind | null) {
     this.capture({ final: false, act, index, reward });
     const boss = index === ROOMS_PER_ACT;
-    const season = SEASONS[act];
+    const season = SEASONS[act % ACTS];   // エンドレスは季節がめぐる
     if (index === 0) this.usedThemes = [];
     const shop = reward === "shop";
     const altar: AltarKind | null = reward === "treasure" || reward === "rest" || reward === "fusion" || reward === "curse" ? reward : null;
@@ -484,9 +492,9 @@ export class World {
         return w.flatMap((t) => (t === "ant" ? [t, t] : [t]));   // アリは群れで来る
       });
     // 虫の大群: 季節が進むと、弱い虫が20匹以上で押し寄せる波がまざる（連鎖で一掃する気持ちよさ）
-    if (!boss && !quiet && waves.length && (act >= 1 || index >= 4) && index >= 2 && this.rng.next() < 0.3 + act * 0.08) {
+    if (!boss && !quiet && waves.length && (act >= 1 || index >= 4) && index >= 2 && this.rng.next() < Math.min(0.6, 0.3 + act * 0.08)) {
       const weak = bugs.pool.reduce((a, b) => (ENEMY[a].hp <= ENEMY[b].hp ? a : b));
-      const n = Math.min(30, Math.round((90 + act * 40) / ENEMY[weak].hp));
+      const n = Math.min(30, Math.round((90 + capAct(act, 6) * 40) / ENEMY[weak].hp));
       waves[waves.length - 1] = Array.from({ length: Math.max(14, n) }, () => weak);
     }
 
@@ -534,7 +542,7 @@ export class World {
   private eliteChance() {
     const r = this.room;
     if (r.kind === "boss" || (r.act === 0 && r.index < 2)) return 0;
-    return 0.08 + r.act * 0.06 + r.index * 0.01 + (this.curses.includes("tsuyoi") ? 0.25 : 0);
+    return Math.min(0.6, 0.08 + r.act * 0.06 + r.index * 0.01 + (this.curses.includes("tsuyoi") ? 0.25 : 0));
   }
 
   private spawnWave() {
@@ -707,7 +715,7 @@ export class World {
     if (this.doorOpen) for (const d of this.room.doors) if (dist(p.pos, d.pos) < 0.7) { this.goThrough(d); break; }
   }
 
-  // ---------- ママのところ（Magicraft のお店と鍛冶にあたる: おねだり・お直し） ----------
+  // ---------- ママのところ（おねだり・お直し） ----------
   /** 技の値段（修飾は少し安い。★は高い）。 */
   static price(id: string) { const d = spellDef(id); return Math.round((d.kind === "attack" ? 8 : d.kind === "modifier" ? 6 : 10) * (1 + starsOf(id) * 1.5) * (1 + rarOf(id) * 0.35)); }
   /** 値上げの呪いをふくめた値段。 */
@@ -776,7 +784,7 @@ export class World {
     al.used = true; this.offerPacts();
   }
 
-  // ---------- 秘密の隠し場所（Magicraft の融合にあたる） ----------
+  // ---------- 秘密の隠し場所 ----------
   // ソファの下の、猫だけが知っている隠し場所。同じレア度の物を4つ押しこむと、奥から前に失くした1つ上のレア度の物が出てくる。
   /** 隠し場所で交換できるレア度（手持ちに同じレア度の技が4つ以上）。 */
   fusable(): number[] {
@@ -804,7 +812,7 @@ export class World {
   private spellPool() { return SPELL_IDS.filter((id) => !this.isLocked("spell", id)); }
   /** レア度で重みをつけて技を選ぶ（季節が進むとレアが出やすい）。 */
   private pickSpells(n: number, minRar = 0): string[] {
-    const act = this.room?.act ?? 0, W = [6, 3 + act * 0.4, 1.2 + act * 0.4, 0.4 + act * 0.25];
+    const act = capAct(this.room?.act ?? 0, 6), W = [6, 3 + act * 0.4, 1.2 + act * 0.4, 0.4 + act * 0.25];
     const left = this.spellPool().filter((id) => (SPELLS[id].rar ?? 0) >= minRar), out: string[] = [];
     while (out.length < n && left.length) {
       const total = left.reduce((a, id) => a + W[SPELLS[id].rar ?? 0], 0);
@@ -884,7 +892,7 @@ export class World {
   private goThrough(d: Door) {
     const r = this.room;
     if (r.kind === "boss") {
-      if (r.act + 1 >= ACTS) { this.enterFinal(); return; }
+      if (r.act + 1 >= ACTS && !this.opts.endless) { this.enterFinal(); return; }
       this.enterRoom(r.act + 1, 0, null);
     } else this.enterRoom(r.act, r.index + 1, d.reward === "boss" ? null : d.reward);
   }
@@ -922,7 +930,7 @@ export class World {
       const ahead = { x: from.x + d.x * 0.6, z: from.z + d.z * 0.6 }, c = cellAt(L, ahead.x, ahead.z);
       pr.pos = cellValue(L, c.c, c.r) === Cell.Floor ? ahead : { ...from };
       if (s.tech !== "roomba") pr.vel = { x: 0, z: 0 };
-      // 上限で呼ぶと一番古い仲間が帰る（Magicraft の召喚上限）
+      // 上限で呼ぶと一番古い仲間が帰る（召喚の上限）
       const mine = this.projectiles.filter((q) => q.motion === "summon" && q.tech === s.tech);
       const limit = (SUMMON_LIMIT[s.tech] ?? 1) + this.bonus.summonAdd;
       if (mine.length >= limit) {
@@ -1027,14 +1035,14 @@ export class World {
         if (e.t > (fast ? 1.6 : 2.2)) {
           e.t = 0; e.phase++;
           if (e.phase % 2) for (let k = 0; k < 3; k++) this.gas({ x: p.pos.x + (this.rng.next() - 0.5) * 5, z: p.pos.z + (this.rng.next() - 0.5) * 4 }, 1.0);
-          else { const n = 8 + this.room.act * 2; for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2; this.fire({ stats: enemyShot("#94d82d", 3.6), payload: [] }, e.pos, { x: Math.cos(a), z: Math.sin(a) }, "enemy"); } }
+          else { const n = 8 + capAct(this.room.act, 5) * 2; for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2; this.fire({ stats: enemyShot("#94d82d", 3.6), payload: [] }, e.pos, { x: Math.cos(a), z: Math.sin(a) }, "enemy"); } }
         }
       } else if (e.type === "camelKing") {   // 大ジャンプして、着地で輪の弾
         if (e.phase > 0) {
           e.phase -= dt;
           if (e.phase <= 0) {
             e.vel = { x: 0, z: 0 }; this.events.push("land");
-            const n = (e.hp / e.maxHp < 0.5 ? 14 : 10) + this.room.act * 2;
+            const n = (e.hp / e.maxHp < 0.5 ? 14 : 10) + capAct(this.room.act, 5) * 2;
             for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2; this.fire({ stats: enemyShot("#c58a4a", 4.5), payload: [] }, e.pos, { x: Math.cos(a), z: Math.sin(a) }, "enemy"); }
           }
         } else if (e.t > 2.2) { e.t = 0; e.phase = 0.6; const d = Math.min(7, dist(e.pos, p.pos)); e.vel = { x: direct.x * d / 0.6, z: direct.z * d / 0.6 }; }
@@ -1054,11 +1062,11 @@ export class World {
         if (dist(e.pos, p.pos) < e.radius + p.radius) { this.phase = "win"; this.events.push("caught"); this.events.push("win"); }
       } else if (e.type === "hornet") {
         e.vel = { x: to.x * sp, z: to.z * sp };
-        const hpRate = e.hp / e.maxHp, period = (hpRate < 0.5 ? 1.5 : 2.1) - this.room.act * 0.12;
+        const hpRate = e.hp / e.maxHp, period = (hpRate < 0.5 ? 1.5 : 2.1) - capAct(this.room.act, 4) * 0.12;
         if (e.t > period) {
           e.t = 0; e.phase++;
           if (e.phase % 2) {
-            const n = (hpRate < 0.5 ? 14 : 10) + this.room.act * 2, off = this.rng.next() * Math.PI;
+            const n = (hpRate < 0.5 ? 14 : 10) + capAct(this.room.act, 5) * 2, off = this.rng.next() * Math.PI;
             for (let k = 0; k < n; k++) {
               const a = off + (k / n) * Math.PI * 2;
               this.fire({ stats: enemyShot("#ffcf33", 4.2), payload: [] }, e.pos, { x: Math.cos(a), z: Math.sin(a) }, "enemy");
@@ -1570,7 +1578,7 @@ function segDist(q: Vec, ax: number, az: number, b: Vec) {
 function makeEnemy(id: number, type: EnemyType, pos: Vec, act: number, difficulty = 1): Enemy {
   const d = ENEMY[type], D = DIFFS[difficulty];
   const hp = Math.round(d.hp * (1 + act * (d.boss ? 0.8 : 0.6)) * D.hp);
-  return { id, type, pos: { ...pos }, vel: { x: 0, z: 0 }, hp, maxHp: hp, radius: d.r, speed: d.speed * (1 + act * 0.06) * D.speed, slow: 0, hurt: 0, t: (id * 0.37) % 1, phase: 0, spawn: 0,
+  return { id, type, pos: { ...pos }, vel: { x: 0, z: 0 }, hp, maxHp: hp, radius: d.r, speed: d.speed * (1 + capAct(act, 6) * 0.06) * D.speed, slow: 0, hurt: 0, t: (id * 0.37) % 1, phase: 0, spawn: 0,
     wet: 0, sticky: 0, repel: 0, repelDps: 0, repelTick: 0, push: { x: 0, z: 0 }, elite: null };
 }
 
