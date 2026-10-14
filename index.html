@@ -143,13 +143,17 @@
       .example .cell { pointer-events: none; }
 
       /* タイトル */
-      #intro { background: radial-gradient(ellipse at center, #2b243388 0%, #1c1622ee 75%); }
+      #intro { background: radial-gradient(ellipse at center, #2b243388 0%, #1c1622ee 75%); overflow-y: auto; align-items: safe center; padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)); }
       .title { display: flex; flex-direction: column; align-items: center; gap: 10px; color: #fff; text-align: center; width: min(560px, 100%); }
       .logo { font-size: clamp(34px, 10vw, 56px); font-weight: 900; letter-spacing: 1px; line-height: 1.0; color: #fff4dc; font-family: "Arial Rounded MT Bold", "Hiragino Maru Gothic ProN", system-ui, sans-serif;
         text-shadow: 0 3px 0 #e8772b, 0 6px 0 #6b3a1a, 0 10px 18px #0008; }
       .logo small { display: block; font-size: 0.42em; color: #ffd8a8; text-shadow: 0 2px 0 #6b3a1a; margin-bottom: 4px; letter-spacing: 3px; }
       /* ママ（奥・大きく）の前に猫が座り、虫がやってくる。猫はママの腰くらいの大きさ */
-      .hero { position: relative; height: clamp(150px, 30vh, 250px); aspect-ratio: 1.25; }
+      .hero { position: relative; height: clamp(120px, 26dvh, 240px); aspect-ratio: 1.25; }
+      /* タイトルのメニュー: はじめる・つづきからは横いっぱい、ほかは2列（スマホの縦でも下まで収まる） */
+      .title .menu { display: grid; grid-template-columns: 1fr 1fr; width: min(420px, 92vw); gap: 7px; }
+      .title .menu .start, .title .menu .cont { grid-column: 1 / -1; }
+      .title .menu button { padding: 9px 6px; font-size: 16px; }
       .hero img { position: absolute; width: auto; filter: drop-shadow(0 6px 8px #0007); }
       .hero .mom { height: 100%; left: 2%; bottom: 0; }
       .hero .cat { height: 52%; left: 38%; bottom: 0; z-index: 2; }   /* ママの前で虫に立ちはだかる */
@@ -269,7 +273,7 @@
 
       /* 低い画面（スマホ横持ち） */
       @media (max-height: 520px) {
-        .title .menu { display: grid; grid-template-columns: 1fr 1fr; width: min(460px, 60vw); gap: 6px; } .title .menu button { padding: 7px; font-size: 15px; } .title .menu .go { grid-column: 1 / -1; }
+        .title .menu { width: min(460px, 60vw); gap: 6px; } .title .menu button { padding: 7px; font-size: 15px; }
         :root { --cell: 36px; --cellBase: 36px; --gap: 5px; }
         #hearts { font-size: 18px; } #mana { width: 100px; height: 8px; } #room { font-size: 12px; }
         #slots .toyIcon { width: 30px; height: 30px; }
@@ -282,7 +286,7 @@
         .go, .close, .skip, .again { margin-top: 6px; padding: 6px 16px; }
         .title { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 6px 18px; width: min(820px, 100%); }
         .logo { width: 100%; font-size: 34px; } .logo br { display: none; }
-        .hero { height: 52vh; } .menu { width: 220px; } .menu button { padding: 7px; font-size: 15px; }
+        .hero { height: 52vh; } .menu { width: 220px; } .menu button { padding: 7px; font-size: 15px; } .title .menu { width: min(460px, 56vw); }
         .record { width: 100%; max-width: max-content; }
         .zgroup { margin-bottom: 3px; } .ztitle { font-size: 11px; }
         .diffs { gap: 5px; margin: 4px 0; } .diff { padding: 6px 8px; } .grows { gap: 4px; margin: 4px 0; grid-template-columns: 1fr 1fr; } .grow { padding: 3px 8px; }
