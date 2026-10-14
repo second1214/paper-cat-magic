@@ -129,6 +129,18 @@ export function kidCanvas(type: "boy" | "girl", hug = false): HTMLCanvasElement 
 
 export function enemyTexture(type: EnemyType): THREE.CanvasTexture {
   if (type === "boy" || type === "girl") return canvasTexture(kidCanvas(type));
+  if (type === "shrimp") return sticker(300, 220, (g) => {   // エビのけりぐるみ（ピンクの長いぬいぐるみ・しっぽの扇）
+    g.strokeStyle = INK; g.lineWidth = 7;
+    g.fillStyle = "#ff8787"; g.beginPath(); g.moveTo(40, 120); g.lineTo(10, 80); g.lineTo(15, 160); g.closePath(); g.fill(); g.stroke();   // しっぽ
+    g.beginPath(); g.moveTo(40, 120); g.lineTo(5, 120); g.lineTo(30, 185); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = "#ffa8a8"; g.beginPath(); g.roundRect(35, 75, 230, 95, 46); g.fill(); g.stroke();   // 体
+    g.strokeStyle = "#fff"; g.lineWidth = 5; for (const x of [85, 125, 165, 205]) { g.beginPath(); g.moveTo(x, 80); g.quadraticCurveTo(x - 10, 122, x, 165); g.stroke(); }
+    g.strokeStyle = INK; g.lineWidth = 5; g.beginPath(); g.moveTo(250, 85); g.quadraticCurveTo(285, 40, 295, 20); g.moveTo(240, 85); g.quadraticCurveTo(260, 30, 250, 10); g.stroke();   // ひげ
+    stubs(g, [110, 150, 190], 168, 22, 9, "#ff6b6b");
+    g.fillStyle = "#fff"; g.strokeStyle = INK; g.lineWidth = 3; g.beginPath(); g.roundRect(70, 100, 60, 26, 6); g.fill(); g.stroke();   // タグ
+    cuteEyes(g, 220, 112, 13, 0); blush(g, 238, 140, 10);
+    g.lineWidth = 4; g.beginPath(); g.arc(246, 130, 8, 0.2, Math.PI - 0.2); g.stroke();
+  });
   if (type === "roach") return sticker(300, 240, (g) => {   // まるいおまんじゅう型のゴキちゃん
     stubs(g, [95, 150, 205], 175, 30, 12);
     g.strokeStyle = INK; g.lineWidth = 6; g.lineCap = "round";                          // くるんとした触角

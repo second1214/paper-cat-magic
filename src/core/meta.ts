@@ -49,7 +49,8 @@ export function runReward(roomsCleared: number, bossesBeaten: number, win: boole
 /** locked: まだ解放していないもの（"spell:id" / "toy:id" / "relic:id"）。 */
 /** endless: エンドレスモード（夏のあとも季節がめぐり続け、だんだん強くなる。ポイントでランキング）。 */
 /** favorites: おきにいり（クリアしたときに選んだ技。最初から手持ちに入る）。 */
-export interface RunOptions { difficulty: number; meta: MetaLv; locked?: string[]; endless?: boolean; favorites?: string[] }
+/** training: トレーニング部屋（技を自由に試してDPSを見る）。 */
+export interface RunOptions { difficulty: number; meta: MetaLv; locked?: string[]; endless?: boolean; favorites?: string[]; training?: boolean }
 
 /** おきにいり枠の数（はじめは1つ、おきにいりの箱で増える）。 */
 export const favSlots = (m: MetaLv) => 1 + (m.fav ?? 0);

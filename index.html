@@ -173,6 +173,14 @@
       .sendRow { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; } .nameIn { font-size: 16px; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--line); width: min(240px, 60vw); }
       .sendBtn { padding: 8px 12px; } .sendMsg { min-height: 1.2em; margin: 4px 0 0; font-size: 13px; }
       .menu.center { margin: 10px auto 0; }
+      #trainBox { left: 12px; top: 112px; color: #fff; background: #000b; border-radius: 12px; padding: 6px 10px; font-size: 13px; pointer-events: auto; display: flex; gap: 10px; align-items: center; }
+      #trainBox b { color: #ffd43b; font-size: 18px; } #trainBox button { padding: 3px 8px; font-size: 12px; }
+      body.touch #trainBox { top: 150px; }
+      @media (max-height: 520px) { #trainBox, body.touch #trainBox { top: auto; bottom: 12px; } }
+      .trainPanel { width: min(900px, 100%); text-align: left; } .trainPanel h3 { margin: 8px 0 4px; font-size: 14px; }
+      .trainRow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .trainRow .cell.toy.sel { outline: 4px solid var(--accent); }
+      .trainOpts { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; } .trainOpts button.on { background: var(--accent); color: #fff; }
+      .palette .zgroups { max-height: none; overflow: visible; }
       .favBox { background: #ffe3ec; border: 2px solid #f783ac; border-radius: 12px; padding: 6px 10px; margin: 6px 0; } .favBox small { display: block; font-size: 12px; color: var(--muted); }
       .favBox .fuseBag { justify-content: center; } .favGo { padding: 7px 16px; }
       .favNow { background: #ffe3ec; border-radius: 12px; padding: 6px 10px; margin: 8px 0; } .favNow small { display: block; font-size: 12px; color: var(--muted); } .favNow .zcells { justify-content: center; margin: 4px 0; }
@@ -320,6 +328,7 @@
     <div class="hud" id="roomBox"><div id="room"></div><div class="row"><button id="bagBtn">持ち物</button><button id="muteBtn" aria-label="音">♪</button><button id="pauseBtn" aria-label="一時停止">Ⅱ</button></div></div>
     <div class="hud" id="hint" hidden></div>
     <div class="hud" id="toast" hidden></div>
+    <div class="hud" id="trainBox" hidden></div>
     <div class="hud" id="help">WASD 移動 ／ クリック長押し 攻撃 ／ J 自動で狙う<br />Space ダッシュ ／ Q 持ち替え ／ Tab 持ち物</div>
     <div class="tbtn" id="atkBtn">攻撃</div>
     <div class="tbtn" id="dashBtn">ダッシュ</div>

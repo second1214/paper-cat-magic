@@ -22,10 +22,10 @@ export interface Vec { x: number; z: number }
  * 季節ごとの虫。秋: カメムシ・蚊・クモ／冬: カマドウマ・クモ・ゴキブリ／春: アリ・毛虫・クモ／夏: ゴキブリ・蚊・クモ・アリ。
  * ボスは 秋: カメムシ大王・冬: カマドウマ親分・春: 毛虫の女王・夏: スズメバチ。
  */
-export type EnemyType = "roach" | "mosquito" | "spider" | "hornet" | "stinkbug" | "camel" | "ant" | "caterpillar" | "stinkKing" | "camelKing" | "queen" | "mama" | "boy" | "girl";
+export type EnemyType = "roach" | "mosquito" | "spider" | "hornet" | "stinkbug" | "camel" | "ant" | "caterpillar" | "stinkKing" | "camelKing" | "queen" | "mama" | "boy" | "girl" | "shrimp";
 
 /** 体力・半径・速さ・飛ぶか・ボスか・名前。 */
-export const ENEMY: Record<EnemyType, { hp: number; r: number; speed: number; fly?: boolean; boss?: boolean; kid?: boolean; name: string }> = {
+export const ENEMY: Record<EnemyType, { hp: number; r: number; speed: number; fly?: boolean; boss?: boolean; kid?: boolean; dummy?: boolean; name: string }> = {
   roach: { hp: 16, r: 0.4, speed: 3.0, name: "ゴキブリ" },
   mosquito: { hp: 9, r: 0.3, speed: 2.8, fly: true, name: "蚊" },
   spider: { hp: 14, r: 0.42, speed: 2.2, name: "クモ" },
@@ -42,7 +42,10 @@ export const ENEMY: Record<EnemyType, { hp: number; r: number; speed: number; fl
   // 攻撃は効かない（虫ではない）。つかまると数秒だっこでもみくちゃにされて動けず、♥が減る
   boy: { hp: 1e9, r: 0.5, speed: 2.7, kid: true, name: "お兄ちゃん（6さい）" },
   girl: { hp: 1e9, r: 0.45, speed: 1.6, kid: true, name: "妹（3さい）" },
+  // トレーニング部屋の的。動かず、攻撃もせず、倒れない（受けたダメージを数えるだけ）
+  shrimp: { hp: 1e9, r: 0.55, speed: 0, dummy: true, name: "エビのけりぐるみ" },
 };
+export const isDummy = (t: EnemyType) => !!ENEMY[t].dummy;
 export const isKid = (t: EnemyType) => !!ENEMY[t].kid;
 /** 子どもにだっこされている秒数（お兄ちゃんは短く、妹はなかなか離さない）と、逃げられたあと次に追いかけるまで。 */
 const HUG: Partial<Record<EnemyType, number>> = { boy: 2.0, girl: 2.8 };
@@ -85,6 +88,8 @@ export interface Enemy {
   push: Vec;
   /** 強い虫の性質（null はふつうの虫）。 */
   elite: Elite | null;
+  /** トレーニングの的: はじかれても戻ってくる場所。 */
+  home?: Vec;
 }
 
 /** 強い虫: 体が大きく体力3倍、カリカリをたくさん落とす。性質は1つ。 */
@@ -213,8 +218,8 @@ export const REWARD_INFO: Record<RewardKind, { icon: string; label: string; colo
   curse: { icon: "☁", label: "あやしい箱（呪いと引きかえ）", color: "#5f3dc4" },
 };
 /** 特別な部屋の置き物。 */
-export type AltarKind = "treasure" | "rest" | "fusion" | "curse";
-export const ALTAR_NAME: Record<AltarKind, string> = { treasure: "宝箱", rest: "ママのおひざ", fusion: "秘密の隠し場所", curse: "あやしい箱" };
+export type AltarKind = "treasure" | "rest" | "fusion" | "curse" | "kotatsu";
+export const ALTAR_NAME: Record<AltarKind, string> = { treasure: "宝箱", rest: "ママのおひざ", fusion: "秘密の隠し場所", curse: "あやしい箱", kotatsu: "猫こたつ" };
 
 /** 持ち物画面の置き場所。 */
 export interface Spot { where: "slot" | "sub" | "bag"; i: number }
@@ -244,7 +249,7 @@ export interface Room {
   kids: EnemyType[];
 }
 
-export type Phase = "intro" | "play" | "reward" | "shop" | "bench" | "dead" | "win";
+export type Phase = "intro" | "play" | "reward" | "shop" | "bench" | "train" | "dead" | "win";
 
 /** 落ちているカリカリ（お金）。 */
 export interface Pickup { id: number; pos: Vec; value: number; t: number }
@@ -443,6 +448,7 @@ export class World {
   get title() {
     const r = this.room;
     if (r.kind === "final") return "さいご・ママ";
+    if (this.opts.training) return "トレーニング部屋";
     // エンドレスは2年目から「2年目の秋」のように
     const S = `${this.opts.endless && r.act >= ACTS ? `${Math.floor(r.act / ACTS) + 1}年目の` : ""}${SEASON_NAME[r.season]}`;
     if (r.kind === "shop") return `${S}・ママのところ`;
@@ -541,6 +547,56 @@ export class World {
     if (this.room.kids.length) this.notify(this.room.kids.length > 1 ? "子どもたちが猫と遊びたがっている！にげて！" : `${KID_CALL[this.room.kids[0]]} にげて！`);
   }
 
+  // ---------- トレーニング部屋 ----------
+  /** 的が受けたダメージの記録（DPS の計算）と、やる気むげん。 */
+  trainLog: { t: number; d: number }[] = [];
+  trainInfMana = false;
+  trainMulti = false;
+
+  /** トレーニング部屋に入る（multi: けりぐるみをたくさん並べる）。猫こたつで技を編集できる。 */
+  enterTraining(multi: boolean) {
+    this.trainMulti = multi;
+    const layout = buildLayout(SHOP_TEMPLATE, "living", this.rng, { doors: [] });
+    const mid = cellCenter(layout, layout.cols >> 1, layout.rows >> 1);
+    this.room = {
+      act: 0, index: 0, season: "autumn", theme: "living", kind: "special", layout,
+      w: layout.cols / 2, d: layout.rows / 2, waves: [], wave: 0, cleared: true, reward: null, doors: [],
+      altar: { kind: "kotatsu", pos: openFloor(layout, cellCenter(layout, layout.entry.c + 3, (layout.rows >> 1) + 3)), used: false, away: true }, challenge: false, kids: [],
+    };
+    this.shop = null; this.pickups = []; this.projectiles = []; this.doorOpen = false; this.flow = null; this.toast = null;
+    this.enemies = [];
+    const spots = multi ? [[4, 0], [6, -2], [6, 2], [8, 0], [8, -3.5], [8, 3.5], [10, -1.5], [10, 1.5]] : [[6, 0]];
+    for (const [dx, dz] of spots) {
+      const pos = openFloor(layout, { x: mid.x + dx - 3, z: mid.z + dz });   // 家具の上には置かない
+      const e = makeEnemy(this.nextId++, "shrimp", pos, 0, 1); e.home = { ...pos }; this.enemies.push(e);
+    }
+    this.player.pos = cellCenter(layout, layout.entry.c, layout.entry.r); this.player.vel = { x: 0, z: 0 };
+    this.trainLog = [];
+  }
+
+  /** DPS（直近5秒）・合計・いちばん大きい1回。 */
+  get trainStats() {
+    const now = this.time, recent = this.trainLog.filter((h) => now - h.t <= 5);
+    const span = recent.length ? Math.max(1, Math.min(5, now - recent[0].t)) : 1;
+    return { dps: recent.reduce((a, h) => a + h.d, 0) / span, total: this.trainLog.reduce((a, h) => a + h.d, 0), max: this.trainLog.reduce((a, h) => Math.max(a, h.d), 0) };
+  }
+
+  /** トレーニング: 持つおもちゃを選ぶ（電池式は電池の枠に）。最初から入っている技はそのまま。 */
+  trainToy(id: string) {
+    const t = structuredClone(TOYS[id]);
+    if (t.auto) { this.batt = [held(t, t.manaMax)]; return; }
+    this.toys = [held(t, t.manaMax)]; this.cur = 0;
+    this.player.mana = t.manaMax; this.player.cursor = 0; this.player.castCd = 0.2;
+  }
+
+  /** トレーニング: スロットに技を置く（null で外す）。h は held の番号。 */
+  trainSet(h: number, where: "slot" | "sub", i: number, id: string | null) {
+    const def = this.held[h]?.def, arr = where === "slot" ? def?.slots : def?.sub?.slots;
+    if (!arr || i >= arr.length) return;
+    arr[i] = id; this.held[h].cursor = 0; if (h === this.cur) this.player.cursor = 0;
+    this.player.mana = Math.min(this.player.mana, this.manaMax);
+  }
+
   /** 強い虫になる確率（季節・部屋が進むほど、呪いで上がる）。 */
   private eliteChance() {
     const r = this.room;
@@ -594,6 +650,7 @@ export class World {
     this.updateProjectiles(dt);
     this.updateFx(dt);
     this.updatePickups(dt);
+    if (this.opts.training && this.trainInfMana) { this.player.mana = this.manaMax; for (const h of this.batt) h.mana = this.manaMaxOf(h.def); }
     if (this.room.kind === "final") this.finalT += dt;
     // ママのところ: ママに近づくとお店が開く（離れてからまた近づくと再び開く）
     const sh = this.shop;
@@ -772,12 +829,13 @@ export class World {
     return true;
   }
 
-  closeShop() { if (this.phase === "shop" || this.phase === "bench") this.phase = "play"; }
+  closeShop() { if (this.phase === "shop" || this.phase === "bench" || this.phase === "train") this.phase = "play"; }
 
   /** 特別な部屋の置き物を使う。宝箱・ママのおひざ・あやしい箱は1回だけ、秘密の隠し場所は何回でも。 */
   private useAltar() {
     const al = this.room.altar!, p = this.player;
     if (al.kind === "fusion") { this.phase = "bench"; this.events.push("shop"); return; }
+    if (al.kind === "kotatsu") { this.phase = "train"; this.events.push("shop"); return; }   // トレーニング: 技の編集
     if (al.used) return;
     if (al.kind === "rest") {
       al.used = true; p.hp = p.maxHp; this.events.push("clear");
@@ -1088,7 +1146,8 @@ export class World {
       const k = Math.exp(-7 * dt);
       this.moveCircle(e.pos, { x: e.vel.x + e.push.x, z: e.vel.z + e.push.z }, e.radius, dt, flying, false);
       e.push.x *= k; e.push.z *= k;
-      if (e.type !== "mama" && !isKid(e.type) && p.held <= 0 && dist(e.pos, p.pos) < e.radius + p.radius) this.hurtPlayer(1, e.pos);
+      if (e.home) { const k2 = Math.min(1, dt * 3); e.pos.x += (e.home.x - e.pos.x) * k2; e.pos.z += (e.home.z - e.pos.z) * k2; }   // 的は元の場所へ戻る
+      if (e.type !== "mama" && !isKid(e.type) && !isDummy(e.type) && p.held <= 0 && dist(e.pos, p.pos) < e.radius + p.radius) this.hurtPlayer(1, e.pos);
     }
     this.enemies.push(...spawnLater);
     for (let a = 0; a < this.enemies.length; a++) for (let b = a + 1; b < this.enemies.length; b++) {
@@ -1408,7 +1467,8 @@ export class World {
 
   private damageEnemy(e: Enemy, dmg: number, slow: number, color = "#ffffff") {
     if (isKid(e.type)) return;
-    e.hp -= dmg; e.hurt = 0.15;
+    if (isDummy(e.type)) this.trainLog.push({ t: this.time, d: dmg }); else e.hp -= dmg;   // 的は倒れず、ダメージを数える
+    e.hurt = 0.15;
     if (slow > 0) e.slow = Math.max(e.slow, slow);
     if (this.fx.length < 260) this.fx.push({ kind: "num", value: Math.max(1, Math.round(dmg)), pos: { x: e.pos.x, z: e.pos.z }, radius: 0.5, color, t: 0, life: 0.7 });
   }
@@ -1590,6 +1650,16 @@ export class World {
 }
 
 const ZERO: Vec = { x: 0, z: 0 };
+
+/** p に一番近い、まわり（上下左右）も床のマスの中心。家具や壁の上に物を置かないため。 */
+function openFloor(L: Layout, p: Vec): Vec {
+  const at = cellAt(L, p.x, p.z), free = (c: number, r: number) => [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].every(([dc, dr]) => cellValue(L, c + dc, r + dr) === Cell.Floor);
+  for (let rad = 0; rad < 12; rad++) for (let dr = -rad; dr <= rad; dr++) for (let dc = -rad; dc <= rad; dc++) {
+    if (Math.max(Math.abs(dc), Math.abs(dr)) !== rad) continue;
+    if (free(at.c + dc, at.r + dr)) return cellCenter(L, at.c + dc, at.r + dr);
+  }
+  return p;
+}
 
 /** 点 q と線分 (ax,az)-b の距離。 */
 function segDist(q: Vec, ax: number, az: number, b: Vec) {
