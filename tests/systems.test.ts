@@ -364,3 +364,37 @@ describe("トレーニング部屋", () => {
     w.trainToy("denmouse"); expect(w.batt.map((h) => h.def.id)).toEqual(["denmouse"]);
   });
 });
+
+describe("リビングのパパ", () => {
+  const withPapa = (seed: number) => {
+    const w = new World(seed); w.start(); w.room.waves = [[]]; w.enemies = [];
+    const L = w.room.layout;
+    let pos = cellCenter(L, 0, 0);   // まわりも床の所（家具の上には寝ころばない）
+    for (let r = 2; r < L.rows - 2 && pos.x === cellCenter(L, 0, 0).x; r++) for (let c = 2; c < L.cols - 2; c++) {
+      if ([-1, 0, 1].every((dr) => [-1, 0, 1].every((dc) => L.grid[(r + dr) * L.cols + c + dc] === 0))) { pos = cellCenter(L, c, r); break; }
+    }
+    w.enemies.push({ ...dummy(pos.x, pos.z, 77), type: "papa", radius: 0.9, home: { ...pos } });
+    w.enemies.push(dummy(pos.x + 50, pos.z, 78));   // 虫が残っている部屋
+    w.player.pos = { ...pos };
+    return w;
+  };
+  const still = (w: World, sec: number) => { for (let t = 0; t < sec; t += 1 / 60) w.update(1 / 60, { move: { x: 0, z: 0 }, aim: null, fire: false, dash: false }); };
+  it("お腹の上でじっとしていると、最大HPとやる気の最大がアップ（または猫吸いで失敗）。1回だけ", () => {
+    let ok = 0, sucked = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      const w = withPapa(seed), hp = w.player.maxHp, mana = w.manaMax;
+      still(w, 2.8);
+      if (w.player.maxHp === hp + 2) { expect(w.manaMax).toBe(mana + 15); ok++; }
+      else { expect(w.player.held).toBeGreaterThan(0); expect(w.manaMax).toBe(mana); sucked++; }
+      const hp2 = w.player.maxHp; still(w, 6); expect(w.player.maxHp).toBe(hp2);   // 2回目はない
+    }
+    expect(ok).toBeGreaterThan(10); expect(sucked).toBeGreaterThan(2);
+  });
+  it("動いていると寝られない・攻撃は当たらない・ダメージもない", () => {
+    const w = withPapa(1), hp = w.player.maxHp, papa = w.enemies[0];
+    for (let t = 0; t < 3; t += 1 / 60) { w.player.pos = { ...papa.pos }; w.update(1 / 60, { move: { x: t % 0.5 < 0.25 ? 1 : -1, z: 0 }, aim: { x: 1, z: 0 }, fire: true, dash: false }); }
+    expect(w.player.maxHp).toBe(hp);
+    expect(papa.hp).toBe(papa.maxHp);
+    expect(w.player.hp).toBe(w.player.maxHp);
+  });
+});

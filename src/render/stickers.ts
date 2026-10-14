@@ -127,7 +127,34 @@ export function kidCanvas(type: "boy" | "girl", hug = false): HTMLCanvasElement 
   }, 0.03);
 }
 
+/**
+ * パパ（仮の絵。public/papa/sleep.png・suck.png があればそちらを使う）。
+ * sleep: あおむけに寝ころんでいる（横長）。suck: すわって猫を顔に押しあてて吸っている（猫は描かない）。
+ */
+export function papaCanvas(suck = false): HTMLCanvasElement {
+  if (!suck) return stickerCanvas(380, 170, (g) => {
+    g.strokeStyle = INK; g.lineWidth = 7;
+    g.fillStyle = "#495057"; g.beginPath(); g.roundRect(215, 95, 150, 46, 20); g.fill(); g.stroke();   // ズボン
+    g.fillStyle = "#74c0fc"; g.beginPath(); g.ellipse(170, 105, 85, 50, 0, 0, 7); g.fill(); g.stroke();   // おなか（Tシャツ）
+    g.fillStyle = "#ffd8be"; g.beginPath(); g.arc(62, 100, 48, 0, 7); g.fill(); g.stroke();   // 顔
+    g.fillStyle = "#2b2118"; g.beginPath(); g.arc(50, 92, 48, Math.PI * 0.7, Math.PI * 1.5); g.fill();   // 髪
+    g.strokeStyle = INK; g.lineWidth = 5; for (const y of [88, 112]) { g.beginPath(); g.arc(70, y, 7, 0.2, Math.PI - 0.2); g.stroke(); }   // 寝ている目
+    g.fillStyle = INK; g.font = "bold 26px sans-serif"; g.fillText("z", 100, 40); g.font = "bold 34px sans-serif"; g.fillText("Z", 120, 22);
+  }, 0.03);
+  return stickerCanvas(240, 300, (g) => {
+    g.strokeStyle = INK; g.lineWidth = 7;
+    g.fillStyle = "#495057"; g.beginPath(); g.roundRect(55, 215, 130, 60, 20); g.fill(); g.stroke();
+    g.fillStyle = "#74c0fc"; g.beginPath(); g.roundRect(60, 120, 120, 110, 30); g.fill(); g.stroke();
+    g.fillStyle = "#ffd8be"; g.beginPath(); g.arc(120, 80, 52, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#2b2118"; g.beginPath(); g.arc(120, 70, 52, Math.PI * 1.05, Math.PI * 1.95); g.fill();
+    g.strokeStyle = INK; g.lineWidth = 5; for (const x of [100, 140]) { g.beginPath(); g.arc(x, 82, 7, Math.PI + 0.3, -0.3); g.stroke(); }   // うっとり
+    g.strokeStyle = INK; g.lineWidth = 20; g.beginPath(); g.moveTo(70, 150); g.lineTo(95, 110); g.moveTo(170, 150); g.lineTo(145, 110); g.stroke();
+    g.strokeStyle = "#ffd8be"; g.lineWidth = 12; g.stroke();
+  }, 0.03);
+}
+
 export function enemyTexture(type: EnemyType): THREE.CanvasTexture {
+  if (type === "papa") return canvasTexture(papaCanvas());
   if (type === "boy" || type === "girl") return canvasTexture(kidCanvas(type));
   if (type === "shrimp") return sticker(300, 220, (g) => {   // エビのけりぐるみ（ピンクの長いぬいぐるみ・しっぽの扇）
     g.strokeStyle = INK; g.lineWidth = 7;
