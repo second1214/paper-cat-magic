@@ -414,3 +414,14 @@ describe("広告で復活", () => {
     expect(w.over).toBe(true);
   });
 });
+
+describe("選択肢の引き直し", () => {
+  it("部屋クリアの選択肢は1回だけ同じ種類で引き直せる", () => {
+    const w = new World(7); w.start();
+    (w as unknown as { offer(k: string): void }).offer("spell");
+    expect(w.canReroll).toBe(true);
+    w.rerollChoices();
+    expect(w.phase).toBe("reward"); expect(w.choices.every((c) => c.kind === "spell")).toBe(true);
+    expect(w.canReroll).toBe(false);
+  });
+});
