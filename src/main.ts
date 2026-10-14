@@ -11,7 +11,7 @@ const canvas = document.getElementById("game") as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
 const seed = () => Date.now() % 100000;
 /** 難易度と、ねこの成長（保存してあるレベル）・解放ずみのもので新しい冒険を作る。 */
-const newWorld = (difficulty: number, s = seed(), endless = false) => { const r = loadRecord(); return new World(s, { difficulty: endless ? 1 : difficulty, meta: r.meta, locked: lockedKeys(r.stats), endless }); };
+const newWorld = (difficulty: number, s = seed(), endless = false) => { const r = loadRecord(); return new World(s, { difficulty: endless ? 1 : difficulty, meta: r.meta, locked: lockedKeys(r.stats), endless, favorites: r.favorites }); };
 let world = newWorld(1, Number(params.get("seed")) || seed());
 const view = new GameView(canvas);
 const sound = new Sound();

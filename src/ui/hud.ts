@@ -4,11 +4,11 @@ import { baseId, DIR_INFO, ELEMENT_INFO, KIND_LABEL, MOTION_LABEL, rarOf, SPELL_
 import { groupSummary, SUB_LABEL, TOYS, toyStats, type ToyDef } from "../core/wand";
 import { CURSES } from "../core/curses";
 import { findUnlock, isOpen, UNLOCKS, unlockText, type Unlock, type UnlockKind } from "../core/unlock";
-import { buyUpgrade, canPick, loadRecord, nameEndless, recordEndless, recordRun, recordText } from "./record";
+import { buyUpgrade, canPick, loadRecord, nameEndless, recordEndless, recordRun, recordText, setFavorites } from "./record";
 import { fetchBoard, saveName, savedName, submitScore, type Board } from "./ranking";
 import { cleanName, POINTS } from "../core/score";
 import { loadRun, runLabel } from "./save";
-import { DIFFS, runReward, UPGRADES } from "../core/meta";
+import { DIFFS, favSlots, runReward, UPGRADES } from "../core/meta";
 import { enemyTexture } from "../render/stickers";
 import { ENEMY, POTIONS, type EnemyType } from "../game/world";
 
@@ -171,6 +171,9 @@ export class Hud {
   private board: Board | null | "loading" | "error" = null;
   private localRank = 0;
   private endedAt = 0;
+  /** クリアしたときのおきにいり選び（持っている技の番号）と、決めたかどうか。 */
+  private favPick: number[] = [];
+  private favSaved = false;
   private sent: null | "sending" | { rank: number } | { error: string } = null;
   /** 持ち物画面のタブ（おもちゃの番号、または装備・レリック）と、そこで選んでいるもの。 */
   private tab: number | "gear" = 0;
@@ -218,12 +221,12 @@ export class Hud {
       this.earned = runReward(w.cleared, w.bosses, w.phase === "win", w.opts.difficulty, w.curses.length);
       this.opened = recordRun(w.room.act, w.room.index, w.phase === "win", w.opts.difficulty, this.earned,
         { kills: w.kills, elites: w.elites, bosses: w.bosses, rooms: w.cleared, specials: w.specials, curses: w.curses.length }, !!w.opts.endless);
-      this.sent = null;
+      this.sent = null; this.favPick = []; this.favSaved = false;
       this.endedAt = Date.now();
       this.localRank = w.opts.endless && w.cleared > 0 ? recordEndless({ name: savedName(), score: w.score, rooms: w.cleared, bosses: w.bosses, elites: w.elites, kills: w.kills, at: this.endedAt, act: w.room.act }) : 0;
     }
     this.meters(w);
-    const key = JSON.stringify([w.coins, w.shop?.items, w.shop?.rerollCost, w.room.kind, w.held.map((h) => h.def), w.cur, w.relics, w.gear, w.curses, this.tab, this.pick, this.fusePick, w.bag, p.cursor, p.recharging, this.bagOpen, this.paused, this.screen, this.zukanSel, this.sel, w.phase, w.choices, w.doorOpen, w.room.act, w.room.index, w.room.altar?.used, this.rankTab, this.board, this.sent, this.localRank]);
+    const key = JSON.stringify([w.coins, w.shop?.items, w.shop?.rerollCost, w.room.kind, w.held.map((h) => h.def), w.cur, w.relics, w.gear, w.curses, this.tab, this.pick, this.fusePick, w.bag, p.cursor, p.recharging, this.bagOpen, this.paused, this.screen, this.zukanSel, this.sel, w.phase, w.choices, w.doorOpen, w.room.act, w.room.index, w.room.altar?.used, this.rankTab, this.board, this.sent, this.localRank, this.favPick, this.favSaved]);
     if (key === this.lastKey) return;
     this.lastKey = key;
 
@@ -293,7 +296,9 @@ export class Hud {
           const lv = rec.meta[u.id], max = lv >= u.max, cost = u.cost(lv);
           return `<div class="grow"><div><b>${u.name}</b><span class="lv">${"●".repeat(lv)}${"○".repeat(u.max - lv)}</span><small>${u.desc}</small></div>
             <button data-u="${u.id}" ${max || rec.niboshi < cost ? "disabled" : ""}>${max ? "最大" : `にぼし ${cost}`}</button></div>`;
-        }).join("")}</div><button class="back">もどる</button></div>`;
+        }).join("")}</div>
+        <div class="favNow"><b>おきにいり（${favSlots(rec.meta)}枠）</b>${rec.favorites.length ? `<div class="zcells">${rec.favorites.map((id) => cell(id, "tabindex=-1")).join("")}</div><small>冒険のはじめから手持ちに入る</small>` : `<small>まだありません。クリアしたときに、持っている技から選べる</small>`}</div>
+        <button class="back">もどる</button></div>`;
       el.querySelectorAll<HTMLButtonElement>("[data-u]").forEach((b) => b.onclick = () => { buyUpgrade(b.dataset.u as keyof typeof rec.meta); this.lastKey = ""; });
       el.querySelector<HTMLButtonElement>(".back")!.onclick = go("title");
       return;
@@ -367,6 +372,14 @@ export class Hud {
     if (this.board === "error") return `<p class="muted">みんなのランキングは準備中です（つながりません）。</p>`;
     return this.board.top.length ? `<table class="rank"><tr><th>順位</th><th>名前</th><th>ポイント</th><th>部屋</th></tr>${this.board.top.map((e, i) => row(i, e.name, e.score, e.rooms)).join("")}</table>`
       : `<p class="muted">まだだれも記録を送っていません。一番乗りのチャンス！</p>`;
+  }
+
+  /** クリアしたとき: 持っている技から「おきにいり」を選ぶ（次からの冒険で最初から手持ちに入る）。 */
+  private favHtml(w: World) {
+    const owned = w.ownedSpells(), n = favSlots(loadRecord().meta);
+    return `<div class="favBox"><b>おきにいりを選ぶ</b>（${this.favPick.length}/${n}）<small>選んだ技は、次からの冒険で最初から手持ちに入る。枠は「ねこの成長」で増やせる</small>
+      <div class="fuseBag">${owned.map((id, i) => cell(id, `data-fav="${i}"`, this.favPick.includes(i) ? "sel" : "")).join("")}</div>
+      <button class="favGo go" ${this.favPick.length ? "" : "disabled"}>${this.favSaved ? "おきにいりにした！" : "おきにいりにする"}</button></div>`;
   }
 
   /** エンドレスの結果: ポイント・じぶんの順位・名前を入れてみんなのランキングへ送る。 */
@@ -595,7 +608,7 @@ export class Hud {
     const el = this.el("result");
     el.hidden = !(w.phase === "dead" || w.phase === "win");
     if (el.hidden) return;
-    el.innerHTML = `<div class="panel"><h2>${w.phase === "win" ? "ママにつかまった！" : "虫にやられた…"}</h2>${w.opts.endless ? this.endlessResult(w) : ""}
+    el.innerHTML = `<div class="panel"><h2>${w.phase === "win" ? "ママにつかまった！" : "虫にやられた…"}</h2>${w.opts.endless ? this.endlessResult(w) : ""}${w.phase === "win" ? this.favHtml(w) : ""}
       ${w.phase === "win" ? mama("pet", "つかまえた〜♪<br>病院でワクチン打とうね。<br>1年間ありがとう！") : mama("scream", "いやぁぁぁ！<br>虫がーっ！")}
       <p class="muted">${w.phase === "win" ? "秋から夏まで、ぜんぶの虫を追い払った。さいごは病院へ…（おしまい）" : `${w.title} で力尽きた。`}</p>
       <p class="nibline">にぼし <b>+${this.earned}</b>（${DIFFS[w.opts.difficulty].name}・片付けた部屋 ${w.cleared}・倒した虫 ${w.kills}${w.curses.length ? `・呪い ${w.curses.length}` : ""}）　タイトルの「ねこの成長」で使える</p>
@@ -604,6 +617,13 @@ export class Hud {
       <div class="menu"><button class="go again">もう一度</button><button class="toTitle">タイトルへ</button></div></div>`;
     el.querySelector<HTMLButtonElement>(".again")!.onclick = () => this.onRestart();
     el.querySelector<HTMLButtonElement>(".toTitle")!.onclick = () => this.toTitle();
+    el.querySelectorAll<HTMLButtonElement>("[data-fav]").forEach((b) => b.onclick = () => {
+      const i = Number(b.dataset.fav), n = favSlots(loadRecord().meta);
+      this.favPick = this.favPick.includes(i) ? this.favPick.filter((x) => x !== i) : this.favPick.length < n ? [...this.favPick, i] : this.favPick;
+      this.favSaved = false; this.lastKey = "";
+    });
+    const favGo = el.querySelector<HTMLButtonElement>(".favGo");
+    if (favGo) favGo.onclick = () => { const owned = w.ownedSpells(); setFavorites(this.favPick.map((i) => owned[i])); this.favSaved = true; this.lastKey = ""; };
     const send = el.querySelector<HTMLButtonElement>(".sendBtn");
     if (send) send.onclick = () => {
       const name = cleanName(el.querySelector<HTMLInputElement>(".nameIn")!.value);

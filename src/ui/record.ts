@@ -9,16 +9,17 @@ import type { Entry } from "../core/score";
 export interface LocalScore extends Entry { at: number; act: number }
 
 /** きろく＋周回の育成（にぼしと、ねこの成長のレベル）。 */
-export interface Record { best: number; wins: number; plays: number; niboshi: number; meta: MetaLv; cleared: number[]; stats: Stats; endless: LocalScore[] }
+export interface Record { best: number; wins: number; plays: number; niboshi: number; meta: MetaLv; cleared: number[]; stats: Stats; endless: LocalScore[]; favorites: string[] }
 
 const KEY = "paper-cat-magic:record";
-const EMPTY: Record = { best: -1, wins: 0, plays: 0, niboshi: 0, meta: { ...NO_META }, cleared: [], stats: { ...NO_STATS }, endless: [] };
+const EMPTY: Record = { best: -1, wins: 0, plays: 0, niboshi: 0, meta: { ...NO_META }, cleared: [], stats: { ...NO_STATS }, endless: [], favorites: [] };
 
 export function loadRecord(): Record {
   try {
     const r = { ...EMPTY, ...JSON.parse(localStorage.getItem(KEY) ?? "{}") };
-    r.meta = { ...NO_META, ...r.meta }; r.stats = { ...NO_STATS, ...r.stats }; r.endless = Array.isArray(r.endless) ? r.endless : []; return r;
-  } catch { return { ...EMPTY, meta: { ...NO_META }, stats: { ...NO_STATS }, endless: [] }; }
+    r.meta = { ...NO_META, ...r.meta }; r.stats = { ...NO_STATS, ...r.stats }; r.endless = Array.isArray(r.endless) ? r.endless : [];
+    r.favorites = Array.isArray(r.favorites) ? r.favorites : []; return r;
+  } catch { return { ...EMPTY, meta: { ...NO_META }, stats: { ...NO_STATS }, endless: [], favorites: [] }; }
 }
 const save = (r: Record) => { try { localStorage.setItem(KEY, JSON.stringify(r)); } catch { /* 保存できなくても遊べる */ } };
 
@@ -53,6 +54,9 @@ export function recordEndless(e: LocalScore): number {
   save(r);
   return r.endless.indexOf(e) + 1;
 }
+
+/** おきにいり（クリアしたときに選んだ技。次からの冒険で最初から手持ちに入る）。 */
+export function setFavorites(ids: string[]) { const r = loadRecord(); r.favorites = ids; save(r); }
 
 /** あとから名前を入れたエンドレスの記録に、名前をつける。 */
 export function nameEndless(at: number, name: string) {

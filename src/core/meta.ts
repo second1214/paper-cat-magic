@@ -21,8 +21,8 @@ export const DIFFS: Difficulty[] = [
 ];
 
 /** ねこの成長（レベル）。 */
-export interface MetaLv { hp: number; atk: number; mana: number; speed: number; luck: number; gift: number }
-export const NO_META: MetaLv = { hp: 0, atk: 0, mana: 0, speed: 0, luck: 0, gift: 0 };
+export interface MetaLv { hp: number; atk: number; mana: number; speed: number; luck: number; gift: number; fav: number }
+export const NO_META: MetaLv = { hp: 0, atk: 0, mana: 0, speed: 0, luck: 0, gift: 0, fav: 0 };
 
 export const UPGRADES: { id: keyof MetaLv; name: string; desc: string; max: number; cost: (lv: number) => number; bonus: (lv: number) => Part }[] = [
   { id: "hp", name: "じょうぶな体", desc: "最大HP ＋♥1", max: 3, cost: (lv) => 15 + lv * 20, bonus: (lv) => ({ maxHp: lv * 2 }) },
@@ -31,6 +31,7 @@ export const UPGRADES: { id: keyof MetaLv; name: string; desc: string; max: numb
   { id: "speed", name: "しなやかな足", desc: "移動の速さ ＋3%", max: 3, cost: (lv) => 12 + lv * 12, bonus: (lv) => ({ speedMul: 1 + lv * 0.03 }) },
   { id: "luck", name: "招き猫の運", desc: "レアな装備が出やすい", max: 3, cost: (lv) => 20 + lv * 20, bonus: (lv) => ({ luck: lv }) },
   { id: "gift", name: "ママのおみやげ", desc: "最初からレリックを1つ持って始まる", max: 1, cost: () => 40, bonus: () => ({}) },
+  { id: "fav", name: "おきにいりの箱", desc: "おきにいり枠 ＋1（クリアしたときに選んだ技を、次の冒険へ持っていける）", max: 4, cost: (lv) => 30 + lv * 30, bonus: () => ({}) },
 ];
 
 /** 成長の合計効果。 */
@@ -47,5 +48,9 @@ export function runReward(roomsCleared: number, bossesBeaten: number, win: boole
 
 /** locked: まだ解放していないもの（"spell:id" / "toy:id" / "relic:id"）。 */
 /** endless: エンドレスモード（夏のあとも季節がめぐり続け、だんだん強くなる。ポイントでランキング）。 */
-export interface RunOptions { difficulty: number; meta: MetaLv; locked?: string[]; endless?: boolean }
+/** favorites: おきにいり（クリアしたときに選んだ技。最初から手持ちに入る）。 */
+export interface RunOptions { difficulty: number; meta: MetaLv; locked?: string[]; endless?: boolean; favorites?: string[] }
+
+/** おきにいり枠の数（はじめは1つ、おきにいりの箱で増える）。 */
+export const favSlots = (m: MetaLv) => 1 + (m.fav ?? 0);
 export const DEFAULT_RUN: RunOptions = { difficulty: 1, meta: NO_META };
