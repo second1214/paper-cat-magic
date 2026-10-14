@@ -22,7 +22,7 @@ export interface Vec { x: number; z: number }
  * 季節ごとの虫。秋: カメムシ・蚊・クモ／冬: カマドウマ・クモ・ゴキブリ／春: アリ・毛虫・クモ／夏: ゴキブリ・蚊・クモ・アリ。
  * ボスは 秋: カメムシ大王・冬: カマドウマ親分・春: 毛虫の女王・夏: スズメバチ。
  */
-export type EnemyType = "roach" | "mosquito" | "spider" | "hornet" | "stinkbug" | "camel" | "ant" | "caterpillar" | "stinkKing" | "camelKing" | "queen" | "mama" | "boy" | "girl" | "shrimp";
+export type EnemyType = "roach" | "mosquito" | "spider" | "hornet" | "stinkbug" | "camel" | "ant" | "caterpillar" | "stinkKing" | "camelKing" | "queen" | "mama" | "boy" | "girl" | "shrimp" | "papa";
 
 /** 体力・半径・速さ・飛ぶか・ボスか・名前。 */
 export const ENEMY: Record<EnemyType, { hp: number; r: number; speed: number; fly?: boolean; boss?: boolean; kid?: boolean; dummy?: boolean; name: string }> = {
@@ -42,11 +42,15 @@ export const ENEMY: Record<EnemyType, { hp: number; r: number; speed: number; fl
   // 攻撃は効かない（虫ではない）。つかまると数秒だっこでもみくちゃにされて動けず、♥が減る
   boy: { hp: 1e9, r: 0.5, speed: 2.7, kid: true, name: "お兄ちゃん（6さい）" },
   girl: { hp: 1e9, r: 0.45, speed: 1.6, kid: true, name: "妹（3さい）" },
+  // まれにリビングで寝ころんでいる大好きなパパ（攻撃は当たらない）。お腹でじっとしていると、最大HP・やる気の最大がアップ。たまに猫吸いされて失敗
+  papa: { hp: 1e9, r: 0.9, speed: 0, kid: true, name: "パパ" },
   // トレーニング部屋の的。動かず、攻撃もせず、倒れない（受けたダメージを数えるだけ）
   shrimp: { hp: 1e9, r: 0.55, speed: 0, dummy: true, name: "エビのけりぐるみ" },
 };
 export const isDummy = (t: EnemyType) => !!ENEMY[t].dummy;
 export const isKid = (t: EnemyType) => !!ENEMY[t].kid;
+/** パパのお腹で寝おわるまでの秒数。 */
+export const PAPA_NAP = 2.5;
 /** 子どもにだっこされている秒数（お兄ちゃんは短く、妹はなかなか離さない）と、逃げられたあと次に追いかけるまで。 */
 const HUG: Partial<Record<EnemyType, number>> = { boy: 2.0, girl: 2.8 };
 const REST: Partial<Record<EnemyType, number>> = { boy: 2.5, girl: 3.5 };
@@ -88,8 +92,10 @@ export interface Enemy {
   push: Vec;
   /** 強い虫の性質（null はふつうの虫）。 */
   elite: Elite | null;
-  /** トレーニングの的: はじかれても戻ってくる場所。 */
+  /** トレーニングの的・パパ: はじかれても戻ってくる場所。 */
   home?: Vec;
+  /** パパ: お腹で寝おわった（1部屋1回）。 */
+  napDone?: boolean;
 }
 
 /** 強い虫: 体が大きく体力3倍、カリカリをたくさん落とす。性質は1つ。 */
@@ -245,8 +251,9 @@ export interface Room {
   altar: { kind: AltarKind; pos: Vec; used: boolean; away: boolean } | null;
   /** 強い虫の部屋。 */
   challenge: boolean;
-  /** この部屋に遊びに来る子ども。 */
+  /** この部屋に遊びに来る子ども・パパ。 */
   kids: EnemyType[];
+  papa: boolean;
 }
 
 export type Phase = "intro" | "play" | "reward" | "shop" | "bench" | "train" | "dead" | "win";
@@ -528,6 +535,7 @@ export class World {
       altar: altar ? { kind: altar, pos: mid, used: false, away: true } : null, challenge,
       // まれにリビングへ子どもが来る（2人いっしょが多い）
       kids: theme === "living" && !boss && !quiet && this.rng.next() < 0.3 ? (this.rng.next() < 0.6 ? ["boy", "girl"] : [this.rng.pick<EnemyType>(["boy", "girl"])]) : [],
+      papa: theme === "living" && !boss && !quiet && this.rng.next() < 0.18,   // まれにパパが寝ころんでいる
     };
     if (shop) {
       this.room.kind = "shop";
@@ -544,6 +552,11 @@ export class World {
       const e = makeEnemy(this.nextId++, t, cellCenter(layout, layout.cols - 4 - k * 2, (layout.rows >> 1) + (k ? 2 : -2)), 0, 1);
       e.spawn = 1.2; e.phase = 2.5; this.enemies.push(e);
     }
+    if (this.room.papa) {
+      const pos = openFloor(layout, cellCenter(layout, layout.cols >> 1, (layout.rows >> 1) + 2));
+      const e = makeEnemy(this.nextId++, "papa", pos, 0, 1); e.home = { ...pos }; this.enemies.push(e);
+    }
+    if (this.room.papa && !this.room.kids.length) this.notify("パパがリビングで寝ころんでいる！お腹の上でじっとしてみよう");
     if (this.room.kids.length) this.notify(this.room.kids.length > 1 ? "子どもたちが猫と遊びたがっている！にげて！" : `${KID_CALL[this.room.kids[0]]} にげて！`);
   }
 
@@ -561,7 +574,7 @@ export class World {
     this.room = {
       act: 0, index: 0, season: "autumn", theme: "living", kind: "special", layout,
       w: layout.cols / 2, d: layout.rows / 2, waves: [], wave: 0, cleared: true, reward: null, doors: [],
-      altar: { kind: "kotatsu", pos: openFloor(layout, cellCenter(layout, layout.entry.c + 3, (layout.rows >> 1) + 3)), used: false, away: true }, challenge: false, kids: [],
+      altar: { kind: "kotatsu", pos: openFloor(layout, cellCenter(layout, layout.entry.c + 3, (layout.rows >> 1) + 3)), used: false, away: true }, challenge: false, kids: [], papa: false,
     };
     this.shop = null; this.pickups = []; this.projectiles = []; this.doorOpen = false; this.flow = null; this.toast = null;
     this.enemies = [];
@@ -710,7 +723,8 @@ export class World {
       p.vel = { x: 0, z: 0 };
       if (p.held <= 0 || !k) {
         p.held = 0; p.holder = null; p.iframes = Math.max(p.iframes, 1.2);
-        if (k) { k.phase = REST[k.type] ?? 3; p.pos = { ...k.pos }; p.vel = { x: p.facing * 7, z: 0 }; this.notify("にげた！"); }
+        if (k && k.type === "papa") { p.pos = { x: k.pos.x + 1.4, z: k.pos.z }; }   // パパはやさしくおろしてくれる
+        else if (k) { k.phase = REST[k.type] ?? 3; p.pos = { ...k.pos }; p.vel = { x: p.facing * 7, z: 0 }; this.notify("にげた！"); }
       }
       return;
     }
@@ -727,7 +741,7 @@ export class World {
       this.chargeSub("dash", 1);
     }
     // 子どもがそばに来ると、必死に逃げる（少し速くなる）
-    p.scared = this.enemies.some((e) => isKid(e.type) && e.spawn <= 0 && e.phase <= 0 && dist(e.pos, p.pos) < 3.2);
+    p.scared = this.enemies.some((e) => isKid(e.type) && e.type !== "papa" && e.spawn <= 0 && e.phase <= 0 && dist(e.pos, p.pos) < 3.2);
     const speed = p.dash > 0 ? 13 : 5.2 * B.speedMul * (p.scared ? 1.15 : 1);
     p.dash = Math.max(0, p.dash - dt);
     if (p.dash <= 0) {
@@ -946,7 +960,7 @@ export class World {
     const layout = buildLayout(FINAL_TEMPLATE, "living", this.rng, { doors: [] });
     this.room = {
       act: ACTS - 1, index: ROOMS_PER_ACT + 1, season: "summer", theme: "living", kind: "final", layout,
-      w: layout.cols / 2, d: layout.rows / 2, waves: [["mama"]], wave: 0, cleared: false, reward: null, doors: [], altar: null, challenge: false, kids: [],
+      w: layout.cols / 2, d: layout.rows / 2, waves: [["mama"]], wave: 0, cleared: false, reward: null, doors: [], altar: null, challenge: false, kids: [], papa: false,
     };
     this.enemies = []; this.projectiles = []; this.pickups = []; this.shop = null; this.doorOpen = false; this.flow = null; this.finalT = 0;
     this.player.pos = cellCenter(layout, layout.entry.c, layout.entry.r); this.player.vel = { x: 0, z: 0 };
@@ -1072,7 +1086,8 @@ export class World {
       const flying = isFly(e.type);
       const to = this.chase(e, flying);
       const direct = norm({ x: p.pos.x - e.pos.x, z: p.pos.z - e.pos.z });
-      if (isKid(e.type)) this.updateKid(e, dt, to);
+      if (e.type === "papa") this.updatePapa(e, dt);
+      else if (isKid(e.type)) this.updateKid(e, dt, to);
       else if (e.type === "roach") {
         const run = (e.t % 1.4) < 0.6;
         e.vel = run ? { x: to.x * sp, z: to.z * sp } : { x: e.vel.x * 0.8, z: e.vel.z * 0.8 };
@@ -1182,6 +1197,31 @@ export class World {
       this.events.push("hug");
       this.notify(`${ENEMY[e.type].name}につかまった！ダッシュでじたばた！`);
     }
+  }
+
+  /**
+   * パパ: 寝ころんで動かない。猫がお腹の上で 2.5 秒じっとしていると寝おわり、
+   * 最大HP＋♥1・やる気の最大＋15（全部のおもちゃ）。ただし 3 回に1回くらい、強制猫吸いされて失敗（しばらく動けない）。
+   */
+  private updatePapa(e: Enemy, dt: number) {
+    const p = this.player;
+    e.vel = { x: 0, z: 0 };
+    if (e.napDone) return;
+    const on = p.held <= 0 && dist(e.pos, p.pos) < e.radius + 0.25 && Math.hypot(p.vel.x, p.vel.z) < 0.6;
+    e.phase = on ? e.phase + dt : Math.max(0, e.phase - dt * 2);
+    if (e.phase < PAPA_NAP) return;
+    e.napDone = true; e.phase = 0;
+    if (this.rng.next() < 0.3) {   // 強制猫吸い
+      p.held = 2.2; p.holder = e.id; p.vel = { x: 0, z: 0 };
+      this.events.push("hug");
+      this.notify("パパに強制猫吸いされた！すーはーすーはー…（上限アップ失敗）");
+      return;
+    }
+    this.baseMaxHp += 2; p.maxHp += 2; p.hp = Math.min(p.maxHp, p.hp + 2);
+    this.manaUp.max += 15;
+    for (const h of this.held) { h.def.manaMax += 15; }
+    this.events.push("clear");
+    this.notify("パパのお腹でぐっすり…最大HP ＋♥1・やる気の最大 ＋15");
   }
 
   private hurtPlayer(n: number, from: Vec) {

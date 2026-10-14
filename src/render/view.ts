@@ -1,8 +1,8 @@
 // three.js での描画。World の状態を毎フレーム写すだけで、ゲームの判断はしない。
 import * as THREE from "three";
-import { ELITE_INFO, ENEMY, type AltarKind, type World, type EnemyType, type Room } from "../game/world";
+import { ELITE_INFO, ENEMY, PAPA_NAP, type AltarKind, type World, type EnemyType, type Room } from "../game/world";
 import { CatDoll, type CatState } from "./catDoll";
-import { canvasTexture, enemyTexture, glowTexture, kidCanvas, orbTexture } from "./stickers";
+import { canvasTexture, enemyTexture, glowTexture, kidCanvas, orbTexture, papaCanvas } from "./stickers";
 import { buildRoom, type BuiltRoom } from "./roomBuilder";
 import { elementCanvas, INK, kibbleCanvas, rewardCanvas, spellCanvas, stickerCanvas, techCanvas } from "../art/items";
 import type { Element, TechFx } from "../core/spells";
@@ -13,7 +13,7 @@ const LEAN = 0.42;
 const ENEMY_H: Record<EnemyType, number> = {
   roach: 0.95, mosquito: 0.95, spider: 1.0, hornet: 2.4, stinkbug: 0.95, camel: 1.0, ant: 0.7, caterpillar: 0.95,
   stinkKing: 3.4, camelKing: 3.4, queen: 3.2,   // 王冠のぶん絵が縦長なので大きめ
-  mama: 3.8, boy: 2.7, girl: 2.2, shrimp: 1.4,
+  mama: 3.8, boy: 2.7, girl: 2.2, shrimp: 1.4, papa: 2.2,
 };
 const FLY: Partial<Record<EnemyType, number>> = { mosquito: 0.55, hornet: 0.35 };
 
@@ -107,6 +107,10 @@ export class GameView {
       this.hugTex.set(k, hug ? { tex: hug, drawsCat: true } : { tex: canvasTexture(kidCanvas(k, true)), drawsCat: false });
     }
     const shop = await load(`${base}mama/shop.png`); if (shop) this.mamaShopTex = shop;
+    // パパ: 寝ころんでいる絵と、猫吸いの絵（猫が描いてあれば猫の人形は隠す）
+    const sleep = await load(`${base}papa/sleep.png`); if (sleep) this.enemyTex.set("papa", sleep);
+    const suck = await load(`${base}papa/suck.png`);
+    this.hugTex.set("papa", suck ? { tex: suck, drawsCat: true } : { tex: canvasTexture(papaCanvas(true)), drawsCat: false });
     this.kibble = canvasTexture(kibbleCanvas());
     for (const t of ["claw", "bite", "hairball", "hiss", "swing", "yarn", "laser", "pounce", "punch", "post", "friend", "roomba", "squirt", "duck", "hammer", "bubble", "flash", "pumpkin", "box", "roller"] as const) this.techTex.set(t, canvasTexture(techCanvas(t)));
     this.friendTex = await Promise.all([1, 2, 3, 4].map((i) => grayCat(`${base}cat/A01_walk_${i}.png`)));
@@ -147,7 +151,8 @@ export class GameView {
 
   private altarTexs = new Map<AltarKind, THREE.Texture>();
   /** 子どもが猫をだっこしている絵（drawsCat: 絵に猫が描いてある＝猫の人形は隠す）。 */
-  private hugTex = new Map<"boy" | "girl", { tex: THREE.Texture; drawsCat: boolean }>();
+  private hugTex = new Map<"boy" | "girl" | "papa", { tex: THREE.Texture; drawsCat: boolean }>();
+  private zzz: THREE.Texture | null = null;
   /** お店のママ（mama/shop.png があればそれ、なければ歩くママ）。 */
   private mamaShopTex: THREE.Texture | null = null;
   /** 子どもが追いかけていないとき（ひと息中）の絵。 */
@@ -238,9 +243,12 @@ export class GameView {
     if (world.phase === "dead") state = "down";
     // 子どもにだっこされているとき: 絵に猫が描いてあれば人形は隠し、なければ腕の高さに持ち上げる
     const holder = p.held > 0 ? world.enemies.find((e) => e.id === p.holder) : undefined;
-    const hug = holder && (holder.type === "boy" || holder.type === "girl") ? this.hugTex.get(holder.type) : undefined;
+    const hug = holder && (holder.type === "boy" || holder.type === "girl" || holder.type === "papa") ? this.hugTex.get(holder.type) : undefined;
+    // パパのお腹の上でじっとしている: 香箱すわりで、少し高い所（お腹の上）に
+    const papa = world.enemies.find((e) => e.type === "papa" && !e.napDone && e.phase > 0);
+    if (papa && !hug) state = "nap";
     this.cat.group.visible = !hug?.drawsCat;
-    this.cat.group.position.set(p.pos.x, hug ? ENEMY_H[holder!.type] * 0.42 : 0, p.pos.z + (hug ? 0.15 : 0));
+    this.cat.group.position.set(p.pos.x, hug ? ENEMY_H[holder!.type] * 0.42 : papa ? 0.45 : 0, p.pos.z + (hug ? 0.15 : papa ? 0.2 : 0));
     this.cat.group.rotation.x = -LEAN;
     this.cat.group.rotation.z = hug ? Math.sin(world.time * 30) * 0.12 : 0;   // だっこされてじたばた
     if (hug) state = "hurt";
@@ -266,7 +274,21 @@ export class GameView {
       const face = (e.vel.x < -0.1 ? -1 : 1) * (e.type === "mama" ? -1 : 1);   // ママの絵は左向き
       const walker = e.type === "mama" || e.type === "boy" || e.type === "girl";
       g.rotation.z = walker && Math.hypot(e.vel.x, e.vel.z) > 0.2 ? Math.sin(e.t * (e.type === "mama" ? 9 : 12)) * 0.05 : 0;   // てくてく揺れる
-      let wide = 1;
+      let wide = 1, tall = 1;
+      if (e.type === "papa") {   // 猫吸い中は猫吸いの絵。お腹で寝ている間は Zzz
+        const base = this.enemyTex.get("papa")!, h = this.hugTex.get("papa")!, holding = p.holder === e.id && p.held > 0;
+        const tex = holding ? h.tex : base, mat = (g.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
+        if (mat.map !== tex) { mat.map = tex; mat.needsUpdate = true; }
+        const ar = (t: THREE.Texture) => { const im = t.image as { width: number; height: number }; return im.width / im.height; };
+        wide = ar(tex) / ar(base);
+        if (holding) tall = 1.7;   // 猫吸いはすわった絵なので背を高く
+        const z = this.sprite("zzz", 0, () => new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
+        if (!this.zzz) this.zzz = canvasTexture(stickerCanvas(160, 90, (c) => { c.fillStyle = "#4dabf7"; c.strokeStyle = INK; c.lineWidth = 5; c.font = "bold 60px sans-serif"; c.strokeText("Zzz", 15, 70); c.fillText("Zzz", 15, 70); }));
+        if (z.material.map !== this.zzz) { z.material.map = this.zzz; z.material.needsUpdate = true; }
+        const k = e.phase / PAPA_NAP;
+        z.visible = k > 0 && !e.napDone;
+        z.position.set(e.pos.x + 0.4, 1.6 + k * 0.6 + Math.sin(world.time * 3) * 0.05, e.pos.z); z.scale.set(0.9 + k * 1.0, (0.9 + k * 1.0) * 0.56, 1);
+      }
       if (e.type === "boy" || e.type === "girl") {   // だっこ中は、だっこの絵に差し替える
         const base = this.enemyTex.get(e.type)!, h = this.hugTex.get(e.type)!, holding = p.holder === e.id && p.held > 0;
         const tex = holding ? h.tex : e.phase > 0 ? this.runTex.get(e.type) ?? base : base, mat = (g.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
@@ -276,7 +298,7 @@ export class GameView {
       }
       const appear = e.spawn > 0 ? Math.max(0.05, 1 - e.spawn / 1.0) : 1;
       const squash = e.hurt > 0 ? 0.88 : 1, big = e.elite ? 1.3 : 1;   // 強い虫は大きく、足元が光る
-      g.scale.set(face * (2 - squash) * appear * big * wide, squash * appear * big, 1);
+      g.scale.set(face * (2 - squash) * appear * big * wide * tall, squash * appear * big * tall, 1);
       if (e.elite) {
         const a = this.sprite("aura", nAura++, () => new THREE.SpriteMaterial({ map: this.glow, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
         const r = ENEMY_H[e.type] * 1.5 * (1 + Math.sin(world.time * 6 + e.id) * 0.08);
@@ -297,6 +319,7 @@ export class GameView {
       });
     }
     this.hideRest("status", nStat); this.hideRest("aura", nAura);
+    if (!world.enemies.some((e) => e.type === "papa")) this.hideRest("zzz", 0);
     for (const [id, g] of this.enemyMeshes) if (!alive.has(id)) { this.scene.remove(g); this.enemyMeshes.delete(id); }
 
     // 弾: 猫の技はその絵（爪・牙・毛糸玉など）が、技ごとの動きで出る。虫の攻撃は縁取りのある玉。

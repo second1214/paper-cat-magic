@@ -15,9 +15,10 @@ const FRAMES: Record<string, number> = {
   P14_hiss: STAND / 395,
   P03_sit_happy: 1.6 / 420,
   P09_belly_up: 1.25 / 417,
+  P05_loaf_front: 1.05 / 401,
 };
 
-export type CatState = "idle" | "walk" | "dash" | "jump" | "hurt" | "happy" | "down";
+export type CatState = "idle" | "walk" | "dash" | "jump" | "hurt" | "happy" | "down" | "nap";
 
 export class CatDoll {
   group = new THREE.Group();
@@ -83,6 +84,7 @@ export class CatDoll {
       case "hurt": name = "P14_hiss"; break;
       case "happy": name = "P03_sit_happy"; sy = 1 + 0.015 * Math.sin(t * 3); break;
       case "down": name = "P09_belly_up"; break;
+      case "nap": name = "P05_loaf_front"; sy = 1 + 0.03 * Math.sin(t * 2); break;   // パパのお腹の上で香箱すわり（すやすや）
       default: {
         // 待機: 半目 → ときどきまばたき → 時々キラキラ目
         const c = t % 6;
