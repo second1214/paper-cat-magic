@@ -244,7 +244,7 @@ export class GameView {
     // 子どもにだっこされているとき: 絵に猫が描いてあれば人形は隠し、なければ腕の高さに持ち上げる
     const holder = p.held > 0 ? world.enemies.find((e) => e.id === p.holder) : undefined;
     const hug = holder && (holder.type === "boy" || holder.type === "girl" || holder.type === "papa") ? this.hugTex.get(holder.type) : undefined;
-    // パパのお腹の上でじっとしている: 香箱すわりで、少し高い所（お腹の上）に
+    // パパのお腹の上でじっとしている: 丸まって寝る絵で、少し高い所（お腹の上）に
     const papa = world.enemies.find((e) => e.type === "papa" && !e.napDone && e.phase > 0);
     if (papa && !hug) state = "nap";
     this.cat.group.visible = !hug?.drawsCat;
