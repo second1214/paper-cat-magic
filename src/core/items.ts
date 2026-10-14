@@ -21,7 +21,7 @@ export interface Bonus {
   clearHeal: number; // 部屋を片付けるたびの回復（半ハート）
   choiceAdd: number; // ごほうびの選択肢
   dashPower: number; // ダッシュのあと攻撃力1.5倍になる秒数
-  // Magicraft の装備・レリックにある特殊効果
+  // 特殊効果
   crit: number; // 会心（攻撃力2倍）の確率
   killHeal: number; // 虫を倒したとき♥0.5回復する確率
   killBoom: number; // 倒した虫がはじける（攻撃力）
@@ -113,7 +113,7 @@ export const RELICS: Record<string, RelicDef> = {
 };
 export const RELIC_IDS = Object.keys(RELICS);
 
-// ---------- 装備（Magicraft の装備セットのように、同じセットをそろえるとボーナス） ----------
+// ---------- 装備（同じセットをそろえるとボーナス） ----------
 // 飼い主が「かわいい！」と思って買ってきた、よくわからない物を着せられている。
 export type GearSlot = "hat" | "body" | "collar";
 export const GEAR_SLOTS: GearSlot[] = ["hat", "body", "collar"];
@@ -121,7 +121,7 @@ export const SLOT_NAME: Record<GearSlot, string> = { hat: "頭", body: "服", co
 
 export interface GearDef { id: string; name: string; slot: GearSlot; set: string; desc: string; bonus: Part }
 
-/** レアリティ（Magicraft と同じく、上がるほど効果が大きく、エピック以上は特殊効果がつく）。 */
+/** レアリティ（上がるほど効果が大きく、エピック以上は特殊効果がつく）。 */
 export type Rarity = 0 | 1 | 2 | 3;
 export const RARITY: { name: string; color: string; k: number; fx: number }[] = [
   { name: "ふつう", color: "#868e96", k: 1, fx: 0 },
@@ -133,7 +133,7 @@ export const RARITY: { name: string; color: string; k: number; fx: number }[] = 
 /** 装備1つ（同じ装備でもレアリティと特殊効果が違う）。 */
 export interface GearItem { id: string; rar: Rarity; fx: string[] }
 
-/** エピック以上につく特殊効果（Magicraft の装備・レリックにある効果）。 */
+/** エピック以上につく特殊効果。 */
 export const GEAR_FX: Record<string, { name: string; bonus: Part }> = {
   crit: { name: "会心", bonus: { crit: 0.1 } },
   killHeal: { name: "倒して回復", bonus: { killHeal: 0.08 } },

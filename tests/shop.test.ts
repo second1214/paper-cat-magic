@@ -1,4 +1,4 @@
-// ママのところ（Magicraft のお店と鍛冶）・カリカリ・さいごのママ。
+// ママのところ（おねだり・お直し）・カリカリ・さいごのママ。
 import { describe, expect, it } from "vitest";
 import { spellDef, SPELLS } from "../src/core/spells";
 import { ACTS, ROOMS_PER_ACT, World } from "../src/game/world";

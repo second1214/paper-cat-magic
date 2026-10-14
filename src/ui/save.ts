@@ -20,7 +20,8 @@ export function clearRun() {
 
 /** 「つづきから」に出す、どこまで進んだか。 */
 export function runLabel(d: SaveData) {
+  const year = d.at.final ? 0 : Math.floor(d.at.act / SEASONS.length);
   const where = d.at.final ? "さいご・ママ"
-    : `${SEASON_NAME[SEASONS[d.at.act]]}・${d.at.index === ROOMS_PER_ACT ? "ボス" : `${d.at.index + 1}/${ROOMS_PER_ACT}部屋目`}`;
-  return `${where}（${DIFFS[d.opts.difficulty].name}）`;
+    : `${year ? `${year + 1}年目の` : ""}${SEASON_NAME[SEASONS[d.at.act % SEASONS.length]]}・${d.at.index === ROOMS_PER_ACT ? "ボス" : `${d.at.index + 1}/${ROOMS_PER_ACT}部屋目`}`;
+  return `${where}（${d.opts.endless ? "エンドレス" : DIFFS[d.opts.difficulty].name}）`;
 }

@@ -110,7 +110,7 @@ describe("おうちのもの属性", () => {
   });
 });
 
-describe("召喚（Magicraft と同じ: 修飾は仲間の攻撃にかかる・召喚ごとの上限）", () => {
+describe("召喚（修飾は仲間の攻撃にかかる・召喚ごとの上限）", () => {
   it("友達猫は虫を追いかけてひっかく", () => {
     const { w, foe } = arena(["friend", null], { dx: 4, dz: 0 });
     run(w, 1 / 60); run(w, 4, false);
