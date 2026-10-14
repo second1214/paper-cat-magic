@@ -174,13 +174,16 @@ export class Hud {
   /** クリアしたときのおきにいり選び（持っている技の番号）と、決めたかどうか。 */
   private favPick: number[] = [];
   private favSaved = false;
+  /** トレーニング: パレットで選んでいる技と、★の数。 */
+  private trainPick: string | null = null;
+  private trainStars = 0;
   private sent: null | "sending" | { rank: number } | { error: string } = null;
   /** 持ち物画面のタブ（おもちゃの番号、または装備・レリック）と、そこで選んでいるもの。 */
   private tab: number | "gear" = 0;
   private pick: string | null = null;
   private lastKey = "";
 
-  constructor(private world: () => World, private onRestart: () => void, private onTitle: () => void, private onStart: (difficulty: number, endless?: boolean) => void, private onContinue: () => void) {
+  constructor(private world: () => World, private onRestart: () => void, private onTitle: () => void, private onStart: (difficulty: number, endless?: boolean) => void, private onContinue: () => void, private onTraining: () => void) {
     this.el("bagBtn").addEventListener("click", () => this.toggleBag());
     this.el("pauseBtn").addEventListener("click", () => this.togglePause());
     this.el("muteBtn").addEventListener("click", () => { this.onMute(); this.lastKey = ""; });
@@ -226,7 +229,7 @@ export class Hud {
       this.localRank = w.opts.endless && w.cleared > 0 ? recordEndless({ name: savedName(), score: w.score, rooms: w.cleared, bosses: w.bosses, elites: w.elites, kills: w.kills, at: this.endedAt, act: w.room.act }) : 0;
     }
     this.meters(w);
-    const key = JSON.stringify([w.coins, w.shop?.items, w.shop?.rerollCost, w.room.kind, w.held.map((h) => h.def), w.cur, w.relics, w.gear, w.curses, this.tab, this.pick, this.fusePick, w.bag, p.cursor, p.recharging, this.bagOpen, this.paused, this.screen, this.zukanSel, this.sel, w.phase, w.choices, w.doorOpen, w.room.act, w.room.index, w.room.altar?.used, this.rankTab, this.board, this.sent, this.localRank, this.favPick, this.favSaved]);
+    const key = JSON.stringify([w.coins, w.shop?.items, w.shop?.rerollCost, w.room.kind, w.held.map((h) => h.def), w.cur, w.relics, w.gear, w.curses, this.tab, this.pick, this.fusePick, w.bag, p.cursor, p.recharging, this.bagOpen, this.paused, this.screen, this.zukanSel, this.sel, w.phase, w.choices, w.doorOpen, w.room.act, w.room.index, w.room.altar?.used, this.rankTab, this.board, this.sent, this.localRank, this.favPick, this.favSaved, this.trainPick, this.trainStars, w.trainInfMana, w.trainMulti]);
     if (key === this.lastKey) return;
     this.lastKey = key;
 
@@ -245,7 +248,8 @@ export class Hud {
     const hint = this.el("hint");
     hint.hidden = !(w.doorOpen && w.phase === "play");
     const al = w.room.altar;
-    const altarHint = al && (!al.used || al.kind === "fusion") ? `<b>真ん中の${ALTAR_NAME[al.kind]}に近づこう</b>` : "";
+    const altarHint = al?.kind === "kotatsu" ? `<b>猫こたつに近づくと、おもちゃと技を自由に選べる</b>`
+      : al && (!al.used || al.kind === "fusion") ? `<b>真ん中の${ALTAR_NAME[al.kind]}に近づこう</b>` : "";
     if (!hint.hidden) hint.innerHTML = (altarHint || `<b>扉を選んで進もう</b>`) + w.room.doors.map((d) =>
       `<span class="chip"><img src="${urlOf(rewardCanvas(d.reward))}" alt="">${REWARD_INFO[d.reward].label}</span>`).join("");
 
@@ -256,6 +260,7 @@ export class Hud {
     this.renderReward(w);
     this.renderShop(w);
     this.renderBench(w);
+    this.renderTrain(w);
     this.renderResult(w);
   }
 
@@ -264,6 +269,17 @@ export class Hud {
     const h = w.toys[w.cur], set = (k: string, v: number) => { const e = document.querySelector<HTMLElement>(`[data-meter="${k}"]`); if (e) e.style.width = `${Math.max(0, Math.min(1, v)) * 100}%`; };
     if (h.def.sub) set("sub", h.charge / h.def.sub.need);
     w.batt.forEach((b, i) => set(`batt${i}`, 1 - b.autoCd / (b.def.auto ?? 1)));
+    // トレーニング: DPS（直近5秒）・合計・いちばん大きい1回
+    const tb = this.el("trainBox");
+    tb.hidden = !(w.opts.training && w.phase === "play");
+    if (!tb.hidden) {
+      if (!tb.firstChild) {
+        tb.innerHTML = `<span>DPS <b data-t="dps">0</b></span><span>合計 <span data-t="total">0</span></span><span>最大 <span data-t="max">0</span></span><button class="trainReset">リセット</button>`;
+        tb.querySelector<HTMLButtonElement>(".trainReset")!.onclick = () => { this.world().trainLog = []; };
+      }
+      const st = w.trainStats, put = (k: string, v: number) => { const e = tb.querySelector(`[data-t="${k}"]`); if (e) e.textContent = v >= 100 ? `${Math.round(v)}` : v.toFixed(1); };
+      put("dps", st.dps); put("total", st.total); put("max", st.max);
+    }
   }
 
   /** タイトル・あそびかた・ずかん（ゲーム開始前）。 */
@@ -338,6 +354,7 @@ export class Hud {
         <button class="${saved ? "" : "go "}start">はじめる</button>
         <button class="endlessBtn">エンドレス</button>
         <button class="rankBtn">ランキング</button>
+        <button class="trainBtn">トレーニング</button>
         <button class="growBtn">ねこの成長</button>
         <button class="howtoBtn">あそびかた</button>
         <button class="zukanBtn">ずかん</button>
@@ -349,6 +366,7 @@ export class Hud {
     if (cont) cont.onclick = () => { this.screen = null; this.lastKey = ""; this.onContinue(); };
     el.querySelector<HTMLButtonElement>(".growBtn")!.onclick = go("grow");
     el.querySelector<HTMLButtonElement>(".endlessBtn")!.onclick = go("endless");
+    el.querySelector<HTMLButtonElement>(".trainBtn")!.onclick = () => { this.screen = null; this.lastKey = ""; this.onTraining(); };
     el.querySelector<HTMLButtonElement>(".rankBtn")!.onclick = () => { this.screen = "rank"; this.lastKey = ""; this.loadBoard(); };
     el.querySelector<HTMLButtonElement>(".howtoBtn")!.onclick = go("howto");
     el.querySelector<HTMLButtonElement>(".zukanBtn")!.onclick = go("zukan");
@@ -592,6 +610,44 @@ export class Hud {
     });
     const go = el.querySelector<HTMLButtonElement>(".fuseGo");
     if (go) go.onclick = () => { w.fuse(this.fusePick); this.fusePick = []; this.lastKey = ""; };
+  }
+
+  /** トレーニング: 猫こたつで、おもちゃ・技（★も）を自由に選んで試す。 */
+  private renderTrain(w: World) {
+    const el = this.el("shopPanel");
+    if (w.phase !== "train") return;
+    el.hidden = false;
+    const main = w.toys[w.cur].def, batt = w.batt[0]?.def, pick = this.trainPick;
+    const toyIcons = Object.keys(TOYS).map((id) => itemCell("toy", id, `data-tt="${id}" title="${TOYS[id].name}"`, id === main.id || id === batt?.id ? "sel" : "")).join("");
+    const slots = (h: number, def: ToyDef) => slotRow(def, (i) => cell(def.slots[i], `data-th="${h}" data-tw="slot" data-ti="${i}"`))
+      + (def.sub ? `<div class="subrow"><span class="sublabel">サブ</span><div class="cells">${def.sub.slots.map((id, i) => cell(id, `data-th="${h}" data-tw="sub" data-ti="${i}"`)).join("")}</div></div>` : "");
+    const star = (id: string) => id + "+".repeat(this.trainStars);
+    const palette = ZUKAN.filter((g) => !g.kind).map((g) => `<div class="zgroup"><div class="ztitle">${g.title}</div><div class="zcells">${g.ids.map((id) => cell(star(id), `data-pal="${star(id)}"`, pick === star(id) ? "sel" : "")).join("")}</div></div>`).join("");
+    el.innerHTML = `<div class="panel trainPanel">
+      <div class="shead"><h2>猫こたつ（トレーニング）</h2><button class="close">閉じる</button><button class="toTitle">タイトルへ</button></div>
+      <p class="muted">下の技をタップで選び、スロットをタップして置く（何回でも置ける）。何も選ばずにスロットをタップすると外す。</p>
+      <div class="trainOpts">
+        <button data-multi="0" class="${w.trainMulti ? "" : "on"}">けりぐるみ 1個</button><button data-multi="1" class="${w.trainMulti ? "on" : ""}">けりぐるみ たくさん</button>
+        <button class="infMana ${w.trainInfMana ? "on" : ""}">やる気むげん</button>
+        ${[0, 1, 2].map((n) => `<button data-star="${n}" class="${this.trainStars === n ? "on" : ""}">${n ? "★".repeat(n) : "★なし"}</button>`).join("")}
+      </div>
+      <div class="detail">${pick ? spellCard(pick) : toyCard(main)}</div>
+      <h3>おもちゃ（電池式は電池の枠へ）</h3><div class="trainRow">${toyIcons}</div>
+      <h3>${main.name}</h3>${slots(w.cur, main)}
+      ${batt ? `<h3>${batt.name}（電池式）<button class="noBatt">外す</button></h3>${slots(w.toys.length, batt)}` : ""}
+      <h3>技・修飾</h3><div class="palette"><div class="zgroups">${palette}</div></div>
+    </div>`;
+    el.querySelectorAll<HTMLElement>("[data-tt]").forEach((b) => b.onclick = () => { w.trainToy(b.dataset.tt!); this.lastKey = ""; });
+    el.querySelectorAll<HTMLElement>("[data-pal]").forEach((b) => b.onclick = () => { this.trainPick = this.trainPick === b.dataset.pal ? null : b.dataset.pal!; this.lastKey = ""; });
+    el.querySelectorAll<HTMLElement>("[data-th]").forEach((b) => b.onclick = () => {
+      w.trainSet(Number(b.dataset.th), b.dataset.tw as "slot" | "sub", Number(b.dataset.ti), this.trainPick); this.lastKey = "";
+    });
+    el.querySelectorAll<HTMLElement>("[data-multi]").forEach((b) => b.onclick = () => { w.enterTraining(b.dataset.multi === "1"); w.phase = "train"; this.lastKey = ""; });
+    el.querySelectorAll<HTMLElement>("[data-star]").forEach((b) => b.onclick = () => { this.trainStars = Number(b.dataset.star); this.trainPick = null; this.lastKey = ""; });
+    el.querySelector<HTMLButtonElement>(".infMana")!.onclick = () => { w.trainInfMana = !w.trainInfMana; this.lastKey = ""; };
+    const nb = el.querySelector<HTMLButtonElement>(".noBatt"); if (nb) nb.onclick = () => { w.batt = []; this.lastKey = ""; };
+    el.querySelector<HTMLButtonElement>(".close")!.onclick = () => { w.closeShop(); this.trainPick = null; this.lastKey = ""; };
+    el.querySelector<HTMLButtonElement>(".toTitle")!.onclick = () => this.toTitle();
   }
 
   /** 秘密の隠し場所の部屋。 */

@@ -3,6 +3,7 @@ import { GameView } from "./render/view";
 import { Controls } from "./input";
 import { Hud } from "./ui/hud";
 import { loadRecord } from "./ui/record";
+import { NO_META } from "./core/meta";
 import { Sound } from "./audio";
 import { lockedKeys } from "./core/unlock";
 import { clearRun, loadRun, saveRun } from "./ui/save";
@@ -12,6 +13,8 @@ const params = new URLSearchParams(location.search);
 const seed = () => Date.now() % 100000;
 /** 難易度と、ねこの成長（保存してあるレベル）・解放ずみのもので新しい冒険を作る。 */
 const newWorld = (difficulty: number, s = seed(), endless = false) => { const r = loadRecord(); return new World(s, { difficulty: endless ? 1 : difficulty, meta: r.meta, locked: lockedKeys(r.stats), endless, favorites: r.favorites }); };
+/** トレーニング部屋（成長・解放の影響なし。技はすべて選べる）。 */
+const newTraining = () => { const w = new World(seed(), { difficulty: 1, meta: { ...NO_META }, training: true }); w.enterTraining(false); w.start(); return w; };
 let world = newWorld(1, Number(params.get("seed")) || seed());
 const view = new GameView(canvas);
 const sound = new Sound();
@@ -23,6 +26,7 @@ const hud = new Hud(
   () => { world = newWorld(1); },
   (difficulty, endless) => { world = newWorld(difficulty, Number(params.get("seed")) || seed(), endless); world.start(); },
   () => { const d = loadRun(); if (!d) return; world = World.load(d); world.start(); savedNo = world.saveNo; },
+  () => { world = newTraining(); },
 );
 /** 途中セーブ: 部屋に入るたびに保存し、冒険が終わったら消す。 */
 let savedNo = -1;
@@ -44,7 +48,7 @@ function frame(now: number) {
   const wasOpen = world.doorOpen;
   if (!hud.bagOpen && !hud.paused) world.update(dt, input);
   if (world.phase === "dead" || world.phase === "win") { if (savedNo !== -2) { clearRun(); savedNo = -2; } }
-  else if (world.phase !== "intro" && world.checkpoint && world.saveNo !== savedNo) { saveRun(world.checkpoint); savedNo = world.saveNo; }
+  else if (world.phase !== "intro" && !world.opts.training && world.checkpoint && world.saveNo !== savedNo) { saveRun(world.checkpoint); savedNo = world.saveNo; }
   // 効果音と曲
   for (const e of world.events) sound.sfx(e);
   if (!wasOpen && world.doorOpen && world.room.kind !== "shop" && world.room.kind !== "special") sound.sfx("door");

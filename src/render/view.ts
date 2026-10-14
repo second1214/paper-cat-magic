@@ -4,7 +4,7 @@ import { ELITE_INFO, ENEMY, type AltarKind, type World, type EnemyType, type Roo
 import { CatDoll, type CatState } from "./catDoll";
 import { canvasTexture, enemyTexture, glowTexture, kidCanvas, orbTexture } from "./stickers";
 import { buildRoom, type BuiltRoom } from "./roomBuilder";
-import { elementCanvas, INK, kibbleCanvas, rewardCanvas, stickerCanvas, techCanvas } from "../art/items";
+import { elementCanvas, INK, kibbleCanvas, rewardCanvas, spellCanvas, stickerCanvas, techCanvas } from "../art/items";
 import type { Element, TechFx } from "../core/spells";
 import type { Season } from "../game/stage";
 
@@ -13,7 +13,7 @@ const LEAN = 0.42;
 const ENEMY_H: Record<EnemyType, number> = {
   roach: 0.95, mosquito: 0.95, spider: 1.0, hornet: 2.4, stinkbug: 0.95, camel: 1.0, ant: 0.7, caterpillar: 0.95,
   stinkKing: 3.4, camelKing: 3.4, queen: 3.2,   // 王冠のぶん絵が縦長なので大きめ
-  mama: 3.8, boy: 2.7, girl: 2.2,
+  mama: 3.8, boy: 2.7, girl: 2.2, shrimp: 1.4,
 };
 const FLY: Partial<Record<EnemyType, number>> = { mosquito: 0.55, hornet: 0.35 };
 
@@ -154,7 +154,7 @@ export class GameView {
   private runTex = new Map<"boy" | "girl", THREE.Texture>();
   private altarTex(k: AltarKind) {
     let t = this.altarTexs.get(k);
-    if (!t) { t = canvasTexture(rewardCanvas(k)); this.altarTexs.set(k, t); }
+    if (!t) { t = canvasTexture(k === "kotatsu" ? spellCanvas("kotatsu") : rewardCanvas(k)); this.altarTexs.set(k, t); }   // 猫こたつは「こたつ布団」の絵
     return t;
   }
 

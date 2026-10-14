@@ -337,3 +337,30 @@ describe("おきにいり（クリアしたときに選んだ技を引き継ぐ�
     expect(owned.filter((x) => x === "claw").length).toBeGreaterThanOrEqual(3);   // 電動ねずみの中のひっかきも
   });
 });
+
+describe("トレーニング部屋", () => {
+  const train = (multi = false) => { const w = new World(3, { difficulty: 1, meta: { hp: 0, atk: 0, mana: 0, speed: 0, luck: 0, gift: 0, fav: 0 }, training: true }); w.enterTraining(multi); w.start(); return w; };
+  it("けりぐるみは動かず・倒れず・猫を傷つけず、受けたダメージをDPSとして数える", () => {
+    const w = train();
+    expect(w.enemies).toHaveLength(1);
+    const e = w.enemies[0], home = { ...e.pos };
+    w.trainSet(0, "slot", 0, "hammer"); w.trainSet(0, "slot", 1, "bite");
+    w.player.pos = { x: e.pos.x - 1.4, z: e.pos.z };
+    for (let t = 0; t < 3; t += 1 / 60) w.update(1 / 60, { move: { x: 0, z: 0 }, aim: { x: 1, z: 0 }, fire: true, dash: false });
+    expect(e.hp).toBe(e.maxHp);
+    expect(w.trainStats.total).toBeGreaterThan(0);
+    expect(w.trainStats.dps).toBeGreaterThan(0);
+    expect(Math.hypot(e.pos.x - home.x, e.pos.z - home.z)).toBeLessThan(0.8);   // はじかれても戻る
+    expect(w.player.hp).toBe(w.player.maxHp);
+    expect(w.phase).toBe("play");
+  });
+  it("けりぐるみがたくさんの部屋、猫こたつで編集画面が開く、おもちゃを選べる", () => {
+    const w = train(true);
+    expect(w.enemies.length).toBeGreaterThan(4);
+    w.player.pos = { ...w.room.altar!.pos };
+    w.update(1 / 60, { move: { x: 0, z: 0 }, aim: null, fire: false, dash: false });
+    expect(w.phase).toBe("train");
+    w.trainToy("fukubukuro"); expect(w.toy.slots).toHaveLength(16);
+    w.trainToy("denmouse"); expect(w.batt.map((h) => h.def.id)).toEqual(["denmouse"]);
+  });
+});
