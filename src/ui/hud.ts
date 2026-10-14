@@ -4,10 +4,11 @@ import { baseId, DIR_INFO, ELEMENT_INFO, KIND_LABEL, MOTION_LABEL, rarOf, SPELL_
 import { groupSummary, SUB_LABEL, TOYS, toyStats, type ToyDef } from "../core/wand";
 import { CURSES } from "../core/curses";
 import { findUnlock, isOpen, UNLOCKS, unlockText, type Unlock, type UnlockKind } from "../core/unlock";
-import { buyUpgrade, canPick, loadRecord, nameEndless, recordEndless, recordRun, recordText, setFavorites } from "./record";
+import { addNiboshi, buyUpgrade, canPick, loadRecord, nameEndless, recordEndless, recordRun, recordText, setFavorites } from "./record";
 import { fetchBoard, saveName, savedName, submitScore, type Board } from "./ranking";
 import { cleanName, POINTS } from "../core/score";
 import { loadRun, runLabel } from "./save";
+import { adsAvailable, rewardedAd } from "../platform";
 import { DIFFS, favSlots, runReward, UPGRADES } from "../core/meta";
 import { enemyTexture } from "../render/stickers";
 import { ENEMY, POTIONS, type EnemyType } from "../game/world";
@@ -165,6 +166,10 @@ export class Hud {
   paused = false;
   /** 音のオン・オフ（main から渡す）。 */
   onMute: () => boolean = () => false;
+  /** 広告が流れている間は true（音を止めて、ゲームを止める）。 */
+  onAd: (playing: boolean) => void = () => {};
+  private adBusy = false;
+  private doubled = false;
   muted: () => boolean = () => false;
   private screen: Screen = "title";
   private zukanSel = "claw";
@@ -229,12 +234,12 @@ export class Hud {
     toast.hidden = !w.toast; if (w.toast) toast.textContent = w.toast.text;
 
     // 記録（やられた・守りきったときに一度だけ）
-    if ((w.phase === "dead" || w.phase === "win") && !this.recorded.has(w)) {
+    if (w.over && !this.recorded.has(w)) {
       this.recorded.add(w);
       this.earned = runReward(w.cleared, w.bosses, w.phase === "win", w.opts.difficulty, w.curses.length);
       this.opened = recordRun(w.room.act, w.room.index, w.phase === "win", w.opts.difficulty, this.earned,
         { kills: w.kills, elites: w.elites, bosses: w.bosses, rooms: w.cleared, specials: w.specials, curses: w.curses.length }, !!w.opts.endless);
-      this.sent = null; this.favPick = []; this.favSaved = false;
+      this.sent = null; this.favPick = []; this.favSaved = false; this.doubled = false;
       this.endedAt = Date.now();
       this.localRank = w.opts.endless && w.cleared > 0 ? recordEndless({ name: savedName(), score: w.score, rooms: w.cleared, bosses: w.bosses, elites: w.elites, kills: w.kills, at: this.endedAt, act: w.room.act }) : 0;
     }
@@ -672,17 +677,35 @@ export class Hud {
     el.querySelector<HTMLButtonElement>(".close")!.onclick = () => { w.closeShop(); this.fusePick = []; this.lastKey = ""; };
   }
 
+  /** ごほうび広告を流し、最後まで見たらごほうびを渡す。流れている間はゲームと音を止める。 */
+  private watchAd(reward: () => void) {
+    if (this.adBusy) return;
+    this.adBusy = true; this.lastKey = "";
+    void rewardedAd(() => this.onAd(true), () => this.onAd(false)).then((ok) => { this.adBusy = false; if (ok) reward(); this.lastKey = ""; });
+  }
+
   private renderResult(w: World) {
     const el = this.el("result");
     el.hidden = !(w.phase === "dead" || w.phase === "win");
     if (el.hidden) return;
+    if (!w.over) {   // やられた: 広告を見て1回だけ復活できる
+      el.innerHTML = `<div class="panel"><h2>虫にやられた…</h2>${mama("scream", "いやぁぁぁ！<br>虫がーっ！")}
+        <p class="muted">広告を見ると、その場で1回だけ復活できる（HP満タン）</p>
+        <div class="menu"><button class="go reviveAd" ${this.adBusy ? "disabled" : ""}>▶ 広告を見て復活</button><button class="giveUp">あきらめる</button></div></div>`;
+      el.querySelector<HTMLButtonElement>(".reviveAd")!.onclick = () => this.watchAd(() => w.revive());
+      el.querySelector<HTMLButtonElement>(".giveUp")!.onclick = () => { w.reviveOk = false; this.lastKey = ""; };
+      return;
+    }
     el.innerHTML = `<div class="panel"><h2>${w.phase === "win" ? "ママにつかまった！" : "虫にやられた…"}</h2>${w.opts.endless ? this.endlessResult(w) : ""}${w.phase === "win" ? this.favHtml(w) : ""}
       ${w.phase === "win" ? mama("pet", "つかまえた〜♪<br>病院でワクチン打とうね。<br>1年間ありがとう！") : mama("scream", "いやぁぁぁ！<br>虫がーっ！")}
       <p class="muted">${w.phase === "win" ? "秋から夏まで、ぜんぶの虫を追い払った。さいごは病院へ…（おしまい）" : `${w.title} で力尽きた。`}</p>
       <p class="nibline">にぼし <b>+${this.earned}</b>（${DIFFS[w.opts.difficulty].name}・片付けた部屋 ${w.cleared}・倒した虫 ${w.kills}${w.curses.length ? `・呪い ${w.curses.length}` : ""}）　タイトルの「ねこの成長」で使える</p>
       ${this.opened.length ? `<div class="opened"><b>新しく解放！</b>（次の冒険から出てくる）<div class="zcells">${this.opened.map((u) => u.kind === "spell" ? cell(u.id, "tabindex=-1") : itemCell(u.kind, u.id, "tabindex=-1")).join("")}</div>
         <small>${this.opened.map((u) => (u.kind === "spell" ? SPELLS[u.id].name : u.kind === "toy" ? TOYS[u.id].name : RELICS[u.id].name)).join("・")}</small></div>` : ""}
+      ${adsAvailable() && this.earned > 0 ? this.doubled ? `<p class="nibline">にぼし2倍！ <b>+${this.earned}</b> もらった</p>` : `<div class="menu"><button class="go nibAd" ${this.adBusy ? "disabled" : ""}>▶ 広告を見て にぼし2倍（+${this.earned}）</button></div>` : ""}
       <div class="menu"><button class="go again">もう一度</button><button class="toTitle">タイトルへ</button></div></div>`;
+    const nibAd = el.querySelector<HTMLButtonElement>(".nibAd");
+    if (nibAd) nibAd.onclick = () => this.watchAd(() => { if (!this.doubled) { addNiboshi(this.earned); this.doubled = true; } });
     el.querySelector<HTMLButtonElement>(".again")!.onclick = () => this.onRestart();
     el.querySelector<HTMLButtonElement>(".toTitle")!.onclick = () => this.toTitle();
     el.querySelectorAll<HTMLButtonElement>("[data-fav]").forEach((b) => b.onclick = () => {

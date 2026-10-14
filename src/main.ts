@@ -7,12 +7,18 @@ import { NO_META } from "./core/meta";
 import { Sound } from "./audio";
 import { lockedKeys } from "./core/unlock";
 import { clearRun, loadRun, saveRun } from "./ui/save";
+import { adsAvailable, happy, initPlatform, loadingDone, setPlaying } from "./platform";
+
+await initPlatform();   // 保存データを読む前に（CrazyGames 版は SDK の保存を使う）
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
 const seed = () => Date.now() % 100000;
 /** 難易度と、ねこの成長（保存してあるレベル）・解放ずみのもので新しい冒険を作る。 */
-const newWorld = (difficulty: number, s = seed(), endless = false) => { const r = loadRecord(); return new World(s, { difficulty: endless ? 1 : difficulty, meta: r.meta, locked: lockedKeys(r.stats), endless, favorites: r.favorites }); };
+const newWorld = (difficulty: number, s = seed(), endless = false) => {
+  const r = loadRecord(), w = new World(s, { difficulty: endless ? 1 : difficulty, meta: r.meta, locked: lockedKeys(r.stats), endless, favorites: r.favorites });
+  w.reviveOk = adsAvailable(); return w;
+};
 /** トレーニング部屋（成長・解放の影響なし。技はすべて選べる）。 */
 const newTraining = () => { const w = new World(seed(), { difficulty: 1, meta: { ...NO_META }, training: true }); w.enterTraining(false); w.start(); return w; };
 let world = newWorld(1, Number(params.get("seed")) || seed());
@@ -25,7 +31,7 @@ const hud = new Hud(
   () => { world = newWorld(world.opts.difficulty, seed(), world.opts.endless); world.start(); hud.bagOpen = false; },
   () => { world = newWorld(1); },
   (difficulty, endless) => { world = newWorld(difficulty, Number(params.get("seed")) || seed(), endless); world.start(); },
-  () => { const d = loadRun(); if (!d) return; world = World.load(d); world.start(); savedNo = world.saveNo; },
+  () => { const d = loadRun(); if (!d) return; world = World.load(d); world.reviveOk = adsAvailable(); world.start(); savedNo = world.saveNo; },
   () => { world = newTraining(); },
 );
 /** 途中セーブ: 部屋に入るたびに保存し、冒険が終わったら消す。 */
@@ -40,14 +46,20 @@ addEventListener("resize", fit); fit();
 
 await view.init(import.meta.env.BASE_URL);
 document.getElementById("loading")!.remove();
+loadingDone();
 
 let last = performance.now();
+let adPlaying = false, bossesSeen = 0;
 function frame(now: number) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   const input = controls.read(view.camera, world.player.pos);
   const wasOpen = world.doorOpen;
-  if (!hud.bagOpen && !hud.paused) world.update(dt, input);
-  if (world.phase === "dead" || world.phase === "win") { if (savedNo !== -2) { clearRun(); savedNo = -2; } }
+  if (!hud.bagOpen && !hud.paused && !adPlaying) world.update(dt, input);
+  setPlaying(!adPlaying && !hud.bagOpen && !hud.paused && world.phase === "play");
+  const b = world.bosses; if (b > bossesSeen) happy(); bossesSeen = b;
+  if (world.phase === "win" && savedNo !== -2) happy();
+  if (world.over) { if (savedNo !== -2) { clearRun(); savedNo = -2; } }
+  else if (world.phase === "dead") { /* 復活するかを選んでいる間は、途中セーブを残す */ }
   else if (world.phase !== "intro" && !world.opts.training && world.checkpoint && world.saveNo !== savedNo) { saveRun(world.checkpoint); savedNo = world.saveNo; }
   // 効果音と曲
   for (const e of world.events) sound.sfx(e);
@@ -64,3 +76,4 @@ requestAnimationFrame(frame);
 (window as unknown as { __game: unknown }).__game = { get world() { return world; }, view, sound };
 hud.onMute = () => { sound.unlock(); sound.toggleMute(); return sound.muted; };
 hud.muted = () => sound.muted;
+hud.onAd = (on) => { adPlaying = on; sound.hold(on); };
