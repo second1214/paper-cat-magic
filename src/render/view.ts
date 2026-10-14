@@ -13,7 +13,7 @@ const LEAN = 0.42;
 const ENEMY_H: Record<EnemyType, number> = {
   roach: 0.95, mosquito: 0.95, spider: 1.0, hornet: 2.4, stinkbug: 0.95, camel: 1.0, ant: 0.7, caterpillar: 0.95,
   stinkKing: 3.4, camelKing: 3.4, queen: 3.2,   // 王冠のぶん絵が縦長なので大きめ
-  mama: 3.8, boy: 2.7, girl: 2.2, shrimp: 1.4, papa: 2.2,
+  mama: 3.8, boy: 2.7, girl: 2.2, shrimp: 1.4, papa: 1.5,
 };
 const FLY: Partial<Record<EnemyType, number>> = { mosquito: 0.55, hornet: 0.35 };
 
