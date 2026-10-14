@@ -1,5 +1,6 @@
 // 解放（アンロック）: 冒険の記録の合計で、新しい技・おもちゃ・レリックが出るようになる。
 // 途中の季節で負けても、倒した虫や片付けた部屋は積み上がるので、次の冒険が少し変わる。DOM 非依存。
+import { L } from "../i18n";
 
 /** 全部の冒険の合計。 */
 export interface Stats { kills: number; elites: number; bosses: number; rooms: number; wins: number; specials: number; curses: number; bestAct: number }
@@ -9,14 +10,14 @@ export type UnlockKind = "spell" | "toy" | "relic";
 export interface Unlock { kind: UnlockKind; id: string; stat: keyof Stats; n: number }
 
 const STAT_TEXT: Record<keyof Stats, (n: number) => string> = {
-  kills: (n) => `虫を合計${n}匹たおす`,
-  elites: (n) => `強い虫を合計${n}匹たおす`,
-  bosses: (n) => `ボスを合計${n}回たおす`,
-  rooms: (n) => `部屋を合計${n}個かたづける`,
-  wins: (n) => `${n}回 守りきる`,
-  specials: (n) => `特別な部屋に合計${n}回入る`,
-  curses: (n) => `呪いを合計${n}回受ける`,
-  bestAct: (n) => `${["秋", "冬", "春", "夏"][n]}まで進む`,
+  kills: (n) => L(`虫を合計${n}匹たおす`, `Defeat ${n} bugs total`),
+  elites: (n) => L(`強い虫を合計${n}匹たおす`, `Defeat ${n} elite bugs total`),
+  bosses: (n) => L(`ボスを合計${n}回たおす`, `Defeat bosses ${n} times total`),
+  rooms: (n) => L(`部屋を合計${n}個かたづける`, `Clear ${n} rooms total`),
+  wins: (n) => L(`${n}回 守りきる`, `Protect Mama ${n} time${n > 1 ? "s" : ""}`),
+  specials: (n) => L(`特別な部屋に合計${n}回入る`, `Enter special rooms ${n} times total`),
+  curses: (n) => L(`呪いを合計${n}回受ける`, `Take curses ${n} time${n > 1 ? "s" : ""} total`),
+  bestAct: (n) => L(`${["秋", "冬", "春", "夏"][n]}まで進む`, `Reach ${["Autumn", "Winter", "Spring", "Summer"][n]}`),
 };
 export const unlockText = (u: Unlock) => STAT_TEXT[u.stat](u.n);
 

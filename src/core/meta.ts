@@ -1,5 +1,6 @@
 // 難易度と、周回で強くなる「ねこの成長」（にぼしで買う永続強化）。DOM 非依存。
 import type { Part } from "./items";
+import { L } from "../i18n";
 
 export interface Difficulty {
   id: string;
@@ -14,10 +15,10 @@ export interface Difficulty {
 }
 
 export const DIFFS: Difficulty[] = [
-  { id: "easy", name: "やさしい", desc: "虫が弱くて少ない。はじめての人向け", hp: 0.7, speed: 0.9, extra: -1, dmg: 1, startHp: 8, reward: 0.6 },
-  { id: "normal", name: "ふつう", desc: "ふつうの1年", hp: 1, speed: 1, extra: 0, dmg: 1, startHp: 6, reward: 1 },
-  { id: "hard", name: "むずかしい", desc: "虫がかたくて速く、数も多い", hp: 1.45, speed: 1.1, extra: 1, dmg: 1, startHp: 6, reward: 1.6 },
-  { id: "nightmare", name: "悪夢", desc: "むずかしいをクリアすると選べる。当たると♥1減る", hp: 2, speed: 1.2, extra: 2, dmg: 2, startHp: 8, reward: 2.5 },
+  { id: "easy", name: L("やさしい", "Easy"), desc: L("虫が弱くて少ない。はじめての人向け", "Fewer, weaker bugs. For first-timers"), hp: 0.7, speed: 0.9, extra: -1, dmg: 1, startHp: 8, reward: 0.6 },
+  { id: "normal", name: L("ふつう", "Normal"), desc: L("ふつうの1年", "A normal year"), hp: 1, speed: 1, extra: 0, dmg: 1, startHp: 6, reward: 1 },
+  { id: "hard", name: L("むずかしい", "Hard"), desc: L("虫がかたくて速く、数も多い", "Tougher, faster, and more bugs"), hp: 1.45, speed: 1.1, extra: 1, dmg: 1, startHp: 6, reward: 1.6 },
+  { id: "nightmare", name: L("悪夢", "Nightmare"), desc: L("むずかしいをクリアすると選べる。当たると♥1減る", "Unlocked by clearing Hard. Each hit costs ♥1"), hp: 2, speed: 1.2, extra: 2, dmg: 2, startHp: 8, reward: 2.5 },
 ];
 
 /** ねこの成長（レベル）。 */
@@ -25,13 +26,13 @@ export interface MetaLv { hp: number; atk: number; mana: number; speed: number; 
 export const NO_META: MetaLv = { hp: 0, atk: 0, mana: 0, speed: 0, luck: 0, gift: 0, fav: 0 };
 
 export const UPGRADES: { id: keyof MetaLv; name: string; desc: string; max: number; cost: (lv: number) => number; bonus: (lv: number) => Part }[] = [
-  { id: "hp", name: "じょうぶな体", desc: "最大HP ＋♥1", max: 3, cost: (lv) => 15 + lv * 20, bonus: (lv) => ({ maxHp: lv * 2 }) },
-  { id: "atk", name: "とがった爪", desc: "攻撃力 ＋6%", max: 5, cost: (lv) => 10 + lv * 12, bonus: (lv) => ({ dmgMul: 1 + lv * 0.06 }) },
-  { id: "mana", name: "やる気満々", desc: "やる気の最大 ＋10", max: 5, cost: (lv) => 10 + lv * 10, bonus: (lv) => ({ manaMax: lv * 10 }) },
-  { id: "speed", name: "しなやかな足", desc: "移動の速さ ＋3%", max: 3, cost: (lv) => 12 + lv * 12, bonus: (lv) => ({ speedMul: 1 + lv * 0.03 }) },
-  { id: "luck", name: "招き猫の運", desc: "レアな装備が出やすい", max: 3, cost: (lv) => 20 + lv * 20, bonus: (lv) => ({ luck: lv }) },
-  { id: "gift", name: "ママのおみやげ", desc: "最初からレリックを1つ持って始まる", max: 1, cost: () => 40, bonus: () => ({}) },
-  { id: "fav", name: "おきにいりの箱", desc: "おきにいり枠 ＋1（クリアしたときに選んだ技を、次の冒険へ持っていける）", max: 4, cost: (lv) => 30 + lv * 30, bonus: () => ({}) },
+  { id: "hp", name: L("じょうぶな体", "Sturdy Body"), desc: L("最大HP ＋♥1", "Max HP ＋♥1"), max: 3, cost: (lv) => 15 + lv * 20, bonus: (lv) => ({ maxHp: lv * 2 }) },
+  { id: "atk", name: L("とがった爪", "Sharp Claws"), desc: L("攻撃力 ＋6%", "Damage ＋6%"), max: 5, cost: (lv) => 10 + lv * 12, bonus: (lv) => ({ dmgMul: 1 + lv * 0.06 }) },
+  { id: "mana", name: L("やる気満々", "Full of Energy"), desc: L("やる気の最大 ＋10", "Max Energy ＋10"), max: 5, cost: (lv) => 10 + lv * 10, bonus: (lv) => ({ manaMax: lv * 10 }) },
+  { id: "speed", name: L("しなやかな足", "Nimble Paws"), desc: L("移動の速さ ＋3%", "Move Speed ＋3%"), max: 3, cost: (lv) => 12 + lv * 12, bonus: (lv) => ({ speedMul: 1 + lv * 0.03 }) },
+  { id: "luck", name: L("招き猫の運", "Lucky Cat Luck"), desc: L("レアな装備が出やすい", "Rare gear shows up more"), max: 3, cost: (lv) => 20 + lv * 20, bonus: (lv) => ({ luck: lv }) },
+  { id: "gift", name: L("ママのおみやげ", "Mama's Souvenir"), desc: L("最初からレリックを1つ持って始まる", "Start with 1 charm"), max: 1, cost: () => 40, bonus: () => ({}) },
+  { id: "fav", name: L("おきにいりの箱", "Favorites Box"), desc: L("おきにいり枠 ＋1（クリアしたときに選んだ技を、次の冒険へ持っていける）", "Favorites slot ＋1 (bring a move picked on clear into your next run)"), max: 4, cost: (lv) => 30 + lv * 30, bonus: () => ({}) },
 ];
 
 /** 成長の合計効果。 */

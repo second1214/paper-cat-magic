@@ -20,6 +20,7 @@ const bugUrl = (t: EnemyType) => {
   if (!u) { u = (enemyTexture(t).image as HTMLCanvasElement).toDataURL(); bugUrls.set(t, u); }
   return u;
 };
+import { isJa, L, setLang } from "../i18n";
 import { ALTAR_NAME, REWARD_INFO, type Choice, type HeldToy, type Spot, type World } from "../game/world";
 import { elementCanvas, gearCanvas, kibbleCanvas, relicCanvas, rewardCanvas, spellCanvas, toyCanvas, urlOf } from "../art/items";
 import { bonusRows, GEAR, GEAR_FX, GEAR_IDS, GEAR_SLOTS, gearBonus, RARITY, RELIC_IDS, RELICS, SETS, setCounts, SLOT_NAME, type Gear, type GearItem } from "../core/items";
@@ -34,22 +35,22 @@ const spellImg = (id: string) => urlOf(spellCanvas(baseId(id), spellDef(id).proj
 
 /** ママの場面絵とセリフ。 */
 const mama = (img: "scared" | "relief" | "pet" | "scream", line: string, small = false) =>
-  `<div class="mama ${small ? "small" : ""}"><img src="${import.meta.env.BASE_URL}mama/${img}.png" alt="ママ"><div class="say">${line}</div></div>`;
+  `<div class="mama ${small ? "small" : ""}"><img src="${import.meta.env.BASE_URL}mama/${img}.png" alt="${L("ママ", "Mama")}"><div class="say">${line}</div></div>`;
 
 /** 修飾のかかる向きの矢印（▶右・◀左・◀▶両側・全 全体・つづけて/ふたつ持ちは左右をつなぐ）。 */
 const arrowOf = (s: SpellDef) => s.kind === "attack" ? "" : s.kind === "modifier" ? DIR_INFO[s.dir ?? "right"].arrow : s.kind === "multicast" ? "▶" : "◀▶";
 /** 修飾の説明の札（カード用）。 */
-const TRIG_TAG = { hit: "当たると", every: "当たるたびに", bounce: "はね返るたびに", kill: "虫を倒すと" } as const;
-const modTag = (s: SpellDef) => s.kind === "trigger" ? (s.timer ? "つづけて ◀左の技から時間で右の技" : `つづけて ◀左の技が${TRIG_TAG[s.on ?? "hit"]}右の技▶`)
-  : s.kind === "duet" ? "ふたつ持ち ◀左と右のおもちゃを同時に扱い、1つの技に▶" : s.kind === "multicast" ? "修飾 ▶右の技を同時に"
-  : `${s.modifier?.element ? "属性" : s.dir === "all" ? "全体修飾" : "修飾"} ${DIR_INFO[s.dir ?? "right"].arrow}${DIR_INFO[s.dir ?? "right"].label}`;
+const TRIG_TAG = { hit: L("当たると", "hits"), every: L("当たるたびに", "hits (each)"), bounce: L("はね返るたびに", "bounces (each)"), kill: L("虫を倒すと", "kills a bug") } as const;
+const modTag = (s: SpellDef) => s.kind === "trigger" ? (s.timer ? L("つづけて ◀左の技から時間で右の技", "Then ◀left move, right move on a timer") : L(`つづけて ◀左の技が${TRIG_TAG[s.on ?? "hit"]}右の技▶`, `Then when ◀left move ${TRIG_TAG[s.on ?? "hit"]}, right move▶`))
+  : s.kind === "duet" ? L("ふたつ持ち ◀左と右のおもちゃを同時に扱い、1つの技に▶", "Two Paws ◀merge left & right into one move▶") : s.kind === "multicast" ? L("修飾 ▶右の技を同時に", "Modifier ▶right moves at once")
+  : `${s.modifier?.element ? L("属性", "Element") : s.dir === "all" ? L("全体修飾", "Global modifier") : L("修飾", "Modifier")} ${DIR_INFO[s.dir ?? "right"].arrow}${DIR_INFO[s.dir ?? "right"].label}`;
 
 /** スロット・手持ちの1マス。修飾にはかかる向きの矢印、レア度は下の帯。 */
 const cell = (id: string | null, attrs = "", extra = "") => {
   if (!id) return `<button class="cell empty ${extra}" ${attrs}></button>`;
   const s = spellDef(id), mod = isMod(id), dir = s.kind === "modifier" ? s.dir ?? "right" : s.kind === "attack" ? "" : "both";
   return `<button class="cell ${mod ? "mod" : "atk"} dir-${dir} rar${rarOf(id)} ${extra}" style="--c:${s.color}" ${attrs}>
-    <img src="${spellImg(id)}" alt="">${starsOf(id) ? `<span class="stars">${"★".repeat(starsOf(id))}</span>` : ""}<span class="badge">${s.modifier?.element ? "属性" : s.dir === "all" ? "全体" : KIND_LABEL[s.kind]}</span>${mod ? `<span class="arrow">${arrowOf(s)}</span>` : ""}</button>`;
+    <img src="${spellImg(id)}" alt="">${starsOf(id) ? `<span class="stars">${"★".repeat(starsOf(id))}</span>` : ""}<span class="badge">${s.modifier?.element ? L("属性", "Elem") : s.dir === "all" ? L("全体", "All") : KIND_LABEL[s.kind]}</span>${mod ? `<span class="arrow">${arrowOf(s)}</span>` : ""}</button>`;
 };
 
 /** おもちゃ・レリック・装備のマス。 */
@@ -67,7 +68,7 @@ const statsTable = (rows: [string, string][]) =>
 function spellCard(id: string, attrs = "") {
   const s = spellDef(id), mod = isMod(id);
   return `<div class="card" ${attrs}>
-    <div class="head"><img src="${spellImg(id)}" alt=""><div><b>${s.name}</b><span class="tag ${mod ? "mod" : "atk"}">${mod ? modTag(s) : `技（${MOTION_LABEL[s.projectile!.motion]}）`}</span></div></div>
+    <div class="head"><img src="${spellImg(id)}" alt=""><div><b>${s.name}</b><span class="tag ${mod ? "mod" : "atk"}">${mod ? modTag(s) : L(`技（${MOTION_LABEL[s.projectile!.motion]}）`, `Move (${MOTION_LABEL[s.projectile!.motion]})`)}</span></div></div>
     ${statsTable(spellStats(s))}<p class="desc">${s.desc}</p>${elementNote(s.modifier?.element)}</div>`;
 }
 
@@ -81,7 +82,7 @@ function elementNote(el?: string) {
 function relicCard(id: string, attrs = "") {
   const r = RELICS[id];
   return `<div class="card" ${attrs}>
-    <div class="head"><img src="${urlOf(relicCanvas(id))}" alt=""><div><b>${r.name}</b><span class="tag relic">レリック</span></div></div>
+    <div class="head"><img src="${urlOf(relicCanvas(id))}" alt=""><div><b>${r.name}</b><span class="tag relic">${L("レリック", "Charm")}</span></div></div>
     ${statsTable(bonusRows(r.bonus))}<p class="desc">${r.desc}</p></div>`;
 }
 
@@ -91,32 +92,32 @@ function gearCard(item: GearItem, gear: Gear | null, attrs = "") {
   const worn = gear?.[g.slot];
   const have = gear ? (setCounts(gear)[g.set] ?? 0) + (worn && GEAR[worn.id].set === g.set ? 0 : 1) : 0;   // これを着けたときの数
   const line = (n: number, b: Parameters<typeof bonusRows>[0]) =>
-    `<div class="setline ${gear && have >= n ? "on" : ""}"><b>${n}つ</b>${bonusRows(b).map(([k, v]) => `${k} ${v}`).join("・")}</div>`;
-  const fx = item.fx.length ? `<div class="fxline">特殊効果: ${item.fx.map((f) => GEAR_FX[f].name).join("・")}</div>` : "";
+    `<div class="setline ${gear && have >= n ? "on" : ""}"><b>${L(`${n}つ`, `${n} pcs `)}</b>${bonusRows(b).map(([k, v]) => `${k} ${v}`).join("・")}</div>`;
+  const fx = item.fx.length ? `<div class="fxline">${L("特殊効果: ", "Special: ")}${item.fx.map((f) => GEAR_FX[f].name).join("・")}</div>` : "";
   return `<div class="card rar${item.rar}" style="--r:${R.color}" ${attrs}>
     <div class="head"><img src="${urlOf(gearCanvas(item.id))}" alt=""><div><b>${g.name}</b><span class="tag" style="background:${R.color}">${R.name}</span><span class="tag gear" style="background:${set.color}">${SLOT_NAME[g.slot]}</span></div></div>
     ${statsTable(bonusRows(gearBonus(item)))}${fx}<p class="desc">${g.desc}</p>
-    <div class="setbox" style="--c:${set.color}"><div class="setname">${set.name}${gear ? `（着けると ${have}/3）` : ""}</div>${line(2, set.two)}${line(3, set.three)}</div></div>`;
+    <div class="setbox" style="--c:${set.color}"><div class="setname">${set.name}${gear ? L(`（着けると ${have}/3）`, ` (if worn ${have}/3)`) : ""}</div>${line(2, set.two)}${line(3, set.three)}</div></div>`;
 }
 
 function toyCard(t: ToyDef, attrs = "") {
   const d = TOYS[t.id] ?? t, pre = [...d.slots, ...(d.sub?.slots ?? [])].filter((x): x is string => !!x);   // 売り物としての最初の中身
   return `<div class="card" ${attrs}>
-    <div class="head"><img src="${urlOf(toyCanvas(t.id))}" alt=""><div><b>${t.name}</b><span class="tag toy">${t.auto ? "電池式のおもちゃ（自動）" : "おもちゃ（装備）"}</span></div></div>
-    ${statsTable(toyStats(t))}${pre.length ? `<div class="pre">最初から入っている: ${pre.map((id) => spellDef(id).name).join("・")}</div>` : ""}<p class="desc">${t.desc}</p></div>`;
+    <div class="head"><img src="${urlOf(toyCanvas(t.id))}" alt=""><div><b>${t.name}</b><span class="tag toy">${t.auto ? L("電池式のおもちゃ（自動）", "Battery toy (auto)") : L("おもちゃ（装備）", "Toy (equip)")}</span></div></div>
+    ${statsTable(toyStats(t))}${pre.length ? `<div class="pre">${L("最初から入っている: ", "Comes with: ")}${pre.map((id) => spellDef(id).name).join("・")}</div>` : ""}<p class="desc">${t.desc}</p></div>`;
 }
 
 /** 解放していないもののカード（条件を見せる）。 */
 function lockedCard(u: Unlock) {
-  return `<div class="card locked"><div class="head"><div class="qmark">？</div><div><b>まだ解放していない</b><span class="tag">${u.kind === "toy" ? "おもちゃ" : u.kind === "relic" ? "レリック" : "技・修飾"}</span></div></div>
-    <p class="desc">解放の条件: <b>${unlockText(u)}</b><br>負けても記録は積み上がる。条件を満たすと、次の冒険から出てくる。</p></div>`;
+  return `<div class="card locked"><div class="head"><div class="qmark">？</div><div><b>${L("まだ解放していない", "Locked")}</b><span class="tag">${u.kind === "toy" ? L("おもちゃ", "Toy") : u.kind === "relic" ? L("レリック", "Charm") : L("技・修飾", "Move / Modifier")}</span></div></div>
+    <p class="desc">${L("解放の条件: ", "To unlock: ")}<b>${unlockText(u)}</b><br>${L("負けても記録は積み上がる。条件を満たすと、次の冒険から出てくる。", "Progress counts even if you lose. Once met, it shows up from your next run.")}</p></div>`;
 }
 
 /** サブスロットの列（たまり具合のメーターつき）。 */
 function subRow(h: HeldToy, cellOf: (i: number) => string) {
   const sub = h.def.sub;
   if (!sub) return "";
-  return `<div class="subrow"><span class="sublabel">サブ<small>${SUB_LABEL[sub.charge](sub.need)}で発動</small></span><div class="cells">${sub.slots.map((_, i) => cellOf(i)).join("")}</div>
+  return `<div class="subrow"><span class="sublabel">${L("サブ", "Sub")}<small>${L(`${SUB_LABEL[sub.charge](sub.need)}で発動`, `Fires: ${SUB_LABEL[sub.charge](sub.need)}`)}</small></span><div class="cells">${sub.slots.map((_, i) => cellOf(i)).join("")}</div>
     <div class="meter"><i style="width:${Math.min(100, (h.charge / sub.need) * 100)}%"></i></div></div>`;
 }
 
@@ -129,21 +130,21 @@ function slotRow(toy: ToyDef, cellOf: (i: number) => string, next = -1) {
 
 /** ずかんの並び（種類ごとに見せる）。 */
 const ZUKAN: { title: string; ids: string[]; kind?: "toy" | "relic" | "gear" }[] = [
-  { title: "飛ぶ技", ids: ["claw", "bite", "hairball", "hiss", "yarn", "laser"] },
-  { title: "近く・置く技", ids: ["swing", "pounce", "punch", "post"] },
-  { title: "召喚", ids: ["friend", "roomba"] },
-  { title: "買ってきた物の技", ids: ["mizudeppo", "ahiru", "shabon", "kabocha", "korokoro", "hammer", "flash", "danbo"] },
-  { title: "弾を増やす（重ねると掛け算）", ids: ["double", "nekodango", "tatougai", "butimake", "hotsure"] },
-  { title: "▶修飾（右の技に）", ids: ["matatabi", "kajikaji", "big", "small", "quick", "stare", "bouncy", "pushy", "rame", "suzu", "kenko", "jidori"] },
-  { title: "速さ・やる気", ids: ["massigura", "churu"] },
-  { title: "◀修飾（左の技に）・◀▶修飾（左右の技に）", ids: ["okawari", "oikake", "tsurutsuru", "dryer", "catnipBag", "kotatsu"] },
-  { title: "全体修飾（どこに置いても）", ids: ["maigofuda", "hidamari", "sensor", "kezukuroi"] },
-  { title: "つづけて・ふたつ持ち", ids: ["chain", "nandodemo", "pyonpyon", "todome", "hitoiki", "issho"] },
-  { title: "属性", ids: ["static", "water", "tape", "spray"] },
-  { title: "おもちゃ", ids: Object.keys(TOYS).filter((t) => !TOYS[t].auto), kind: "toy" },
-  { title: "電池式のおもちゃ（自動で動く）", ids: Object.keys(TOYS).filter((t) => TOYS[t].auto), kind: "toy" },
-  { title: "レリック", ids: RELIC_IDS, kind: "relic" },
-  { title: "装備", ids: GEAR_IDS, kind: "gear" },
+  { title: L("飛ぶ技", "Flying moves"), ids: ["claw", "bite", "hairball", "hiss", "yarn", "laser"] },
+  { title: L("近く・置く技", "Close & placed moves"), ids: ["swing", "pounce", "punch", "post"] },
+  { title: L("召喚", "Summons"), ids: ["friend", "roomba"] },
+  { title: L("買ってきた物の技", "Store-bought moves"), ids: ["mizudeppo", "ahiru", "shabon", "kabocha", "korokoro", "hammer", "flash", "danbo"] },
+  { title: L("弾を増やす（重ねると掛け算）", "More shots (stacks multiply)"), ids: ["double", "nekodango", "tatougai", "butimake", "hotsure"] },
+  { title: L("▶修飾（右の技に）", "▶Modifiers (right move)"), ids: ["matatabi", "kajikaji", "big", "small", "quick", "stare", "bouncy", "pushy", "rame", "suzu", "kenko", "jidori"] },
+  { title: L("速さ・やる気", "Speed & Energy"), ids: ["massigura", "churu"] },
+  { title: L("◀修飾（左の技に）・◀▶修飾（左右の技に）", "◀Modifiers (left) · ◀▶Modifiers (both)"), ids: ["okawari", "oikake", "tsurutsuru", "dryer", "catnipBag", "kotatsu"] },
+  { title: L("全体修飾（どこに置いても）", "Global modifiers (anywhere)"), ids: ["maigofuda", "hidamari", "sensor", "kezukuroi"] },
+  { title: L("つづけて・ふたつ持ち", "Then & Two Paws"), ids: ["chain", "nandodemo", "pyonpyon", "todome", "hitoiki", "issho"] },
+  { title: L("属性", "Elements"), ids: ["static", "water", "tape", "spray"] },
+  { title: L("おもちゃ", "Toys"), ids: Object.keys(TOYS).filter((t) => !TOYS[t].auto), kind: "toy" },
+  { title: L("電池式のおもちゃ（自動で動く）", "Battery toys (auto)"), ids: Object.keys(TOYS).filter((t) => TOYS[t].auto), kind: "toy" },
+  { title: L("レリック", "Charms"), ids: RELIC_IDS, kind: "relic" },
+  { title: L("装備", "Gear"), ids: GEAR_IDS, kind: "gear" },
 ];
 
 /** タイトルまわりの画面。null ならゲーム中。 */
@@ -251,11 +252,11 @@ export class Hud {
     // 上の帯: おもちゃのスロット（まとまりの下線と合計攻撃力、次に出るまとまりを光らせる）
     // 持っているおもちゃ（タップで持ち替え）。今のものは大きく
     const others = w.toys.map((h, i) => i === w.cur ? "" : `<button class="toySw" data-toy="${i}" title="${h.def.name}"><img src="${urlOf(toyCanvas(h.def.id))}" alt=""><span>${i + 1}</span></button>`).join("");
-    const sub = toy.sub ? `<div class="subTop"><span>サブ</span>${toy.sub.slots.map((id) => cell(id, "tabindex=-1", "mini")).join("")}<div class="meter"><i data-meter="sub"></i></div></div>` : "";
+    const sub = toy.sub ? `<div class="subTop"><span>${L("サブ", "Sub")}</span>${toy.sub.slots.map((id) => cell(id, "tabindex=-1", "mini")).join("")}<div class="meter"><i data-meter="sub"></i></div></div>` : "";
     const batts = w.batt.length ? `<div class="batts">${w.batt.map((h, i) => `<div class="batt" title="${h.def.name}"><img src="${urlOf(toyCanvas(h.def.id))}" alt=""><div class="meter"><i data-meter="batt${i}"></i></div></div>`).join("")}</div>` : "";
     this.el("slots").innerHTML = (others ? `<div class="toySws">${others}</div>` : "") + `<img class="toyIcon" src="${urlOf(toyCanvas(toy.id))}" alt="${toy.name}">`
       + `<div>${slotRow(toy, (i) => cell(toy.slots[i], "tabindex=-1"), p.recharging ? -1 : p.cursor)}${sub}</div>`
-      + (p.recharging ? `<span class="rest">休けい中</span>` : "") + batts;
+      + (p.recharging ? `<span class="rest">${L("休けい中", "Resting")}</span>` : "") + batts;
     this.meters(w);
     this.el("slots").querySelectorAll<HTMLButtonElement>("[data-toy]").forEach((b) => b.onclick = () => w.switchToy(Number(b.dataset.toy)));
 
@@ -263,9 +264,9 @@ export class Hud {
     const hint = this.el("hint");
     hint.hidden = !(w.doorOpen && w.phase === "play");
     const al = w.room.altar;
-    const altarHint = al?.kind === "kotatsu" ? `<b>猫こたつに近づくと、おもちゃと技を自由に選べる</b>`
-      : al && (!al.used || al.kind === "fusion") ? `<b>真ん中の${ALTAR_NAME[al.kind]}に近づこう</b>` : "";
-    if (!hint.hidden) hint.innerHTML = (altarHint || `<b>扉を選んで進もう</b>`) + w.room.doors.map((d) =>
+    const altarHint = al?.kind === "kotatsu" ? `<b>${L("猫こたつに近づくと、おもちゃと技を自由に選べる", "Go to the Cat Kotatsu to pick any toys and moves")}</b>`
+      : al && (!al.used || al.kind === "fusion") ? `<b>${L(`真ん中の${ALTAR_NAME[al.kind]}に近づこう`, `Go to the ${ALTAR_NAME[al.kind]} in the middle`)}</b>` : "";
+    if (!hint.hidden) hint.innerHTML = (altarHint || `<b>${L("扉を選んで進もう", "Pick a door to move on")}</b>`) + w.room.doors.map((d) =>
       `<span class="chip"><img src="${urlOf(rewardCanvas(d.reward))}" alt="">${REWARD_INFO[d.reward].label}</span>`).join("");
 
     document.body.classList.toggle("titling", w.phase === "intro");
@@ -291,7 +292,7 @@ export class Hud {
     tb.hidden = !(w.opts.training && w.phase === "play");
     if (!tb.hidden) {
       if (!tb.firstChild) {
-        tb.innerHTML = `<span>DPS <b data-t="dps">0</b></span><span>合計 <span data-t="total">0</span></span><span>最大 <span data-t="max">0</span></span><button class="trainReset">リセット</button>`;
+        tb.innerHTML = `<span>DPS <b data-t="dps">0</b></span><span>${L("合計", "Total")} <span data-t="total">0</span></span><span>${L("最大", "Max")} <span data-t="max">0</span></span><button class="trainReset">${L("リセット", "Reset")}</button>`;
         tb.querySelector<HTMLButtonElement>(".trainReset")!.onclick = () => { this.world().trainLog = []; };
       }
       const st = w.trainStats, put = (k: string, v: number) => { const e = tb.querySelector(`[data-t="${k}"]`); if (e) e.textContent = v >= 100 ? `${Math.round(v)}` : v.toFixed(1); };
@@ -307,50 +308,50 @@ export class Hud {
     if (this.screen === null) this.screen = "title";
     const go = (sc: Screen) => () => { this.screen = sc; this.lastKey = ""; };
     if (this.screen === "howto") {
-      el.innerHTML = `<div class="panel intro">${this.howtoHtml()}<button class="back">もどる</button></div>`;
+      el.innerHTML = `<div class="panel intro">${this.howtoHtml()}<button class="back">${L("もどる", "Back")}</button></div>`;
       el.querySelector<HTMLButtonElement>(".back")!.onclick = go("title");
       return;
     }
     if (this.screen === "diff") {   // 難易度を選んではじめる
       const rec = loadRecord();
       const saved = loadRun();
-      el.innerHTML = `<div class="panel diffPanel"><h2>難易度をえらぶ</h2>${saved ? `<p class="muted warn">はじめると、前の冒険のつづき（${runLabel(saved)}）は消えます</p>` : ""}<div class="diffs">${DIFFS.map((d, i) => {
+      el.innerHTML = `<div class="panel diffPanel"><h2>${L("難易度をえらぶ", "Choose Difficulty")}</h2>${saved ? `<p class="muted warn">${L(`はじめると、前の冒険のつづき（${runLabel(saved)}）は消えます`, `Starting will erase your saved run (${runLabel(saved)})`)}</p>` : ""}<div class="diffs">${DIFFS.map((d, i) => {
         const ok = canPick(rec, i);
-        return `<button class="diff ${i === 1 ? "go" : ""}" data-d="${i}" ${ok ? "" : "disabled"}><b>${d.name}${rec.cleared.includes(i) ? " ★" : ""}</b><small>${ok ? d.desc : "むずかしいを守りきると選べる"}</small><small>にぼし ×${d.reward}</small></button>`;
-      }).join("")}</div><button class="back">もどる</button></div>`;
+        return `<button class="diff ${i === 1 ? "go" : ""}" data-d="${i}" ${ok ? "" : "disabled"}><b>${d.name}${rec.cleared.includes(i) ? " ★" : ""}</b><small>${ok ? d.desc : L("むずかしいを守りきると選べる", "Clear Hard to unlock")}</small><small>${L("にぼし", "Sardines")} ×${d.reward}</small></button>`;
+      }).join("")}</div><button class="back">${L("もどる", "Back")}</button></div>`;
       el.querySelectorAll<HTMLButtonElement>("[data-d]").forEach((b) => b.onclick = () => { this.screen = null; this.lastKey = ""; this.onStart(Number(b.dataset.d)); });
       el.querySelector<HTMLButtonElement>(".back")!.onclick = go("title");
       return;
     }
     if (this.screen === "grow") {   // ねこの成長（周回で強くなる）
       const rec = loadRecord();
-      el.innerHTML = `<div class="panel growPanel"><h2>ねこの成長</h2><p class="muted">冒険でもらった にぼし で、ずっと強くなる。今のにぼし: <b class="nib">${rec.niboshi}</b></p>
+      el.innerHTML = `<div class="panel growPanel"><h2>${L("ねこの成長", "Cat Growth")}</h2><p class="muted">${L("冒険でもらった にぼし で、ずっと強くなる。今のにぼし: ", "Spend sardines from runs to grow stronger for good. Sardines: ")}<b class="nib">${rec.niboshi}</b></p>
         <div class="grows">${UPGRADES.map((u) => {
           const lv = rec.meta[u.id], max = lv >= u.max, cost = u.cost(lv);
           return `<div class="grow"><div><b>${u.name}</b><span class="lv">${"●".repeat(lv)}${"○".repeat(u.max - lv)}</span><small>${u.desc}</small></div>
-            <button data-u="${u.id}" ${max || rec.niboshi < cost ? "disabled" : ""}>${max ? "最大" : `にぼし ${cost}`}</button></div>`;
+            <button data-u="${u.id}" ${max || rec.niboshi < cost ? "disabled" : ""}>${max ? L("最大", "MAX") : L(`にぼし ${cost}`, `${cost} sardines`)}</button></div>`;
         }).join("")}</div>
-        <div class="favNow"><b>おきにいり（${favSlots(rec.meta)}枠）</b>${rec.favorites.length ? `<div class="zcells">${rec.favorites.map((id) => cell(id, "tabindex=-1")).join("")}</div><small>冒険のはじめから手持ちに入る</small>` : `<small>まだありません。クリアしたときに、持っている技から選べる</small>`}</div>
-        <button class="back">もどる</button></div>`;
+        <div class="favNow"><b>${L(`おきにいり（${favSlots(rec.meta)}枠）`, `Favorites (${favSlots(rec.meta)} slots)`)}</b>${rec.favorites.length ? `<div class="zcells">${rec.favorites.map((id) => cell(id, "tabindex=-1")).join("")}</div><small>${L("冒険のはじめから手持ちに入る", "In your bag from the start of each run")}</small>` : `<small>${L("まだありません。クリアしたときに、持っている技から選べる", "None yet. Pick from your moves when you clear a run")}</small>`}</div>
+        <button class="back">${L("もどる", "Back")}</button></div>`;
       el.querySelectorAll<HTMLButtonElement>("[data-u]").forEach((b) => b.onclick = () => { buyUpgrade(b.dataset.u as keyof typeof rec.meta); this.lastKey = ""; });
       el.querySelector<HTMLButtonElement>(".back")!.onclick = go("title");
       return;
     }
     if (this.screen === "endless") {   // エンドレスの説明とはじめる
       const saved = loadRun();
-      el.innerHTML = `<div class="panel diffPanel"><h2>エンドレス</h2>
-        <p>夏のあとも季節がめぐり続け、虫はどんどん強くなる。どこまで守れるか、ポイントで競おう。難易度は「ふつう」。</p>
-        <p class="muted">ポイント: 片付けた部屋 ×${POINTS.rooms}・ボス ×${POINTS.bosses}・強い虫 ×${POINTS.elites}・倒した虫 ×${POINTS.kills}</p>
-        ${saved ? `<p class="muted warn">はじめると、前の冒険のつづき（${runLabel(saved)}）は消えます</p>` : ""}
-        <div class="menu center"><button class="go startEndless">はじめる</button><button class="back">もどる</button></div></div>`;
+      el.innerHTML = `<div class="panel diffPanel"><h2>${L("エンドレス", "Endless")}</h2>
+        <p>${L("夏のあとも季節がめぐり続け、虫はどんどん強くなる。どこまで守れるか、ポイントで競おう。難易度は「ふつう」。", "After summer the seasons keep cycling and bugs keep getting stronger. How long can you protect Mama? Compete for points. Difficulty: Normal.")}</p>
+        <p class="muted">${L(`ポイント: 片付けた部屋 ×${POINTS.rooms}・ボス ×${POINTS.bosses}・強い虫 ×${POINTS.elites}・倒した虫 ×${POINTS.kills}`, `Points: rooms cleared ×${POINTS.rooms}・bosses ×${POINTS.bosses}・elite bugs ×${POINTS.elites}・bugs defeated ×${POINTS.kills}`)}</p>
+        ${saved ? `<p class="muted warn">${L(`はじめると、前の冒険のつづき（${runLabel(saved)}）は消えます`, `Starting will erase your saved run (${runLabel(saved)})`)}</p>` : ""}
+        <div class="menu center"><button class="go startEndless">${L("はじめる", "Start")}</button><button class="back">${L("もどる", "Back")}</button></div></div>`;
       el.querySelector<HTMLButtonElement>(".startEndless")!.onclick = () => { this.screen = null; this.lastKey = ""; this.onStart(1, true); };
       el.querySelector<HTMLButtonElement>(".back")!.onclick = go("title");
       return;
     }
     if (this.screen === "rank") {
-      el.innerHTML = `<div class="panel rankPanel"><h2>エンドレスのランキング</h2>
-        <div class="tabs"><button class="tab ${this.rankTab === "all" ? "on" : ""}" data-rt="all">みんな</button><button class="tab ${this.rankTab === "mine" ? "on" : ""}" data-rt="mine">じぶん</button></div>
-        ${this.rankHtml()}<button class="back">もどる</button></div>`;
+      el.innerHTML = `<div class="panel rankPanel"><h2>${L("エンドレスのランキング", "Endless Ranking")}</h2>
+        <div class="tabs"><button class="tab ${this.rankTab === "all" ? "on" : ""}" data-rt="all">${L("みんな", "Everyone")}</button><button class="tab ${this.rankTab === "mine" ? "on" : ""}" data-rt="mine">${L("じぶん", "Mine")}</button></div>
+        ${this.rankHtml()}<button class="back">${L("もどる", "Back")}</button></div>`;
       el.querySelectorAll<HTMLButtonElement>("[data-rt]").forEach((b) => b.onclick = () => { this.rankTab = b.dataset.rt as "all" | "mine"; this.lastKey = ""; });
       el.querySelector<HTMLButtonElement>(".back")!.onclick = go("title");
       return;
@@ -363,20 +364,21 @@ export class Hud {
     }
     const base = import.meta.env.BASE_URL, rec = loadRecord(), saved = loadRun();
     el.innerHTML = `<div class="title">
-      <div class="logo"><small>ママを虫から守れ！</small>My Cat Is <br>So Cute</div>
-      <div class="hero"><img class="mom" src="${base}mama/scared.png" alt="ママ"><img class="cat" src="${base}cat/P03_sit_happy.png" alt="猫">
+      <div class="logo"><small>${L("ママを虫から守れ！", "Protect Mama from bugs!")}</small>My Cat Is <br>So Cute</div>
+      <div class="hero"><img class="mom" src="${base}mama/scared.png" alt="${L("ママ", "Mama")}"><img class="cat" src="${base}cat/P03_sit_happy.png" alt="${L("猫", "Cat")}">
         <img class="bug b1" src="${bugUrl("roach")}" alt=""><img class="bug b2" src="${bugUrl("mosquito")}" alt=""></div>
       <div class="menu">
-        ${saved ? `<button class="go cont">つづきから<small>${runLabel(saved)}</small></button>` : ""}
-        <button class="${saved ? "" : "go "}start">はじめる</button>
-        <button class="endlessBtn">エンドレス</button>
-        <button class="rankBtn">ランキング</button>
-        <button class="trainBtn">トレーニング</button>
-        <button class="growBtn">ねこの成長</button>
-        <button class="howtoBtn">あそびかた</button>
-        <button class="zukanBtn">ずかん</button>
+        ${saved ? `<button class="go cont">${L("つづきから", "Continue")}<small>${runLabel(saved)}</small></button>` : ""}
+        <button class="${saved ? "" : "go "}start">${L("はじめる", "Start")}</button>
+        <button class="endlessBtn">${L("エンドレス", "Endless")}</button>
+        <button class="rankBtn">${L("ランキング", "Ranking")}</button>
+        <button class="trainBtn">${L("トレーニング", "Training")}</button>
+        <button class="growBtn">${L("ねこの成長", "Cat Growth")}</button>
+        <button class="howtoBtn">${L("あそびかた", "How to Play")}</button>
+        <button class="zukanBtn">${L("ずかん", "Collection")}</button>
+        <button class="langBtn">${isJa ? "English" : "日本語"}</button>
       </div>
-      <div class="record">${recordText(rec)}<br>解放: <b>${UNLOCKS.filter((u) => isOpen(u, rec.stats)).length}/${UNLOCKS.length}</b>（倒した虫 ${rec.stats.kills}・片付けた部屋 ${rec.stats.rooms}）</div>
+      <div class="record">${recordText(rec)}<br>${L("解放: ", "Unlocked: ")}<b>${UNLOCKS.filter((u) => isOpen(u, rec.stats)).length}/${UNLOCKS.length}</b>${L(`（倒した虫 ${rec.stats.kills}・片付けた部屋 ${rec.stats.rooms}）`, ` (bugs ${rec.stats.kills}・rooms ${rec.stats.rooms})`)}</div>
     </div>`;
     el.querySelector<HTMLButtonElement>(".start")!.onclick = go("diff");
     const cont = el.querySelector<HTMLButtonElement>(".cont");
@@ -387,6 +389,7 @@ export class Hud {
     el.querySelector<HTMLButtonElement>(".rankBtn")!.onclick = () => { this.screen = "rank"; this.lastKey = ""; this.loadBoard(); };
     el.querySelector<HTMLButtonElement>(".howtoBtn")!.onclick = go("howto");
     el.querySelector<HTMLButtonElement>(".zukanBtn")!.onclick = go("zukan");
+    el.querySelector<HTMLButtonElement>(".langBtn")!.onclick = () => setLang(isJa ? "en" : "ja");
   }
 
   /** みんなのランキングを読みこむ（終わったら描き直す）。 */
@@ -397,57 +400,57 @@ export class Hud {
 
   private rankHtml() {
     const row = (i: number, name: string, score: number, rooms: number, mark = false) =>
-      `<tr class="${mark ? "me" : ""}"><td>${i + 1}</td><td class="nm">${esc(name || "ななしの猫")}</td><td>★${score}</td><td>${rooms}部屋</td></tr>`;
+      `<tr class="${mark ? "me" : ""}"><td>${i + 1}</td><td class="nm">${esc(name || L("ななしの猫", "Nameless Cat"))}</td><td>★${score}</td><td>${L(`${rooms}部屋`, `${rooms} rooms`)}</td></tr>`;
     if (this.rankTab === "mine") {
       const mine = loadRecord().endless;
-      return mine.length ? `<table class="rank"><tr><th>順位</th><th>名前</th><th>ポイント</th><th>部屋</th></tr>${mine.map((e, i) => row(i, e.name, e.score, e.rooms)).join("")}</table>`
-        : `<p class="muted">まだ記録がありません。エンドレスで遊ぶとここに残ります。</p>`;
+      return mine.length ? `<table class="rank"><tr><th>${L("順位", "Rank")}</th><th>${L("名前", "Name")}</th><th>${L("ポイント", "Points")}</th><th>${L("部屋", "Rooms")}</th></tr>${mine.map((e, i) => row(i, e.name, e.score, e.rooms)).join("")}</table>`
+        : `<p class="muted">${L("まだ記録がありません。エンドレスで遊ぶとここに残ります。", "No records yet. Play Endless to see them here.")}</p>`;
     }
-    if (this.board === "loading" || this.board === null) return `<p class="muted">読みこみ中…</p>`;
-    if (this.board === "error") return `<p class="muted">みんなのランキングは準備中です（つながりません）。</p>`;
-    return this.board.top.length ? `<table class="rank"><tr><th>順位</th><th>名前</th><th>ポイント</th><th>部屋</th></tr>${this.board.top.map((e, i) => row(i, e.name, e.score, e.rooms)).join("")}</table>`
-      : `<p class="muted">まだだれも記録を送っていません。一番乗りのチャンス！</p>`;
+    if (this.board === "loading" || this.board === null) return `<p class="muted">${L("読みこみ中…", "Loading…")}</p>`;
+    if (this.board === "error") return `<p class="muted">${L("みんなのランキングは準備中です（つながりません）。", "The global ranking isn't available yet (can't connect).")}</p>`;
+    return this.board.top.length ? `<table class="rank"><tr><th>${L("順位", "Rank")}</th><th>${L("名前", "Name")}</th><th>${L("ポイント", "Points")}</th><th>${L("部屋", "Rooms")}</th></tr>${this.board.top.map((e, i) => row(i, e.name, e.score, e.rooms)).join("")}</table>`
+      : `<p class="muted">${L("まだだれも記録を送っていません。一番乗りのチャンス！", "No one has sent a score yet. Be the first!")}</p>`;
   }
 
   /** クリアしたとき: 持っている技から「おきにいり」を選ぶ（次からの冒険で最初から手持ちに入る）。 */
   private favHtml(w: World) {
     const owned = w.ownedSpells(), n = favSlots(loadRecord().meta);
-    return `<div class="favBox"><b>おきにいりを選ぶ</b>（${this.favPick.length}/${n}）<small>選んだ技は、次からの冒険で最初から手持ちに入る。枠は「ねこの成長」で増やせる</small>
+    return `<div class="favBox"><b>${L("おきにいりを選ぶ", "Pick Favorites")}</b>${L(`（${this.favPick.length}/${n}）`, ` (${this.favPick.length}/${n})`)}<small>${L("選んだ技は、次からの冒険で最初から手持ちに入る。枠は「ねこの成長」で増やせる", "Picked moves start in your bag on future runs. Get more slots in Cat Growth")}</small>
       <div class="fuseBag">${owned.map((id, i) => cell(id, `data-fav="${i}"`, this.favPick.includes(i) ? "sel" : "")).join("")}</div>
-      <button class="favGo go" ${this.favPick.length ? "" : "disabled"}>${this.favSaved ? "おきにいりにした！" : "おきにいりにする"}</button></div>`;
+      <button class="favGo go" ${this.favPick.length ? "" : "disabled"}>${this.favSaved ? L("おきにいりにした！", "Saved!") : L("おきにいりにする", "Save Favorites")}</button></div>`;
   }
 
   /** エンドレスの結果: ポイント・じぶんの順位・名前を入れてみんなのランキングへ送る。 */
   private endlessResult(w: World) {
     const s = this.sent;
-    const status = s === null ? "" : s === "sending" ? "送っています…" : "rank" in s ? `みんなのランキングで <b>${s.rank}位</b>！` : s.error;
-    return `<div class="endlessBox"><div class="bigScore">★ ${w.score} ポイント</div>
-      <p class="muted">片付けた部屋 ${w.cleared}×${POINTS.rooms}・ボス ${w.bosses}×${POINTS.bosses}・強い虫 ${w.elites}×${POINTS.elites}・倒した虫 ${w.kills}×${POINTS.kills}</p>
-      ${this.localRank ? `<p>じぶんの記録で <b>${this.localRank}位</b></p>` : ""}
-      ${w.cleared > 0 ? `<div class="sendRow"><input class="nameIn" maxlength="12" placeholder="名前（本名は入れないでね）" value="${esc(savedName())}">
-        <button class="sendBtn" ${s === "sending" || (s !== null && typeof s === "object" && "rank" in s) ? "disabled" : ""}>ランキングに送る</button></div><p class="sendMsg">${status}</p>` : ""}</div>`;
+    const status = s === null ? "" : s === "sending" ? L("送っています…", "Sending…") : "rank" in s ? L(`みんなのランキングで <b>${s.rank}位</b>！`, `Global rank: <b>#${s.rank}</b>!`) : s.error;
+    return `<div class="endlessBox"><div class="bigScore">★ ${w.score} ${L("ポイント", "pts")}</div>
+      <p class="muted">${L(`片付けた部屋 ${w.cleared}×${POINTS.rooms}・ボス ${w.bosses}×${POINTS.bosses}・強い虫 ${w.elites}×${POINTS.elites}・倒した虫 ${w.kills}×${POINTS.kills}`, `Rooms ${w.cleared}×${POINTS.rooms}・Bosses ${w.bosses}×${POINTS.bosses}・Elite bugs ${w.elites}×${POINTS.elites}・Bugs ${w.kills}×${POINTS.kills}`)}</p>
+      ${this.localRank ? `<p>${L(`じぶんの記録で <b>${this.localRank}位</b>`, `Your records: <b>#${this.localRank}</b>`)}</p>` : ""}
+      ${w.cleared > 0 ? `<div class="sendRow"><input class="nameIn" maxlength="12" placeholder="${L("名前（本名は入れないでね）", "Name (no real names!)")}" value="${esc(savedName())}">
+        <button class="sendBtn" ${s === "sending" || (s !== null && typeof s === "object" && "rank" in s) ? "disabled" : ""}>${L("ランキングに送る", "Submit Score")}</button></div><p class="sendMsg">${status}</p>` : ""}</div>`;
   }
 
   private howtoHtml() {
     const touch = isTouch();
     return `<div class="cols">
-        <div>${mama("scared", "きゃー！虫！<br>ねこちゃん、たすけてー！")}
+        <div>${mama("scared", L("きゃー！虫！<br>ねこちゃん、たすけてー！", "Eek! Bugs!<br>Kitty, help me!"))}
           <div class="howto">
-            <div><b>移動</b>${touch ? "画面をドラッグ" : "WASD / 矢印キー"}</div>
-            <div><b>攻撃</b>${touch ? "<span class='k'>攻撃</span>を押しっぱなし（近くの虫を自動で狙う）" : "クリック長押し（マウスの方向）／ J（自動で狙う）"}</div>
-            <div><b>よける</b>${touch ? "<span class='k'>ダッシュ</span>" : "Space"}（一瞬むてき）</div>
-            <div><b>持ち替え</b>${touch ? "スロットの左の小さなおもちゃ" : "Q ／ 1〜3 ／ ホイール"}</div>
-            <div><b>止める</b>${touch ? "右上の <span class='k'>Ⅱ</span>" : "Esc ／ 右上の Ⅱ"}</div>
+            <div><b>${L("移動", "Walk")}</b>${touch ? L("画面をドラッグ", "Drag the screen") : L("WASD / 矢印キー", "WASD / Arrow keys")}</div>
+            <div><b>${L("攻撃", "Attack")}</b>${touch ? L("<span class='k'>攻撃</span>を押しっぱなし（近くの虫を自動で狙う）", "Hold <span class='k'>Attack</span> (auto-aims at nearby bugs)") : L("クリック長押し（マウスの方向）／ J（自動で狙う）", "Hold click (aim with mouse) / J (auto-aim)")}</div>
+            <div><b>${L("よける", "Dodge")}</b>${touch ? L("<span class='k'>ダッシュ</span>", "<span class='k'>Dash</span>") : "Space"}${L("（一瞬むてき）", " (brief invincibility)")}</div>
+            <div><b>${L("持ち替え", "Switch")}</b>${touch ? L("スロットの左の小さなおもちゃ", "Small toys left of the slots") : L("Q ／ 1〜3 ／ ホイール", "Q / 1-3 / Wheel")}</div>
+            <div><b>${L("止める", "Pause")}</b>${touch ? L("右上の <span class='k'>Ⅱ</span>", "<span class='k'>Ⅱ</span> at top right") : L("Esc ／ 右上の Ⅱ", "Esc / Ⅱ at top right")}</div>
           </div></div>
         <div class="rules">
-          <h3>おもちゃのしくみ</h3>
-          <p>おもちゃを振ると、スロットに入れた<b>技（爪・牙など）が出る</b>。スロットは<b>左から順に</b>使われる。</p>
-          <div class="example">${cell("matatabi")}${cell("bite")}<span>修飾の ▶ は<b>右の技</b>、◀ は<b>左の技</b>、◀▶ は<b>左右の技</b>にかかる。<b>全</b>はどこに置いても全部の技に</span></div>
-          <div class="example">${cell("claw")}${cell("chain")}${cell("swing")}<span><b>つづけて</b>: ひっかきが当たった所で、ぶんぶんが回る。<b>ふたつ持ち</b>は左右の技を同時に扱って1つの技に</span></div>
-          <p>スロットの下の線が「1回で一緒に出る範囲」。⚔は攻撃力の合計、⚡は使うやる気。サブスロットのあるおもちゃは、条件がたまると全部いっぺんに出る。電池式のおもちゃは持っているだけで自動で動く。</p>
-          <p><b>属性</b>（静電気・水のみ皿・ガムテープ・虫よけ）を技の左に置くと効果がつく。<b>ぬれた虫にビリビリ</b>、<b>ねばねばの虫に虫よけ</b>はよく効く。</p>
-          <p>部屋を片付けると扉が開く。扉の上の絵が<b>次の部屋のごほうび</b>（♥最大HP／⚡やる気／★技／おもちゃ）や<b>特別な部屋</b>（宝箱・ママのおひざ・秘密の隠し場所・強い虫・あやしい箱）。季節ごとに8部屋＋ボス、秋から始まり夏が最後。</p>
-          <p>負けても、倒した虫や片付けた部屋の数で<b>新しいおもちゃや技が解放</b>される。</p>
+          <h3>${L("おもちゃのしくみ", "How Toys Work")}</h3>
+          <p>${L("おもちゃを振ると、スロットに入れた<b>技（爪・牙など）が出る</b>。スロットは<b>左から順に</b>使われる。", "Swing a toy to unleash the <b>moves (claws, fangs, etc.)</b> in its slots. Slots fire <b>left to right</b>.")}</p>
+          <div class="example">${cell("matatabi")}${cell("bite")}<span>${L("修飾の ▶ は<b>右の技</b>、◀ は<b>左の技</b>、◀▶ は<b>左右の技</b>にかかる。<b>全</b>はどこに置いても全部の技に", "A modifier's ▶ affects the <b>right move</b>, ◀ the <b>left move</b>, ◀▶ <b>both sides</b>. <b>All</b> affects every move, placed anywhere")}</span></div>
+          <div class="example">${cell("claw")}${cell("chain")}${cell("swing")}<span>${L("<b>つづけて</b>: ひっかきが当たった所で、ぶんぶんが回る。<b>ふたつ持ち</b>は左右の技を同時に扱って1つの技に", "<b>Then</b>: where Scratch hits, Swish whirls. <b>Two Paws</b> merges the left and right moves into one")}</span></div>
+          <p>${L("スロットの下の線が「1回で一緒に出る範囲」。⚔は攻撃力の合計、⚡は使うやる気。サブスロットのあるおもちゃは、条件がたまると全部いっぺんに出る。電池式のおもちゃは持っているだけで自動で動く。", "The line under the slots shows what fires together. ⚔ is total damage, ⚡ is Energy used. Toys with sub slots fire them all at once when charged. Battery toys work on their own just by having them.")}</p>
+          <p>${L("<b>属性</b>（静電気・水のみ皿・ガムテープ・虫よけ）を技の左に置くと効果がつく。<b>ぬれた虫にビリビリ</b>、<b>ねばねばの虫に虫よけ</b>はよく効く。", "Put an <b>element</b> (Static, Water Bowl, Duct Tape, Bug Spray) left of a move to add its effect. <b>Zap on Soaked bugs</b> and <b>Bug Spray on Sticky bugs</b> work great.")}</p>
+          <p>${L("部屋を片付けると扉が開く。扉の上の絵が<b>次の部屋のごほうび</b>（♥最大HP／⚡やる気／★技／おもちゃ）や<b>特別な部屋</b>（宝箱・ママのおひざ・秘密の隠し場所・強い虫・あやしい箱）。季節ごとに8部屋＋ボス、秋から始まり夏が最後。", "Clear a room to open the doors. The picture over each door shows the <b>next room's reward</b> (♥ max HP / ⚡ Energy / ★ move / toy) or a <b>special room</b> (treasure chest, Mama's lap, Secret Stash, elite bug, suspicious box). Each season has 8 rooms + a boss, from autumn to summer.")}</p>
+          <p>${L("負けても、倒した虫や片付けた部屋の数で<b>新しいおもちゃや技が解放</b>される。", "Even if you lose, bugs defeated and rooms cleared <b>unlock new toys and moves</b>.")}</p>
         </div>
       </div>`;
   }
@@ -463,7 +466,7 @@ export class Hud {
       const x = `${id === sel ? "sel" : ""} ${lock(kindOf(id), id) ? "lockedCell" : ""}`;
       return g.kind ? itemCell(g.kind, id, `data-z="${id}"`, x) : cell(id, `data-z="${id}"`, x);
     }).join("")}</div></div>`).join("");
-    return `<div class="edit"><div class="detail">${detail}</div><div class="board"><div class="boardHead"><b>ずかん</b><span class="muted">タップで説明を見る</span><button class="back">もどる</button></div><div class="zgroups">${groups}</div></div></div>`;
+    return `<div class="edit"><div class="detail">${detail}</div><div class="board"><div class="boardHead"><b>${L("ずかん", "Collection")}</b><span class="muted">${L("タップで説明を見る", "Tap for details")}</span><button class="back">${L("もどる", "Back")}</button></div><div class="zgroups">${groups}</div></div></div>`;
   }
 
   /** 一時停止メニュー。 */
@@ -471,9 +474,9 @@ export class Hud {
     const el = this.el("pause");
     el.hidden = !this.paused;
     if (el.hidden) return;
-    el.innerHTML = `<div class="panel pausePanel"><h2>ひと休み</h2>
-      <div class="menu"><button class="go resume">つづける</button><button class="toTitle">タイトルへ</button></div>
-      <p class="muted">冒険は部屋に入るたびに自動でセーブされています。タイトルの「つづきから」で、この部屋の入口から再開できます。</p></div>`;
+    el.innerHTML = `<div class="panel pausePanel"><h2>${L("ひと休み", "Paused")}</h2>
+      <div class="menu"><button class="go resume">${L("つづける", "Resume")}</button><button class="toTitle">${L("タイトルへ", "Title")}</button></div>
+      <p class="muted">${L("冒険は部屋に入るたびに自動でセーブされています。タイトルの「つづきから」で、この部屋の入口から再開できます。", "Your run saves each time you enter a room. Pick \"Continue\" on the title to restart from this room's entrance.")}</p></div>`;
     el.querySelector<HTMLButtonElement>(".resume")!.onclick = () => this.togglePause();
     el.querySelector<HTMLButtonElement>(".toTitle")!.onclick = () => this.toTitle();
   }
@@ -483,9 +486,9 @@ export class Hud {
     el.hidden = !this.bagOpen;
     if (el.hidden) return;
     if (typeof this.tab === "number" && this.tab >= w.held.length) this.tab = w.cur;
-    const tabs = `<div class="tabs">${w.held.map((h, i) => `<button class="tab ${this.tab === i ? "on" : ""}" data-tab="${i}"><img src="${urlOf(toyCanvas(h.def.id))}" alt="">${h.def.name}${i === w.cur ? "<small>使用中</small>" : h.def.auto ? "<small>電池</small>" : ""}</button>`).join("")}
-      <button class="tab ${this.tab === "gear" ? "on" : ""}" data-tab="gear"><img src="${urlOf(rewardCanvas("relic"))}" alt="">装備・レリック</button>
-      <button class="close">閉じる</button></div>`;
+    const tabs = `<div class="tabs">${w.held.map((h, i) => `<button class="tab ${this.tab === i ? "on" : ""}" data-tab="${i}"><img src="${urlOf(toyCanvas(h.def.id))}" alt="">${h.def.name}${i === w.cur ? `<small>${L("使用中", "In use")}</small>` : h.def.auto ? `<small>${L("電池", "Battery")}</small>` : ""}</button>`).join("")}
+      <button class="tab ${this.tab === "gear" ? "on" : ""}" data-tab="gear"><img src="${urlOf(rewardCanvas("relic"))}" alt="">${L("装備・レリック", "Gear & Charms")}</button>
+      <button class="close">${L("閉じる", "Close")}</button></div>`;
     el.innerHTML = `<div class="panel edit2">${tabs}${this.tab === "gear" ? this.gearHtml(w) : this.toyHtml(w, this.tab)}</div>`;
     el.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((b) => b.onclick = () => {
       this.tab = b.dataset.tab === "gear" ? "gear" : Number(b.dataset.tab); this.sel = null; this.pick = null; this.lastKey = "";
@@ -515,10 +518,10 @@ export class Hud {
     return `<div class="edit">
       <div class="detail">${selId ? spellCard(selId) : toyCard(toy)}</div>
       <div class="board">
-        <div class="boardHead"><span class="muted">選んでから、置きたい場所をタップ（入れ替え）。おもちゃどうしは手持ちを通して移す</span></div>
+        <div class="boardHead"><span class="muted">${L("選んでから、置きたい場所をタップ（入れ替え）。おもちゃどうしは手持ちを通して移す", "Pick one, then tap where it goes (swaps). Move between toys via your inventory")}</span></div>
         ${slotRow(toy, (i) => cell(toy.slots[i], `data-where="slot" data-i="${i}"`, isSel("slot", i) ? "sel" : ""))}
         ${subRow(h, (i) => cell(toy.sub!.slots[i], `data-where="sub" data-i="${i}"`, isSel("sub", i) ? "sel" : ""))}
-        <div class="bagTitle">手持ち</div>
+        <div class="bagTitle">${L("手持ち", "Inventory")}</div>
         <div class="baggrid">${Array.from({ length: BAG }, (_, i) => cell(w.bag[i] ?? null, `data-where="bag" data-i="${i}"`, isSel("bag", i) ? "sel" : "")).join("")}</div>
       </div></div>`;
   }
@@ -528,7 +531,7 @@ export class Hud {
     const pick = this.pick;
     const worn = GEAR_SLOTS.map((sl) => w.gear[sl]).find((g) => g && g.id === pick);
     const detail = worn ? gearCard(worn, w.gear) : pick && RELICS[pick] ? relicCard(pick)
-      : `<div class="card"><b>装備・レリック</b><p class="desc">装備は帽子・服・首輪の3か所。同じセットを2つ・3つそろえるとボーナス。レリックは持っているだけで効く。</p></div>`;
+      : `<div class="card"><b>${L("装備・レリック", "Gear & Charms")}</b><p class="desc">${L("装備は帽子・服・首輪の3か所。同じセットを2つ・3つそろえるとボーナス。レリックは持っているだけで効く。", "Gear goes in 3 spots: hat, clothes, collar. Match 2 or 3 of a set for a bonus. Charms work just by having them.")}</p></div>`;
     const counts = setCounts(w.gear);
     const sets = Object.values(SETS).map((st) => {
       const n = counts[st.id] ?? 0;
@@ -537,11 +540,11 @@ export class Hud {
     return `<div class="edit">
       <div class="detail">${detail}</div>
       <div class="board">
-        <div class="bagTitle">装備</div>
+        <div class="bagTitle">${L("装備", "Gear")}</div>
         <div class="gearRow">${GEAR_SLOTS.map((sl) => `<div class="gslot">${itemCell("gear", w.gear[sl]?.id ?? null, `data-pick="${w.gear[sl]?.id ?? ""}"`, pick && pick === w.gear[sl]?.id ? "sel" : "", w.gear[sl]?.rar ?? 0)}<span>${SLOT_NAME[sl]}</span></div>`).join("")}<div class="sets">${sets}</div></div>
-        ${w.curses.length ? `<div class="bagTitle">呪い（${w.curses.length}）</div><div class="curses">${w.curses.map((c) => `<span class="curse"><b>${CURSES[c].name}</b>${CURSES[c].desc}</span>`).join("")}</div>` : ""}
-        <div class="bagTitle">レリック（${w.relics.length}）</div>
-        <div class="baggrid">${w.relics.length ? w.relics.map((r) => itemCell("relic", r, `data-pick="${r}"`, pick === r ? "sel" : "")).join("") : `<span class="muted">まだ持っていません（◆の扉・ボスでもらえる）</span>`}</div>
+        ${w.curses.length ? `<div class="bagTitle">${L(`呪い（${w.curses.length}）`, `Curses (${w.curses.length})`)}</div><div class="curses">${w.curses.map((c) => `<span class="curse"><b>${CURSES[c].name}</b>${CURSES[c].desc}</span>`).join("")}</div>` : ""}
+        <div class="bagTitle">${L(`レリック（${w.relics.length}）`, `Charms (${w.relics.length})`)}</div>
+        <div class="baggrid">${w.relics.length ? w.relics.map((r) => itemCell("relic", r, `data-pick="${r}"`, pick === r ? "sel" : "")).join("") : `<span class="muted">${L("まだ持っていません（◆の扉・ボスでもらえる）", "None yet (from ◆ doors and bosses)")}</span>`}</div>
       </div></div>`;
   }
 
@@ -550,28 +553,28 @@ export class Hud {
     el.hidden = w.phase !== "reward";
     if (el.hidden) return;
     const boss = w.room.kind === "boss", al = w.room.altar;
-    const title = boss ? `${ENEMY[w.room.waves[0][0]].name}を追い払った！` : al?.kind === "treasure" ? "宝箱を開けた！" : al?.kind === "curse" ? "あやしい箱を開けた…"
-      : `${w.title.split("・")[1].replace(/ \d.*$/, "")}を片付けた！`;
+    const title = boss ? L(`${ENEMY[w.room.waves[0][0]].name}を追い払った！`, `Drove off the ${ENEMY[w.room.waves[0][0]].name}!`) : al?.kind === "treasure" ? L("宝箱を開けた！", "Opened the chest!") : al?.kind === "curse" ? L("あやしい箱を開けた…", "Opened the suspicious box…")
+      : L(`${(w.title.split(/・| · /)[1] ?? "").replace(/ \d.*$/, "")}を片付けた！`, `Cleared the ${(w.title.split(/・| · /)[1] ?? "").replace(/ \d.*$/, "")}!`);
     const one = (c: Choice, a = "") => c.kind === "pact" ? "" : c.kind === "toy" ? toyCard(TOYS[c.id], a) : c.kind === "relic" ? relicCard(c.id, a) : c.kind === "gear" ? gearCard(c.gear ?? { id: c.id, rar: 0, fx: [] }, w.gear, a) : spellCard(c.id, a);
     const card = (c: Choice, i: number) => {
       const a = `data-i="${i}" role="button" tabindex="0"`;
       if (c.kind !== "pact") return one(c, a);
       const k = CURSES[c.id];
-      return `<div class="card pact" ${a}><div class="cursebox"><b>呪い: ${k.name}</b><small>${k.desc}（この冒険のあいだずっと）</small></div>
-        <div class="pactget">もらえる: カリカリ ${c.coins} ＋</div>${one(c.reward)}</div>`;
+      return `<div class="card pact" ${a}><div class="cursebox"><b>${L("呪い: ", "Curse: ")}${k.name}</b><small>${k.desc}${L("（この冒険のあいだずっと）", " (for the whole run)")}</small></div>
+        <div class="pactget">${L(`もらえる: カリカリ ${c.coins} ＋`, `Get: ${c.coins} kibble +`)}</div>${one(c.reward)}</div>`;
     };
     const kind = w.choices[0]?.kind;
     const batt = w.choices.some((c) => c.kind === "toy" && TOYS[c.id].auto);
-    const note = kind === "pact" ? "呪いを1つ受けると、強いごほうびがもらえる（呪い1つにつき、にぼし＋15%）。いらないなら何も受けない"
-      : kind === "toy" ? (w.toys.length < 3 ? `おもちゃを1つ増やす（今 ${w.toys.length}/3。持ち替えはスロットの横のアイコン）` : "持てるのは3つまで。今使っているおもちゃと交換（技はそのまま移る）") + (batt ? `。電池式は別に${2}つまで（今 ${w.batt.length}/2・自動で動く）` : "")
-      : kind === "relic" ? "レリックを1つ選ぼう（持っているだけで効く）"
-      : kind === "gear" ? "装備を1つ選ぼう（同じ場所の装備とは交換。セットをそろえるとボーナス）"
-      : "1つ選んで手持ちに加えよう（「持ち物」でスロットにはめる）";
+    const note = kind === "pact" ? L("呪いを1つ受けると、強いごほうびがもらえる（呪い1つにつき、にぼし＋15%）。いらないなら何も受けない", "Take 1 curse for a strong reward (+15% sardines per curse). Or take none")
+      : kind === "toy" ? (w.toys.length < 3 ? L(`おもちゃを1つ増やす（今 ${w.toys.length}/3。持ち替えはスロットの横のアイコン）`, `Add a toy (now ${w.toys.length}/3; switch via the icons by the slots)`) : L("持てるのは3つまで。今使っているおもちゃと交換（技はそのまま移る）", "Max 3 toys. Swaps with your current toy (moves carry over)")) + (batt ? L(`。電池式は別に${2}つまで（今 ${w.batt.length}/2・自動で動く）`, `. Plus up to ${2} battery toys (now ${w.batt.length}/2, auto)`) : "")
+      : kind === "relic" ? L("レリックを1つ選ぼう（持っているだけで効く）", "Pick 1 charm (works just by having it)")
+      : kind === "gear" ? L("装備を1つ選ぼう（同じ場所の装備とは交換。セットをそろえるとボーナス）", "Pick 1 gear (swaps with the same spot; match sets for bonuses)")
+      : L("1つ選んで手持ちに加えよう（「持ち物」でスロットにはめる）", "Pick 1 for your inventory (slot it in via Bag)");
     el.innerHTML = `<div class="panel reward">
-      <div class="rhead">${mama("relief", boss ? "すごい！ありがとう！" : "ふぅ…ありがとう。", true)}<div><h2>${title}</h2>
+      <div class="rhead">${mama("relief", boss ? L("すごい！ありがとう！", "Amazing! Thank you!") : L("ふぅ…ありがとう。", "Phew… thank you."), true)}<div><h2>${title}</h2>
         <p class="muted">${note}</p></div></div>
       <div class="choices">${w.choices.map(card).join("")}</div>
-      <button class="skip">いらない</button></div>`;
+      <button class="skip">${L("いらない", "Skip")}</button></div>`;
     el.querySelectorAll<HTMLElement>("[data-i]").forEach((b) => b.onclick = () => w.takeReward(w.choices[Number(b.dataset.i)]));
     el.querySelector<HTMLButtonElement>(".skip")!.onclick = () => w.takeReward(null);
   }
@@ -588,17 +591,17 @@ export class Hud {
       const name = it.kind === "spell" ? spellDef(it.id).name : POTIONS[it.id].name;
       const desc = it.kind === "spell" ? spellDef(it.id).desc : POTIONS[it.id].desc;
       return `<div class="sitem ${it.sold ? "sold" : ""}" ${it.kind === "spell" ? `data-info="${it.id}"` : ""}>${icon}<div class="sname"><b>${name}</b><small>${desc}</small></div>
-        <button data-buy="${i}" ${can ? "" : "disabled"}>${it.sold ? "売り切れ" : `<img src="${urlOf(kibbleCanvas())}" alt="">${it.price}`}</button></div>`;
+        <button data-buy="${i}" ${can ? "" : "disabled"}>${it.sold ? L("売り切れ", "Sold out") : `<img src="${urlOf(kibbleCanvas())}" alt="">${it.price}`}</button></div>`;
     }).join("");
     const forge = w.forgeable();
     el.innerHTML = `<div class="panel shopPanel">
-      <div class="shead"><h2>ママのところ</h2><span class="wallet"><img src="${urlOf(kibbleCanvas())}" alt="">${w.coins}</span>
-        <button class="reroll" ${w.coins >= sh.rerollCost ? "" : "disabled"}>ほかのも見せて <img src="${urlOf(kibbleCanvas())}" alt="">${sh.rerollCost}</button><button class="close">閉じる</button></div>
-      <p class="muted mamaLine">ママ「拾ってきたカリカリと交換ね♪ こわれたおもちゃも直してあげる」</p>
+      <div class="shead"><h2>${L("ママのところ", "Mama's Repair Corner")}</h2><span class="wallet"><img src="${urlOf(kibbleCanvas())}" alt="">${w.coins}</span>
+        <button class="reroll" ${w.coins >= sh.rerollCost ? "" : "disabled"}>${L("ほかのも見せて", "Show others")} <img src="${urlOf(kibbleCanvas())}" alt="">${sh.rerollCost}</button><button class="close">${L("閉じる", "Close")}</button></div>
+      <p class="muted mamaLine">${L("ママ「拾ってきたカリカリと交換ね♪ こわれたおもちゃも直してあげる」", "Mama: \"Trade me the kibble you found♪ I'll fix broken toys too.\"")}</p>
       <div class="sitems">${items}</div>
-      <div class="forge"><b>ママのお直し</b><span class="muted">同じ物3つを、ママが縫い合わせて丈夫な★の物1つに直してくれる</span>
-        <div class="fcells">${forge.length ? forge.map((id) => `<div class="fbtn" role="button" tabindex="0" data-forge="${id}">${cell(id, "tabindex=-1")}<span>×3 → ${spellDef(id + "+").name}</span></div>`).join("") : `<span class="muted">直せる物はまだない（同じ物を3つ集めよう）</span>`}</div></div>
-      ${this.fusionHtml(w, "ソファの下（秘密の隠し場所）")}
+      <div class="forge"><b>${L("ママのお直し", "Mama's Repairs")}</b><span class="muted">${L("同じ物3つを、ママが縫い合わせて丈夫な★の物1つに直してくれる", "Mama sews 3 of the same item into 1 sturdier ★ item")}</span>
+        <div class="fcells">${forge.length ? forge.map((id) => `<div class="fbtn" role="button" tabindex="0" data-forge="${id}">${cell(id, "tabindex=-1")}<span>×3 → ${spellDef(id + "+").name}</span></div>`).join("") : `<span class="muted">${L("直せる物はまだない（同じ物を3つ集めよう）", "Nothing to fix yet (collect 3 of the same)")}</span>`}</div></div>
+      ${this.fusionHtml(w, L("ソファの下（秘密の隠し場所）", "Under the Sofa (Secret Stash)"))}
     </div>`;
     el.querySelectorAll<HTMLButtonElement>("[data-buy]").forEach((b) => b.onclick = () => { w.buy(Number(b.dataset.buy)); this.lastKey = ""; });
     el.querySelectorAll<HTMLElement>("[data-forge]").forEach((b) => b.onclick = () => { w.forge(b.dataset.forge!); this.fusePick = []; this.lastKey = ""; });
@@ -608,16 +611,16 @@ export class Hud {
   }
 
   /** 秘密の隠し場所（ソファの下）: 同じレア度の物を4つ隠す → 奥から1つ上のレア度の物が1つ出てくる。 */
-  private fusionHtml(w: World, title = "秘密の隠し場所") {
+  private fusionHtml(w: World, title = L("秘密の隠し場所", "Secret Stash")) {
     const pick = this.fusePick.filter((i) => i < w.bag.length), r = pick.length ? rarOf(w.bag[pick[0]]) : -1;
     const ok = w.fusable();
     const cells = w.bag.map((id, i) => {
       const on = pick.includes(i), can = ok.includes(rarOf(id)) && (r < 0 || rarOf(id) === r);
       return cell(id, `data-fuse="${i}" ${can || on ? "" : "disabled"}`, `${on ? "sel" : ""} ${can || on ? "" : "dim"}`);
     }).join("");
-    return `<div class="forge fusion"><b>${title}</b><span class="muted">ソファの下の、猫だけの隠し場所。同じレア度の物を4つ押しこむと、奥から前に失くした物（1つ上のレア度）が1つ出てくる</span>
-      <div class="fuseBag">${w.bag.length ? cells : `<span class="muted">手持ちが空っぽ</span>`}</div>
-      <button class="fuseGo go" ${pick.length === 4 ? "" : "disabled"}>${pick.length === 4 ? `4つ隠す（${SPELL_RAR_NAME[Math.min(3, r + 1)]}の物が出てくる）` : `${pick.length}/4 選んだ`}</button></div>`;
+    return `<div class="forge fusion"><b>${title}</b><span class="muted">${L("ソファの下の、猫だけの隠し場所。同じレア度の物を4つ押しこむと、奥から前に失くした物（1つ上のレア度）が1つ出てくる", "A cats-only hideout under the sofa. Stuff in 4 items of the same rarity and a long-lost item (1 rarity higher) pops out")}</span>
+      <div class="fuseBag">${w.bag.length ? cells : `<span class="muted">${L("手持ちが空っぽ", "Inventory is empty")}</span>`}</div>
+      <button class="fuseGo go" ${pick.length === 4 ? "" : "disabled"}>${pick.length === 4 ? L(`4つ隠す（${SPELL_RAR_NAME[Math.min(3, r + 1)]}の物が出てくる）`, `Hide 4 (get a ${SPELL_RAR_NAME[Math.min(3, r + 1)]} item)`) : L(`${pick.length}/4 選んだ`, `${pick.length}/4 picked`)}</button></div>`;
   }
   private bindFusion(el: HTMLElement, w: World) {
     el.querySelectorAll<HTMLButtonElement>("[data-fuse]").forEach((b) => b.onclick = () => {
@@ -637,22 +640,22 @@ export class Hud {
     const main = w.toys[w.cur].def, batt = w.batt[0]?.def, pick = this.trainPick;
     const toyIcons = Object.keys(TOYS).map((id) => itemCell("toy", id, `data-tt="${id}" title="${TOYS[id].name}"`, id === main.id || id === batt?.id ? "sel" : "")).join("");
     const slots = (h: number, def: ToyDef) => slotRow(def, (i) => cell(def.slots[i], `data-th="${h}" data-tw="slot" data-ti="${i}"`))
-      + (def.sub ? `<div class="subrow"><span class="sublabel">サブ</span><div class="cells">${def.sub.slots.map((id, i) => cell(id, `data-th="${h}" data-tw="sub" data-ti="${i}"`)).join("")}</div></div>` : "");
+      + (def.sub ? `<div class="subrow"><span class="sublabel">${L("サブ", "Sub")}</span><div class="cells">${def.sub.slots.map((id, i) => cell(id, `data-th="${h}" data-tw="sub" data-ti="${i}"`)).join("")}</div></div>` : "");
     const star = (id: string) => id + "+".repeat(this.trainStars);
     const palette = ZUKAN.filter((g) => !g.kind).map((g) => `<div class="zgroup"><div class="ztitle">${g.title}</div><div class="zcells">${g.ids.map((id) => cell(star(id), `data-pal="${star(id)}"`, pick === star(id) ? "sel" : "")).join("")}</div></div>`).join("");
     el.innerHTML = `<div class="panel trainPanel">
-      <div class="shead"><h2>猫こたつ（トレーニング）</h2><button class="close">閉じる</button><button class="toTitle">タイトルへ</button></div>
-      <p class="muted">下の技をタップで選び、スロットをタップして置く（何回でも置ける）。何も選ばずにスロットをタップすると外す。</p>
+      <div class="shead"><h2>${L("猫こたつ（トレーニング）", "Cat Kotatsu (Training)")}</h2><button class="close">${L("閉じる", "Close")}</button><button class="toTitle">${L("タイトルへ", "Title")}</button></div>
+      <p class="muted">${L("下の技をタップで選び、スロットをタップして置く（何回でも置ける）。何も選ばずにスロットをタップすると外す。", "Tap a move below, then tap a slot to place it (as many as you like). Tap a slot with nothing picked to remove.")}</p>
       <div class="trainOpts">
-        <button data-multi="0" class="${w.trainMulti ? "" : "on"}">けりぐるみ 1個</button><button data-multi="1" class="${w.trainMulti ? "on" : ""}">けりぐるみ たくさん</button>
-        <button class="infMana ${w.trainInfMana ? "on" : ""}">やる気むげん</button>
-        ${[0, 1, 2].map((n) => `<button data-star="${n}" class="${this.trainStars === n ? "on" : ""}">${n ? "★".repeat(n) : "★なし"}</button>`).join("")}
+        <button data-multi="0" class="${w.trainMulti ? "" : "on"}">${L("けりぐるみ 1個", "1 shrimp kicker")}</button><button data-multi="1" class="${w.trainMulti ? "on" : ""}">${L("けりぐるみ たくさん", "Many kickers")}</button>
+        <button class="infMana ${w.trainInfMana ? "on" : ""}">${L("やる気むげん", "∞ Energy")}</button>
+        ${[0, 1, 2].map((n) => `<button data-star="${n}" class="${this.trainStars === n ? "on" : ""}">${n ? "★".repeat(n) : L("★なし", "No ★")}</button>`).join("")}
       </div>
       <div class="detail">${pick ? spellCard(pick) : toyCard(main)}</div>
-      <h3>おもちゃ（電池式は電池の枠へ）</h3><div class="trainRow">${toyIcons}</div>
+      <h3>${L("おもちゃ（電池式は電池の枠へ）", "Toys (battery toys go to the battery slot)")}</h3><div class="trainRow">${toyIcons}</div>
       <h3>${main.name}</h3>${slots(w.cur, main)}
-      ${batt ? `<h3>${batt.name}（電池式）<button class="noBatt">外す</button></h3>${slots(w.toys.length, batt)}` : ""}
-      <h3>技・修飾</h3><div class="palette"><div class="zgroups">${palette}</div></div>
+      ${batt ? `<h3>${batt.name}${L("（電池式）", " (battery)")}<button class="noBatt">${L("外す", "Remove")}</button></h3>${slots(w.toys.length, batt)}` : ""}
+      <h3>${L("技・修飾", "Moves & Modifiers")}</h3><div class="palette"><div class="zgroups">${palette}</div></div>
     </div>`;
     el.querySelectorAll<HTMLElement>("[data-tt]").forEach((b) => b.onclick = () => { w.trainToy(b.dataset.tt!); this.lastKey = ""; });
     el.querySelectorAll<HTMLElement>("[data-pal]").forEach((b) => b.onclick = () => { this.trainPick = this.trainPick === b.dataset.pal ? null : b.dataset.pal!; this.lastKey = ""; });
@@ -672,7 +675,7 @@ export class Hud {
     const el = this.el("shopPanel");
     if (w.phase !== "bench") return;
     el.hidden = false;
-    el.innerHTML = `<div class="panel shopPanel bench"><div class="shead"><h2>秘密の隠し場所</h2><button class="close">閉じる</button></div>${this.fusionHtml(w)}</div>`;
+    el.innerHTML = `<div class="panel shopPanel bench"><div class="shead"><h2>${L("秘密の隠し場所", "Secret Stash")}</h2><button class="close">${L("閉じる", "Close")}</button></div>${this.fusionHtml(w)}</div>`;
     this.bindFusion(el, w);
     el.querySelector<HTMLButtonElement>(".close")!.onclick = () => { w.closeShop(); this.fusePick = []; this.lastKey = ""; };
   }
@@ -689,21 +692,21 @@ export class Hud {
     el.hidden = !(w.phase === "dead" || w.phase === "win");
     if (el.hidden) return;
     if (!w.over) {   // やられた: 広告を見て1回だけ復活できる
-      el.innerHTML = `<div class="panel"><h2>虫にやられた…</h2>${mama("scream", "いやぁぁぁ！<br>虫がーっ！")}
-        <p class="muted">広告を見ると、その場で1回だけ復活できる（HP満タン）</p>
-        <div class="menu"><button class="go reviveAd" ${this.adBusy ? "disabled" : ""}>▶ 広告を見て復活</button><button class="giveUp">あきらめる</button></div></div>`;
+      el.innerHTML = `<div class="panel"><h2>${L("虫にやられた…", "The bugs got you…")}</h2>${mama("scream", L("いやぁぁぁ！<br>虫がーっ！", "Eeeek!<br>Buuugs!"))}
+        <p class="muted">${L("広告を見ると、その場で1回だけ復活できる（HP満タン）", "Watch an ad to revive once, right here (full HP)")}</p>
+        <div class="menu"><button class="go reviveAd" ${this.adBusy ? "disabled" : ""}>${L("▶ 広告を見て復活", "▶ Watch ad to revive")}</button><button class="giveUp">${L("あきらめる", "Give up")}</button></div></div>`;
       el.querySelector<HTMLButtonElement>(".reviveAd")!.onclick = () => this.watchAd(() => w.revive());
       el.querySelector<HTMLButtonElement>(".giveUp")!.onclick = () => { w.reviveOk = false; this.lastKey = ""; };
       return;
     }
-    el.innerHTML = `<div class="panel"><h2>${w.phase === "win" ? "ママにつかまった！" : "虫にやられた…"}</h2>${w.opts.endless ? this.endlessResult(w) : ""}${w.phase === "win" ? this.favHtml(w) : ""}
-      ${w.phase === "win" ? mama("pet", "つかまえた〜♪<br>病院でワクチン打とうね。<br>1年間ありがとう！") : mama("scream", "いやぁぁぁ！<br>虫がーっ！")}
-      <p class="muted">${w.phase === "win" ? "秋から夏まで、ぜんぶの虫を追い払った。さいごは病院へ…（おしまい）" : `${w.title} で力尽きた。`}</p>
-      <p class="nibline">にぼし <b>+${this.earned}</b>（${DIFFS[w.opts.difficulty].name}・片付けた部屋 ${w.cleared}・倒した虫 ${w.kills}${w.curses.length ? `・呪い ${w.curses.length}` : ""}）　タイトルの「ねこの成長」で使える</p>
-      ${this.opened.length ? `<div class="opened"><b>新しく解放！</b>（次の冒険から出てくる）<div class="zcells">${this.opened.map((u) => u.kind === "spell" ? cell(u.id, "tabindex=-1") : itemCell(u.kind, u.id, "tabindex=-1")).join("")}</div>
+    el.innerHTML = `<div class="panel"><h2>${w.phase === "win" ? L("ママにつかまった！", "Caught by Mama!") : L("虫にやられた…", "The bugs got you…")}</h2>${w.opts.endless ? this.endlessResult(w) : ""}${w.phase === "win" ? this.favHtml(w) : ""}
+      ${w.phase === "win" ? mama("pet", L("つかまえた〜♪<br>病院でワクチン打とうね。<br>1年間ありがとう！", "Gotcha~♪<br>Time for your shots at the vet.<br>Thanks for this year!")) : mama("scream", L("いやぁぁぁ！<br>虫がーっ！", "Eeeek!<br>Buuugs!"))}
+      <p class="muted">${w.phase === "win" ? L("秋から夏まで、ぜんぶの虫を追い払った。さいごは病院へ…（おしまい）", "You chased off every bug from autumn to summer. Last stop: the vet… (The End)") : L(`${w.title} で力尽きた。`, `Fell in ${w.title}.`)}</p>
+      <p class="nibline">${L("にぼし", "Sardines")} <b>+${this.earned}</b>${L(`（${DIFFS[w.opts.difficulty].name}・片付けた部屋 ${w.cleared}・倒した虫 ${w.kills}`, ` (${DIFFS[w.opts.difficulty].name}・rooms ${w.cleared}・bugs ${w.kills}`)}${w.curses.length ? L(`・呪い ${w.curses.length}`, `・curses ${w.curses.length}`) : ""}${L("）　タイトルの「ねこの成長」で使える", ")  Spend them in Cat Growth on the title")}</p>
+      ${this.opened.length ? `<div class="opened"><b>${L("新しく解放！", "New unlocks!")}</b>${L("（次の冒険から出てくる）", " (from your next run)")}<div class="zcells">${this.opened.map((u) => u.kind === "spell" ? cell(u.id, "tabindex=-1") : itemCell(u.kind, u.id, "tabindex=-1")).join("")}</div>
         <small>${this.opened.map((u) => (u.kind === "spell" ? SPELLS[u.id].name : u.kind === "toy" ? TOYS[u.id].name : RELICS[u.id].name)).join("・")}</small></div>` : ""}
-      ${adsAvailable() && this.earned > 0 ? this.doubled ? `<p class="nibline">にぼし2倍！ <b>+${this.earned}</b> もらった</p>` : `<div class="menu"><button class="go nibAd" ${this.adBusy ? "disabled" : ""}>▶ 広告を見て にぼし2倍（+${this.earned}）</button></div>` : ""}
-      <div class="menu"><button class="go again">もう一度</button><button class="toTitle">タイトルへ</button></div></div>`;
+      ${adsAvailable() && this.earned > 0 ? this.doubled ? `<p class="nibline">${L(`にぼし2倍！ <b>+${this.earned}</b> もらった`, `Sardines x2! Got <b>+${this.earned}</b>`)}</p>` : `<div class="menu"><button class="go nibAd" ${this.adBusy ? "disabled" : ""}>${L(`▶ 広告を見て にぼし2倍（+${this.earned}）`, `▶ Watch ad: 2x sardines (+${this.earned})`)}</button></div>` : ""}
+      <div class="menu"><button class="go again">${L("もう一度", "Retry")}</button><button class="toTitle">${L("タイトルへ", "Title")}</button></div></div>`;
     const nibAd = el.querySelector<HTMLButtonElement>(".nibAd");
     if (nibAd) nibAd.onclick = () => this.watchAd(() => { if (!this.doubled) { addNiboshi(this.earned); this.doubled = true; } });
     el.querySelector<HTMLButtonElement>(".again")!.onclick = () => this.onRestart();
@@ -718,7 +721,7 @@ export class Hud {
     const send = el.querySelector<HTMLButtonElement>(".sendBtn");
     if (send) send.onclick = () => {
       const name = cleanName(el.querySelector<HTMLInputElement>(".nameIn")!.value);
-      if (!name) { this.sent = { error: "その名前は使えません（12文字まで・連絡先や長い数字はだめ）" }; this.lastKey = ""; return; }
+      if (!name) { this.sent = { error: L("その名前は使えません（12文字まで・連絡先や長い数字はだめ）", "Can't use that name (max 12 chars, no contact info or long numbers)") }; this.lastKey = ""; return; }
       saveName(name); nameEndless(this.endedAt, name); this.sent = "sending"; this.lastKey = "";
       void submitScore({ name, score: w.score, rooms: w.cleared, bosses: w.bosses, elites: w.elites, kills: w.kills }).then((r) => { this.sent = r; this.lastKey = ""; });
     };

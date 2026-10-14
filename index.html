@@ -322,24 +322,40 @@
   </head>
   <body>
     <canvas id="game"></canvas>
-    <div id="loading">読み込み中…</div>
-    <div class="hud" id="status"><div id="hearts"></div><div id="manaWrap"><span>やる気</span><div id="mana"><div id="manaFill"></div></div><span id="manaNum"></span></div><div id="coins"></div></div>
+    <div id="loading" data-en="Loading…">読み込み中…</div>
+    <div class="hud" id="status"><div id="hearts"></div><div id="manaWrap"><span data-en="Energy">やる気</span><div id="mana"><div id="manaFill"></div></div><span id="manaNum"></span></div><div id="coins"></div></div>
     <div class="hud" id="slots"></div>
-    <div class="hud" id="roomBox"><div id="room"></div><div class="row"><button id="bagBtn">持ち物</button><button id="muteBtn" aria-label="音">♪</button><button id="pauseBtn" aria-label="一時停止">Ⅱ</button></div></div>
+    <div class="hud" id="roomBox"><div id="room"></div><div class="row"><button id="bagBtn" data-en="Bag">持ち物</button><button id="muteBtn" aria-label="音" data-en-aria="Sound">♪</button><button id="pauseBtn" aria-label="一時停止" data-en-aria="Pause">Ⅱ</button></div></div>
     <div class="hud" id="hint" hidden></div>
     <div class="hud" id="toast" hidden></div>
     <div class="hud" id="trainBox" hidden></div>
-    <div class="hud" id="help">WASD 移動 ／ クリック長押し 攻撃 ／ J 自動で狙う<br />Space ダッシュ ／ Q 持ち替え ／ Tab 持ち物</div>
-    <div class="tbtn" id="atkBtn">攻撃</div>
-    <div class="tbtn" id="dashBtn">ダッシュ</div>
+    <div class="hud" id="help" data-en="WASD Move / Hold click Attack / J Auto-aim&lt;br /&gt;Space Dash / Q Switch toy / Tab Bag">WASD 移動 ／ クリック長押し 攻撃 ／ J 自動で狙う<br />Space ダッシュ ／ Q 持ち替え ／ Tab 持ち物</div>
+    <div class="tbtn" id="atkBtn" data-en="Attack">攻撃</div>
+    <div class="tbtn" id="dashBtn" data-en="Dash">ダッシュ</div>
     <div class="overlay" id="bag" hidden></div>
     <div class="overlay" id="reward" hidden></div>
     <div class="overlay" id="result" hidden></div>
     <div id="stick" hidden><div></div></div>
     <div class="overlay" id="shopPanel" hidden></div>
-    <div class="hud" id="finalHint">肉球ペシペシしかできない！ ママから逃げて…</div>
+    <div class="hud" id="finalHint" data-en="Only paw pats work! Run from Mama…">肉球ペシペシしかできない！ ママから逃げて…</div>
     <div class="overlay" id="pause" hidden></div>
     <div class="overlay" id="intro" hidden></div>
+    <script>
+      // src/i18n.ts の detect() と同じ順で決める（?lang= → 保存 → ブラウザのことば）
+      (function () {
+        var l = null;
+        try {
+          var q = new URLSearchParams(location.search).get("lang");
+          if (q === "ja" || q === "en") l = q;
+          if (!l) { var s = localStorage.getItem("paper-cat-magic:lang"); if (s === "ja" || s === "en") l = s; }
+        } catch (e) { /* なにもしない */ }
+        if (!l) l = (navigator.language || "").toLowerCase().indexOf("ja") === 0 ? "ja" : "en";
+        if (l === "ja") return;
+        document.documentElement.lang = "en";
+        document.querySelectorAll("[data-en]").forEach(function (e) { e.innerHTML = e.getAttribute("data-en"); });
+        document.querySelectorAll("[data-en-aria]").forEach(function (e) { e.setAttribute("aria-label", e.getAttribute("data-en-aria")); });
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

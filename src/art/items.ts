@@ -2,6 +2,7 @@
 // 同じ絵を、ゲーム中に飛んでいく弾と、UI のアイコンの両方に使う。
 import type { TechFx } from "../core/spells";
 import type { RewardKind } from "../game/world";
+import { L } from "../i18n";
 
 export const INK = "#4a2a16";
 
@@ -81,7 +82,7 @@ const TECH_DRAW: Record<Exclude<TechFx, "enemy" | "gas">, (g: CanvasRenderingCon
   hiss: (g) => {
     g.fillStyle = "#c9a6ff"; g.strokeStyle = INK; g.lineWidth = 6;
     spikyBlob(g, 100, 100, 60, 90, 8, 0.75); g.fill(); g.stroke();
-    g.fillStyle = "#3b1d6e"; g.font = "bold 46px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("シャー", 100, 102);
+    g.fillStyle = "#3b1d6e"; g.font = "bold 46px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(L("シャー", "HISS"), 100, 102);
   },
   swing: (g) => {   // ねこじゃらしの先（ふさふさの穂）
     g.strokeStyle = INK; g.lineWidth = 8; g.beginPath(); g.moveTo(15, 150); g.quadraticCurveTo(60, 120, 95, 100); g.stroke();
@@ -189,7 +190,7 @@ const TECH_DRAW: Record<Exclude<TechFx, "enemy" | "gas">, (g: CanvasRenderingCon
     g.fillStyle = "#c0864a"; g.beginPath(); g.moveTo(35, 75); g.lineTo(15, 40); g.lineTo(95, 40); g.lineTo(100, 75); g.closePath(); g.fill(); g.stroke();
     g.beginPath(); g.moveTo(165, 75); g.lineTo(185, 40); g.lineTo(105, 40); g.lineTo(100, 75); g.closePath(); g.fill(); g.stroke();
     g.fillStyle = "#fff"; g.beginPath(); g.rect(60, 105, 80, 30); g.fill(); g.stroke();
-    g.fillStyle = INK; g.font = "bold 18px sans-serif"; g.textAlign = "center"; g.fillText("こわれもの", 100, 127);
+    g.fillStyle = INK; g.font = "bold 18px sans-serif"; g.textAlign = "center"; g.fillText(L("こわれもの", "FRAGILE"), 100, 127);
   },
   roller: (g) => {   // 粘着コロコロ
     g.strokeStyle = INK; g.lineWidth = 7; g.fillStyle = "#f8f9fa";
@@ -367,7 +368,7 @@ const MOD_DRAW: Record<string, (g: CanvasRenderingContext2D) => void> = {
   maigofuda: (g) => {   // 迷子札
     g.strokeStyle = INK; g.lineWidth = 8; g.beginPath(); g.arc(100, 45, 22, 0, 7); g.stroke();
     g.fillStyle = "#ffd43b"; g.lineWidth = 7; g.beginPath(); g.roundRect(45, 65, 110, 110, 22); g.fill(); g.stroke();
-    g.fillStyle = INK; g.font = "bold 42px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("ねこ", 100, 112);
+    g.fillStyle = INK; g.font = "bold 42px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(L("ねこ", "CAT"), 100, 112);
     g.font = "bold 22px sans-serif"; g.fillText("TEL", 100, 150);
   },
   hidamari: (g) => {   // おひさまとクッション
@@ -423,7 +424,7 @@ const MOD_DRAW: Record<string, (g: CanvasRenderingContext2D) => void> = {
     g.save(); g.translate(100, 100); g.rotate(-0.6);
     g.fillStyle = "#fff"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.roundRect(-80, -22, 150, 44, 10); g.fill(); g.stroke();
     g.fillStyle = "#f783ac"; g.beginPath(); g.roundRect(-60, -14, 90, 28, 6); g.fill();
-    g.fillStyle = "#fff"; g.font = "bold 18px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("ちゅ〜る", -15, 1);
+    g.fillStyle = "#fff"; g.font = "bold 18px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(L("ちゅ〜る", "TREAT"), -15, 1);
     g.fillStyle = "#e8a95b"; g.beginPath(); g.moveTo(70, -14); g.lineTo(95, 0); g.lineTo(70, 14); g.closePath(); g.fill(); g.stroke(); g.restore();
   },
   chain: (g) => {   // つながる輪
@@ -515,7 +516,7 @@ const TOY_DRAW: Record<string, (g: CanvasRenderingContext2D) => void> = {
   },
   fukubukuro: (g) => {   // 福袋からねこじゃらしがたくさん
     g.fillStyle = "#e03131"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.moveTo(40, 90); g.lineTo(160, 90); g.lineTo(175, 190); g.lineTo(25, 190); g.closePath(); g.fill(); g.stroke();
-    g.fillStyle = "#ffd43b"; g.font = "bold 46px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("福", 100, 142);
+    g.fillStyle = "#ffd43b"; g.font = "bold 46px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(L("福", "LUCK"), 100, 142);
     for (const [x, a, c] of [[60, -0.5, "#ff9ec4"], [90, -0.15, "#74c0fc"], [115, 0.15, "#ffd43b"], [145, 0.5, "#b197fc"]] as const) {
       g.save(); g.translate(x, 90); g.rotate(a); g.strokeStyle = INK; g.lineWidth = 5; g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -50); g.stroke();
       g.fillStyle = c; g.beginPath(); g.ellipse(0, -62, 11, 22, 0, 0, 7); g.fill(); g.stroke(); g.restore();
@@ -675,7 +676,7 @@ const RELIC_DRAW: Record<string, (g: CanvasRenderingContext2D) => void> = {
     g.fillStyle = "#ced4da"; g.strokeStyle = INK; g.lineWidth = 7; g.beginPath(); g.ellipse(100, 70, 70, 22, 0, 0, 7); g.fill(); g.stroke();
     g.fillStyle = "#e64980"; g.beginPath(); g.rect(30, 70, 140, 80); g.fill(); g.stroke();
     g.fillStyle = "#ced4da"; g.beginPath(); g.ellipse(100, 150, 70, 22, 0, 0, Math.PI); g.fill(); g.stroke();
-    g.fillStyle = "#ffd43b"; g.font = "bold 30px sans-serif"; g.textAlign = "center"; g.fillText("極上", 100, 122);
+    g.fillStyle = "#ffd43b"; g.font = "bold 30px sans-serif"; g.textAlign = "center"; g.fillText(L("極上", "DELUXE"), 100, 122);
   },
   copy: (g) => {   // コピー用紙の束
     g.fillStyle = "#fff"; g.strokeStyle = INK; g.lineWidth = 6;
@@ -801,7 +802,7 @@ const GEAR_DRAW: Record<string, (g: CanvasRenderingContext2D) => void> = {
   }),
   nametag: (g) => collar(g, "#2f9e44", (gg) => {
     gg.fillStyle = "#fff"; gg.beginPath(); gg.roundRect(68, 135, 64, 46, 8); gg.fill(); gg.stroke();
-    gg.fillStyle = INK; gg.font = "bold 18px sans-serif"; gg.textAlign = "center"; gg.fillText("かわいい", 100, 165);
+    gg.fillStyle = INK; gg.font = "bold 18px sans-serif"; gg.textAlign = "center"; gg.fillText(L("かわいい", "CUTE"), 100, 165);
   }),
 };
 

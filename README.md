@@ -176,3 +176,7 @@ npm run build:crazy   # dist-crazygames/ と、アップロード用の my-cat-c
 - ごほうび広告: やられたときに1回だけその場で復活／結果画面でにぼし2倍。ふつうの Web 版には出ない
 - みんなのランキングは `https://my-cat-is-so-cute.pages.dev/api/scores` を呼ぶ（`.env.crazygames`。API は CORS 対応）
 - 共通の切り替えは `src/platform/`
+
+### ことば（日本語／英語）
+
+ブラウザの言語で自動で切りかわる（日本語以外は英語）。タイトルのボタンや `?lang=en` / `?lang=ja` でも切りかえられる。文言は `L("日本語", "English")` とその場に並べて書く（`src/i18n.ts`）。
