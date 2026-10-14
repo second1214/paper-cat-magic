@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:crazy": "tsc --noEmit && vite build --mode crazygames --outDir dist-crazygames && node scripts/zip-crazygames.mjs"
   },
   "devDependencies": {
     "@types/three": "^0.180.0",

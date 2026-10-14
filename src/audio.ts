@@ -1,5 +1,6 @@
 // 音楽と効果音。音のファイルは使わず、ブラウザの WebAudio でその場で鳴らす（かわいい8bit風）。
 // スマホは画面に触れるまで音を出せないので、最初のタップで unlock する。
+import { store } from "./platform";
 
 type Track = "title" | "autumn" | "winter" | "spring" | "summer" | "boss" | "shop" | "final";
 
@@ -48,9 +49,7 @@ export class Sound {
   muted: boolean;
 
   constructor() {
-    let m = false;
-    try { m = localStorage.getItem(KEY) === "1"; } catch { /* 保存できなくてもよい */ }
-    this.muted = m;
+    this.muted = store.get(KEY) === "1";
   }
 
   /** 最初のタップ・キーで音を使えるようにする。 */
@@ -68,8 +67,13 @@ export class Sound {
 
   toggleMute() {
     this.muted = !this.muted;
-    try { localStorage.setItem(KEY, this.muted ? "1" : "0"); } catch { /* 保存できなくてもよい */ }
+    store.set(KEY, this.muted ? "1" : "0");
     if (this.ctx) this.master.gain.setTargetAtTime(this.muted ? 0 : 0.5, this.ctx.currentTime, 0.05);
+  }
+
+  /** 広告の間は音を止める（ミュート設定は変えない）。 */
+  hold(on: boolean) {
+    if (this.ctx) this.master.gain.setTargetAtTime(on || this.muted ? 0 : 0.5, this.ctx.currentTime, 0.05);
   }
 
   /** 流す曲を決める（同じ曲なら何もしない）。 */

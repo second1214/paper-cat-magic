@@ -8,7 +8,11 @@ interface D1Stmt { bind(...v: unknown[]): D1Stmt; all<T>(): Promise<D1Result<T>>
 interface D1 { prepare(sql: string): D1Stmt; exec(sql: string): Promise<unknown> }
 interface Ctx { request: Request; env: { DB?: D1 } }
 
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+// CrazyGames など別の場所に置いた版からも呼べるようにする（Cookie は使わないので、どこからでもよい）
+const CORS = { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "content-type", "access-control-max-age": "86400" };
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...CORS } });
+
+export const onRequestOptions = () => new Response(null, { status: 204, headers: CORS });
 
 async function ready(db: D1) {
   await db.exec("CREATE TABLE IF NOT EXISTS scores (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, score INTEGER NOT NULL, rooms INTEGER NOT NULL, bosses INTEGER NOT NULL, elites INTEGER NOT NULL, kills INTEGER NOT NULL, ip TEXT NOT NULL, at INTEGER NOT NULL)");

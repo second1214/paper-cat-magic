@@ -398,3 +398,19 @@ describe("リビングのパパ", () => {
     expect(w.player.hp).toBe(w.player.maxHp);
   });
 });
+
+describe("広告で復活", () => {
+  it("復活できるときは、やられても冒険は終わらず、1回だけ復活する", () => {
+    const w = new World(5); w.start(); w.reviveOk = true;
+    w.player.hp = 0; w.phase = "dead";
+    expect(w.over).toBe(false);
+    w.revive();
+    expect(w.phase).toBe("play"); expect(w.player.hp).toBe(w.player.maxHp); expect(w.player.iframes).toBeGreaterThan(0);
+    w.phase = "dead"; expect(w.over).toBe(true);   // 2回目はない
+    w.revive(); expect(w.phase).toBe("dead");
+  });
+  it("広告がない公開先では、やられたらそのまま終わり", () => {
+    const w = new World(5); w.start(); w.phase = "dead";
+    expect(w.over).toBe(true);
+  });
+});

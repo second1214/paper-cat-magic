@@ -465,6 +465,23 @@ export class World {
   }
 
   /** エンドレスモードのポイント。 */
+  /** 広告を見て1回だけ復活できるか（公開先が広告に対応しているときだけ外から true にする）。 */
+  reviveOk = false;
+  /** 冒険がほんとうに終わった（守りきった、またはやられて復活もしない）。 */
+  get over() { return this.phase === "win" || (this.phase === "dead" && !this.reviveOk); }
+  /** 復活: HP満タン・少し無敵・まわりの虫をはじき、虫の弾を消す。 */
+  revive() {
+    if (this.phase !== "dead" || !this.reviveOk) return;
+    const p = this.player;
+    this.reviveOk = false; p.hp = p.maxHp; p.iframes = 2.5; p.held = 0; p.holder = null; p.vel = { x: 0, z: 0 };
+    for (const e of this.enemies) {
+      const d = dist(e.pos, p.pos);
+      if (d < 3.5 && !isKid(e.type) && !isDummy(e.type)) { const k = norm({ x: e.pos.x - p.pos.x, z: e.pos.z - p.pos.z }), f = isBoss(e.type) ? 2 : 8; e.push.x += k.x * f; e.push.z += k.z * f; }
+    }
+    this.projectiles = this.projectiles.filter((pr) => pr.owner !== "enemy");
+    this.fx.push({ kind: "puff", pos: { ...p.pos }, radius: 3.5, color: "#ffd43b", t: 0, life: 0.5 });
+    this.phase = "play"; this.notify("復活！もうひとがんばり");
+  }
   get score() { return scoreOf({ rooms: this.cleared, bosses: this.bosses, elites: this.elites, kills: this.kills }); }
 
   // ---------- 部屋 ----------

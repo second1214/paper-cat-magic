@@ -1,8 +1,9 @@
 // みんなのランキング（Cloudflare Pages Functions の /api/scores）。つながらないときは「準備中」として静かに失敗する。
 import type { Entry } from "../core/score";
+import { store } from "../platform";
 
 export interface Board { ok: true; top: (Entry & { at: number })[] }
-const URL_ = "./api/scores";
+const URL_ = `${import.meta.env.VITE_API ?? "."}/api/scores`;   // CrazyGames 版は別の場所から呼ぶので、ふつうの公開先の API を使う
 const NAME_KEY = "paper-cat-magic:name";
 
 async function call(init?: RequestInit): Promise<Response | null> {
@@ -27,5 +28,5 @@ export async function submitScore(e: Entry): Promise<{ rank: number } | { error:
   } catch { return { error: "ランキングは準備中です" }; }
 }
 
-export const savedName = () => { try { return localStorage.getItem(NAME_KEY) ?? ""; } catch { return ""; } };
-export const saveName = (n: string) => { try { localStorage.setItem(NAME_KEY, n); } catch { /* 保存できなくてもよい */ } };
+export const savedName = () => store.get(NAME_KEY) ?? "";
+export const saveName = (n: string) => store.set(NAME_KEY, n);
