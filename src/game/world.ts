@@ -3,7 +3,7 @@
 // 物語: ママは虫が大の苦手。家に入りこんだ虫を、猫がおもちゃで追い払う。
 // 構成: 季節ごとの「章」= 部屋8つ＋ボス。部屋を片付けると出口が2〜3個開き、
 // 扉の上のアイコンで「次の部屋をクリアしたときのごほうび」（または特別な部屋）を選んで進む。
-import { castAll, MAX_BATT, passiveCost, planCast, starterToy, TOYS, type Shot, type ToyDef } from "../core/wand";
+import { castAll, MAX_BATT, passiveCost, planCast, starterToy, TOYS, type CastResult, type Shot, type ToyDef } from "../core/wand";
 import { MAX_STARS, rarOf, SPELL_IDS, SPELLS, spellDef, starsOf, type Element, type Motion, type ProjectileStats, type TechFx, type TriggerOn } from "../core/spells";
 import { CURSE_IDS, CURSES, curseBonus } from "../core/curses";
 import { scoreOf } from "../core/score";
@@ -788,7 +788,9 @@ export class World {
     } else if (input.fire && p.castCd <= 0) {
       // 鈴入りボールは全部いっぺんに出す
       const budget = p.mana / B.manaCostMul;   // 自動給餌器: 消費が少ない
-      const res = toy.castAll ? { ...castAll(toy, budget), nextCursor: 0, wrapped: true, fizzled: false } : planCast(toy, p.cursor, budget);
+      let res = toy.castAll ? { ...castAll(toy, budget), nextCursor: 0, wrapped: true, fizzled: false } : planCast(toy, p.cursor, budget);
+      // まとまり全体が最大のやる気でも足りないときだけ、出せるところまで出す（ずっと出なくなるのを防ぐ）
+      if (!toy.castAll && res.fizzled && (res as CastResult).need! > this.manaMax / B.manaCostMul) res = planCast(toy, p.cursor, budget, toy.slots, false);
       if (res.shots.length) {
         p.mana = Math.min(this.manaMax, p.mana - res.manaUsed * B.manaCostMul);   // ちゅ〜る休憩は戻る
         const extra = B.extraShot > 0 && this.rng.next() < B.extraShot;
@@ -949,7 +951,8 @@ export class World {
       h.mana = Math.min(this.manaMaxOf(h.def), h.mana + h.def.manaRegen * this.bonus.regenMul * dt);
       h.autoCd -= dt;
       if (h.autoCd > 0 || !t || this.room.kind === "final") continue;
-      const res = planCast(h.def, h.cursor, h.mana / this.bonus.manaCostMul);
+      let res = planCast(h.def, h.cursor, h.mana / this.bonus.manaCostMul);
+      if (res.fizzled && res.need! > this.manaMaxOf(h.def) / this.bonus.manaCostMul) res = planCast(h.def, h.cursor, h.mana / this.bonus.manaCostMul, h.def.slots, false);
       if (!res.shots.length) { h.autoCd = 0.3; if (!res.fizzled) h.cursor = 0; continue; }
       h.mana = Math.min(this.manaMaxOf(h.def), h.mana - res.manaUsed * this.bonus.manaCostMul); h.cursor = res.nextCursor;
       h.autoCd = (h.def.auto ?? 2) + (res.wrapped ? h.def.recharge : 0);
