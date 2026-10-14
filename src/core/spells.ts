@@ -67,6 +67,8 @@ export interface ProjectileStats {
   knock: number;
   /** 消えるとき（当たる・壁・時間切れ）に、この数に割れて飛び散る。 */
   split: number;
+  /** 召喚: 同時に出せる数（★で＋1ずつ）。 */
+  limit?: number;
 }
 
 /**
@@ -189,12 +191,12 @@ export const SPELLS: Record<string, SpellDef> = {
   friend: {
     id: "friend", name: "友達猫", kind: "attack", mana: 40, glyph: "猫", color: "#868e96", limit: 2,
     desc: "友達の猫を呼ぶ。近くの虫を追いかけてひっかく。修飾・属性は友達猫の攻撃にかかる",
-    projectile: base({ damage: 4, speed: 5, radius: 0.34, life: 15, motion: "summon", reach: 0.85, hitEvery: 0.6, spread: 0, color: "#ced4da", tech: "friend" }),
+    projectile: base({ limit: 2, damage: 4, speed: 5, radius: 0.34, life: 15, motion: "summon", reach: 0.85, hitEvery: 0.6, spread: 0, color: "#ced4da", tech: "friend" }),
   },
   roomba: {
     id: "roomba", name: "ルンバ", kind: "attack", mana: 35, glyph: "掃", color: "#495057", limit: 1,
     desc: "お掃除ロボを呼ぶ。部屋を走り回って壁ではね返り、ぶつかった虫を吸いこむ",
-    projectile: base({ damage: 4, speed: 3.4, radius: 0.55, life: 15, motion: "summon", hits: 99, hitEvery: 0.5, knock: 2, spread: 0.6, color: "#adb5bd", tech: "roomba" }),
+    projectile: base({ limit: 1, damage: 4, speed: 3.4, radius: 0.55, life: 15, motion: "summon", hits: 99, hitEvery: 0.5, knock: 2, spread: 0.6, color: "#adb5bd", tech: "roomba" }),
   },
   // ---- 飼い主が買ってきた物シリーズ ----
   mizudeppo: {
@@ -422,7 +424,7 @@ export function spellStats(def: SpellDef): [string, string][] {
     if (p.motion === "ring") out.push(["輪の広さ", `半径${p.reach}`]);
     if (p.motion === "melee") out.push(["とどく距離", `${p.reach}マス`]);
     if (p.motion === "trap") out.push(["置いておく", `${p.life}秒`]);
-    if (p.motion === "summon") { out.push(["出ている時間", `${p.life}秒`]); out.push(["攻撃の間隔", `${p.hitEvery}秒`]); out.push(["呼べる数", `${def.limit ?? 1}（超えると古い子が帰る）`]); }
+    if (p.motion === "summon") { out.push(["出ている時間", `${p.life}秒`]); out.push(["攻撃の間隔", `${p.hitEvery}秒`]); out.push(["呼べる数", `${def.limit ?? 1}（★で＋1。超えると古い子が帰る）`]); }
     if (p.explode) out.push(["範囲", `半径${p.explode}`]);
     if (p.slow) out.push(["すくみ", `${p.slow}秒`]);
     if (p.pierce) out.push(["貫通", `${p.pierce}匹`]);
@@ -489,6 +491,7 @@ export function spellDef(id: string): SpellDef {
     d.modifier = m;
   }
   if (b.kind !== "attack") d.mana = Math.max(1, Math.round(b.mana * 0.7 ** n));
+  if (b.limit) { d.limit = b.limit + n; d.projectile = { ...d.projectile!, limit: d.limit }; }   // 召喚は鍛えるほど呼べる数が増える
   starred.set(id, d);
   return d;
 }
