@@ -93,12 +93,28 @@ describe("planCast", () => {
     expect(s.explode).toBeGreaterThan(0);
   });
 
-  it("やる気不足なら止まり、使ったのは足りた分だけ", () => {
+  it("やる気不足なら、まとまりごと出さずに待つ（必要なやる気を返す）", () => {
     const t = toy(["double", "claw", "hairball"]);
     const a = planCast(t, 0, SPELLS.double.mana + SPELLS.claw.mana);
     expect(a.fizzled).toBe(true);
+    expect(a.shots).toHaveLength(0);
+    expect(a.manaUsed).toBe(0);
+    expect(a.nextCursor).toBe(0);
+    expect(a.need).toBe(SPELLS.double.mana + SPELLS.claw.mana + SPELLS.hairball.mana);
+  });
+
+  it("つづけての右の技は、やる気不足でも単体で出ない", () => {
+    const t = toy(["claw", "chain", "swing"]);
+    const a = planCast(t, 0, SPELLS.claw.mana + SPELLS.chain.mana);   // ぶんぶんの分が足りない
+    expect(a.shots).toHaveLength(0);
+    const b = planCast(t, 0, 999);
+    expect(b.shots).toHaveLength(1); expect(b.shots[0].payload).toHaveLength(1);
+  });
+
+  it("whole=false なら出せるところまで出す（最大でも足りないまとまり用）", () => {
+    const t = toy(["double", "claw", "hairball"]);
+    const a = planCast(t, 0, SPELLS.double.mana + SPELLS.claw.mana, t.slots, false);
     expect(a.shots).toHaveLength(1);
-    expect(a.manaUsed).toBe(SPELLS.double.mana + SPELLS.claw.mana);
   });
 
   it("空スロットは飛ばし、技のない修飾は捨てる", () => {

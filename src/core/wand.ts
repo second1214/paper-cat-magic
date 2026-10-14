@@ -42,6 +42,8 @@ export interface Shot {
 
 export interface CastResult {
   shots: Shot[];
+  /** やる気が足りずに出せなかったとき、このまとまりに要るやる気。 */
+  need?: number;
   manaUsed: number;
   nextCursor: number;
   /** 今回読んだスロットの範囲 [start, end)。 */
@@ -104,7 +106,7 @@ function fuse(a: ProjectileStats, b: ProjectileStats): ProjectileStats {
  * - [A][ふたつ持ち][B]: A と B を同時に扱い、1発にまとめる。
  * - スロットの端に達したら打ち切って wrapped を立てる。
  */
-export function planCast(toy: ToyDef, cursor: number, mana: number, slots: (string | null)[] = toy.slots): CastResult {
+export function planCast(toy: ToyDef, cursor: number, mana: number, slots: (string | null)[] = toy.slots, whole = true): CastResult {
   const start = cursor;
   let i = cursor;
   let used = 0;
@@ -177,6 +179,11 @@ export function planCast(toy: ToyDef, cursor: number, mana: number, slots: (stri
   }
 
   const shots = drawOne([]) ?? [];
+  // やる気が足りないときは、まとまりの途中で切らない（つづけての右だけが後で単体で出る、などを防ぐ）。たまるまで待つ
+  if (whole && fizzled) {
+    const need = planCast(toy, cursor, Infinity, slots, false).manaUsed;
+    return { shots: [], manaUsed: 0, nextCursor: cursor, start, end: cursor, wrapped: false, fizzled: true, delayAdd: 0, rechargeAdd: 0, need };
+  }
   if (nextIndex() >= slots.length) wrapped = true;
   return { shots, manaUsed: used, nextCursor: wrapped ? 0 : i, start, end: i, wrapped, fizzled, delayAdd, rechargeAdd };
 }
