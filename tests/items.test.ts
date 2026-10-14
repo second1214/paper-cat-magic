@@ -13,8 +13,8 @@ describe("装備セット", () => {
     const one = totalBonus([], { hat: G("mikan"), body: null, collar: null });
     const two = totalBonus([], { hat: G("mikan"), body: G("suika"), collar: null });
     const three = totalBonus([], { hat: G("mikan"), body: G("suika"), collar: G("cherry") });
-    expect(one.maxHp).toBe(2);
-    expect(two.maxHp).toBe(4);              // みかん＋2つセット
+    expect(one.maxHp).toBe(20);
+    expect(two.maxHp).toBe(40);             // みかん＋2つセット
     expect(three.iframes).toBeCloseTo(0.5); // 3つセット
     expect(totalBonus([], { hat: G("halo"), body: G("aloha"), collar: G("nametag") }).dashPower).toBe(0);
   });
@@ -86,7 +86,7 @@ describe("装備のレアリティ", () => {
   it("レアリティが上がるほど効果が大きく、エピック以上は特殊効果がつく", () => {
     expect(gearBonus(G("aloha", 0)).speedMul).toBeCloseTo(1.05);
     expect(gearBonus(G("aloha", 2)).speedMul).toBeCloseTo(1.1);
-    expect(gearBonus(G("mikan", 3)).maxHp).toBe(6);
+    expect(gearBonus(G("mikan", 3)).maxHp).toBe(52);
     let r = 0; const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
     for (let k = 0; k < 200; k++) { const g = rollGear("lei", rand, 3, 3); expect(g.fx.length).toBe(RARITY[g.rar].fx); expect(new Set(g.fx).size).toBe(g.fx.length); }
   });
@@ -111,10 +111,21 @@ describe("難易度・季節・ねこの成長", () => {
   });
   it("ねこの成長が効き、にぼしは難易度で増える", () => {
     const w = new World(2, { difficulty: 1, meta: { ...NO_META, hp: 2, atk: 3, gift: 1 } });
-    expect(w.player.maxHp).toBe(6 + 4);
-    expect(w.bonus.dmgMul).toBeCloseTo(1.18);
+    expect(w.player.maxHp).toBe(80 + 20);
+    expect(w.bonus.dmgMul).toBeCloseTo(1.15);
     expect(w.relics.length).toBe(1);
     expect(totalBonus([], { hat: null, body: null, collar: null }, metaBonus(NO_META))).toEqual(NO_BONUS);
     expect(runReward(10, 2, false, 2)).toBeGreaterThan(runReward(10, 2, false, 1));
+  });
+});
+
+describe("レリックを重ねる", () => {
+  it("強くなる倍率は足し算、減らす倍率は掛け算、確率は上限つき", () => {
+    const b = (ids: string[]) => totalBonus(ids, { hat: null, body: null, collar: null });
+    expect(b(["tower", "tower", "tower"]).dmgMul).toBeCloseTo(1.45);
+    expect(b(["kyujiki", "kyujiki", "kyujiki", "kyujiki", "kyujiki"]).manaCostMul).toBeCloseTo(0.4);   // 下限
+    expect(b(Array(5).fill("biidama")).crit).toBeLessThanOrEqual(0.6);
+    expect(b(Array(5).fill("maneki")).choiceAdd).toBe(2);
+    expect(b(["oyatsu", "oyatsu"]).maxHp).toBe(40);
   });
 });

@@ -5,7 +5,7 @@ import { L } from "../i18n";
 
 /** すべての効果の合計。倍率は 1、加算は 0 が「効果なし」。 */
 export interface Bonus {
-  maxHp: number; // 最大HP（半ハート単位。2 で ♥1つ）
+  maxHp: number; // 最大HP（数値）
   dmgMul: number; // 技の攻撃力
   manaMax: number; // やる気の最大（全部のおもちゃ）
   regenMul: number; // やる気の回復
@@ -19,12 +19,12 @@ export interface Bonus {
   zapAdd: number; // ビリビリが飛び移る数
   summonAdd: number; // 召喚の上限
   killMana: number; // 虫を倒すたびのやる気
-  clearHeal: number; // 部屋を片付けるたびの回復（半ハート）
+  clearHeal: number; // 部屋を片付けるたびの回復（HP）
   choiceAdd: number; // ごほうびの選択肢
   dashPower: number; // ダッシュのあと攻撃力1.5倍になる秒数
   // 特殊効果
   crit: number; // 会心（攻撃力2倍）の確率
-  killHeal: number; // 虫を倒したとき♥0.5回復する確率
+  killHeal: number; // 虫を倒したとき HP が KILL_HEAL 回復する確率
   killBoom: number; // 倒した虫がはじける（攻撃力）
   thorns: number; // 当たったとき、まわりの虫へ反撃（攻撃力）
   shield: number; // 部屋に入るたびのバリア（回数）
@@ -33,14 +33,18 @@ export interface Bonus {
   luck: number; // 装備のレアリティが上がりやすい
   manaCostMul: number; // 技のやる気の消費
   castMul: number; // 振る間隔・休けい
+  hurtMul: number; // 受けるダメージ
 }
 
 export const NO_BONUS: Bonus = {
   maxHp: 0, dmgMul: 1, manaMax: 0, regenMul: 1, stillRegen: 0, speedMul: 1, dashCdMul: 1, iframes: 0, guard: 0,
   rangeMul: 1, elemMul: 1, zapAdd: 0, summonAdd: 0, killMana: 0, clearHeal: 0, choiceAdd: 0, dashPower: 0,
   crit: 0, killHeal: 0, killBoom: 0, thorns: 0, shield: 0, extraShot: 0, moveMana: 0, luck: 0,
-  manaCostMul: 1, castMul: 1,
+  manaCostMul: 1, castMul: 1, hurtMul: 1,
 };
+
+/** 虫を倒して回復するときの量。 */
+export const KILL_HEAL = 5;
 
 export type Part = Partial<Bonus>;
 
@@ -55,7 +59,7 @@ export function addBonus(a: Bonus, b: Part): Bonus {
 export function bonusRows(b: Part): [string, string][] {
   const pct = (m: number) => `${m > 1 ? "＋" : "−"}${Math.round(Math.abs(m - 1) * 100)}%`;
   const rows: [string, string][] = [];
-  if (b.maxHp) rows.push([L("最大HP", "Max HP"), `＋♥${b.maxHp / 2}`]);
+  if (b.maxHp) rows.push([L("最大HP", "Max HP"), `${b.maxHp > 0 ? "＋" : "−"}${Math.abs(b.maxHp)}`]);
   if (b.dmgMul) rows.push([L("攻撃力", "Damage"), pct(b.dmgMul)]);
   if (b.manaMax) rows.push([L("やる気 最大", "Max Energy"), `＋${b.manaMax}`]);
   if (b.regenMul) rows.push([L("やる気 回復", "Energy Regen"), pct(b.regenMul)]);
@@ -69,11 +73,11 @@ export function bonusRows(b: Part): [string, string][] {
   if (b.zapAdd) rows.push([L("ビリビリの飛び移り", "Zap Chains"), L(`＋${b.zapAdd}匹`, `＋${b.zapAdd}`)]);
   if (b.summonAdd) rows.push([L("召喚の上限", "Summon Limit"), `＋${b.summonAdd}`]);
   if (b.killMana) rows.push([L("虫を倒すと", "On Kill"), L(`やる気＋${b.killMana}`, `Energy ＋${b.killMana}`)]);
-  if (b.clearHeal) rows.push([L("部屋を片付けると", "Room Cleared"), L(`♥${b.clearHeal / 2}回復`, `Heal ♥${b.clearHeal / 2}`)]);
+  if (b.clearHeal) rows.push([L("部屋を片付けると", "Room Cleared"), L(`HP ${b.clearHeal} 回復`, `Heal ${b.clearHeal} HP`)]);
   if (b.choiceAdd) rows.push([L("ごほうびの選択肢", "Reward Choices"), `＋${b.choiceAdd}`]);
   if (b.dashPower) rows.push([L("ダッシュのあと", "After Dash"), L(`${b.dashPower}秒 攻撃力1.5倍`, `Damage ×1.5 for ${b.dashPower}s`)]);
   if (b.crit) rows.push([L("会心（2倍）", "Crit (×2)"), `${Math.round(b.crit * 100)}%`]);
-  if (b.killHeal) rows.push([L("倒すと♥0.5回復", "Heal ♥0.5 on Kill"), `${Math.round(b.killHeal * 100)}%`]);
+  if (b.killHeal) rows.push([L(`倒すとHP${KILL_HEAL}回復`, `Heal ${KILL_HEAL} HP on Kill`), `${Math.round(b.killHeal * 100)}%`]);
   if (b.killBoom) rows.push([L("倒した虫がはじける", "Bugs Pop on Kill"), L(`攻撃力${Math.round(b.killBoom)}`, `Damage ${Math.round(b.killBoom)}`)]);
   if (b.thorns) rows.push([L("当たると反撃", "Counter When Hit"), L(`攻撃力${Math.round(b.thorns)}`, `Damage ${Math.round(b.thorns)}`)]);
   if (b.shield) rows.push([L("部屋ごとのバリア", "Shield per Room"), L(`${b.shield}回`, `×${b.shield}`)]);
@@ -82,6 +86,7 @@ export function bonusRows(b: Part): [string, string][] {
   if (b.luck) rows.push([L("レア装備が出やすい", "Rare Gear Luck"), `＋${b.luck}`]);
   if (b.manaCostMul) rows.push([L("技のやる気", "Move Energy Cost"), pct(b.manaCostMul)]);
   if (b.castMul) rows.push([L("振る間隔・休けい", "Cast Delay / Resting"), pct(b.castMul)]);
+  if (b.hurtMul) rows.push([L("受けるダメージ", "Damage Taken"), pct(b.hurtMul)]);
   return rows;
 }
 
@@ -89,11 +94,11 @@ export function bonusRows(b: Part): [string, string][] {
 export interface RelicDef { id: string; name: string; desc: string; bonus: Part }
 
 export const RELICS: Record<string, RelicDef> = {
-  oyatsu: { id: "oyatsu", name: L("ママの手作りおやつ", "Mama's Homemade Treat"), desc: L("ママが焼いたおやつ。元気が出る", "A treat Mama baked. Gives you pep"), bonus: { maxHp: 2 } },
+  oyatsu: { id: "oyatsu", name: L("ママの手作りおやつ", "Mama's Homemade Treat"), desc: L("ママが焼いたおやつ。元気が出る", "A treat Mama baked. Gives you pep"), bonus: { maxHp: 20 } },
   milk: { id: "milk", name: L("猫用ミルク", "Cat Milk"), desc: L("やる気がよく戻る", "Energy comes back faster"), bonus: { regenMul: 1.25 } },
   moufu: { id: "moufu", name: L("お気に入りの毛布", "Favorite Blanket"), desc: L("当たったあと、少し長くむてき", "Stay invincible a bit longer after a hit"), bonus: { iframes: 0.5 } },
   cream: { id: "cream", name: L("肉球クリーム", "Paw Cream"), desc: L("ダッシュがすぐにまた使える", "Dash recharges quickly"), bonus: { dashCdMul: 0.6 } },
-  nekokusa: { id: "nekokusa", name: L("猫草", "Cat Grass"), desc: L("部屋を片付けるたびに少し回復", "Heal a little each time you clear a room"), bonus: { clearHeal: 1 } },
+  nekokusa: { id: "nekokusa", name: L("猫草", "Cat Grass"), desc: L("部屋を片付けるたびに少し回復", "Heal a little each time you clear a room"), bonus: { clearHeal: 8 } },
   tower: { id: "tower", name: L("キャットタワー", "Cat Tower"), desc: L("高い所で鍛えた。技がすべて強くなる", "Trained up high. All moves get stronger"), bonus: { dmgMul: 1.15 } },
   mushikago: { id: "mushikago", name: L("虫かご", "Bug Cage"), desc: L("虫を倒すたびにやる気が戻る", "Regain Energy with every bug defeated"), bonus: { killMana: 6 } },
   hige: { id: "hige", name: L("ピンとしたひげ", "Perky Whiskers"), desc: L("飛ぶ技・毛糸がより遠くまで届く", "Flying moves and yarn reach farther"), bonus: { rangeMul: 1.3 } },
@@ -146,11 +151,11 @@ export const GEAR_FX: Record<string, { name: string; bonus: Part }> = {
 };
 export const GEAR_FX_IDS = Object.keys(GEAR_FX);
 
-/** 効果をレアリティの倍率で強くする（倍率は1からの差を、加算はそのまま掛ける。HPは♥単位）。 */
+/** 効果をレアリティの倍率で強くする（倍率は1からの差を、加算はそのまま掛ける。HP・回復・バリアは整数）。 */
 export function scaleBonus(b: Part, k: number): Part {
   const out: Part = {};
   for (const [key, v] of Object.entries(b) as [keyof Bonus, number][]) {
-    out[key] = key.endsWith("Mul") ? 1 + (v - 1) * k : key === "maxHp" || key === "shield" || key === "clearHeal" ? Math.max(v, Math.round((v * k) / 2) * 2 || v) : +(v * k).toFixed(2);
+    out[key] = key.endsWith("Mul") ? 1 + (v - 1) * k : key === "maxHp" || key === "shield" || key === "clearHeal" ? Math.max(v, Math.round(v * k)) : +(v * k).toFixed(2);
   }
   if (b.shield) out.shield = b.shield;
   return out;
@@ -183,8 +188,8 @@ export interface SetDef { id: string; name: string; color: string; two: Part; th
 
 export const SETS: Record<string, SetDef> = {
   hawaii: { id: "hawaii", name: L("ハワイのお土産セット", "Hawaii Souvenir Set"), color: "#f76707", two: { regenMul: 1.2 }, three: { stillRegen: 1 } },
-  gacha: { id: "gacha", name: L("ガチャガチャの天使セット", "Capsule Toy Angel Set"), color: "#e64980", two: { guard: 0.1 }, three: { clearHeal: 2 } },
-  fruit: { id: "fruit", name: L("くだものの被り物セット", "Fruit Hat Set"), color: "#f59f00", two: { maxHp: 2 }, three: { iframes: 0.5 } },
+  gacha: { id: "gacha", name: L("ガチャガチャの天使セット", "Capsule Toy Angel Set"), color: "#e64980", two: { guard: 0.1 }, three: { clearHeal: 15 } },
+  fruit: { id: "fruit", name: L("くだものの被り物セット", "Fruit Hat Set"), color: "#f59f00", two: { maxHp: 20 }, three: { iframes: 0.5 } },
   knit: { id: "knit", name: L("ママの手編みセット", "Mama's Knit Set"), color: "#2f9e44", two: { dmgMul: 1.1 }, three: { dashPower: 1.5 } },
   hyakkin: { id: "hyakkin", name: L("100円ショップセット", "Dollar Store Set"), color: "#12b886", two: { crit: 0.1 }, three: { extraShot: 0.15 } },
   petshop: { id: "petshop", name: L("ペットショップの新作セット", "Pet Shop New Arrivals Set"), color: "#4c6ef5", two: { moveMana: 4 }, three: { shield: 1 } },
@@ -196,14 +201,14 @@ export const GEAR: Record<string, GearDef> = {
   lei: { id: "lei", name: L("フラのレイ", "Hula Lei"), slot: "collar", set: "hawaii", desc: L("造花のレイ。ちょっとかじった跡がある", "A fake-flower lei. Slightly chewed"), bonus: { manaMax: 10 } },
   halo: { id: "halo", name: L("天使の輪カチューシャ", "Angel Halo Headband"), slot: "hat", set: "gacha", desc: L("ガチャガチャで3回目に出た", "Came out on the 3rd capsule try"), bonus: { iframes: 0.2 } },
   wings: { id: "wings", name: L("天使の羽", "Angel Wings"), slot: "body", set: "gacha", desc: L("ガチャガチャの大当たり。飛べない", "The capsule toy jackpot. Can't fly"), bonus: { dashCdMul: 0.85 } },
-  heartCollar: { id: "heartCollar", name: L("光るハートの首輪", "Glowing Heart Collar"), slot: "collar", set: "gacha", desc: L("ボタン電池で7色に光る", "Glows in 7 colors on a coin battery"), bonus: { maxHp: 2 } },
-  mikan: { id: "mikan", name: L("みかんの被り物", "Orange Hat"), slot: "hat", set: "fruit", desc: L("SNSで流行っていたやつ。顔だけ出る", "That one trending online. Only your face pokes out"), bonus: { maxHp: 2 } },
-  suika: { id: "suika", name: L("スイカ柄のTシャツ", "Watermelon T-Shirt"), slot: "body", set: "fruit", desc: L("夏祭りで買った。背中に種のもよう", "Bought at a summer festival. Seeds on the back"), bonus: { clearHeal: 1 } },
+  heartCollar: { id: "heartCollar", name: L("光るハートの首輪", "Glowing Heart Collar"), slot: "collar", set: "gacha", desc: L("ボタン電池で7色に光る", "Glows in 7 colors on a coin battery"), bonus: { maxHp: 20 } },
+  mikan: { id: "mikan", name: L("みかんの被り物", "Orange Hat"), slot: "hat", set: "fruit", desc: L("SNSで流行っていたやつ。顔だけ出る", "That one trending online. Only your face pokes out"), bonus: { maxHp: 20 } },
+  suika: { id: "suika", name: L("スイカ柄のTシャツ", "Watermelon T-Shirt"), slot: "body", set: "fruit", desc: L("夏祭りで買った。背中に種のもよう", "Bought at a summer festival. Seeds on the back"), bonus: { clearHeal: 8 } },
   cherry: { id: "cherry", name: L("さくらんぼの首輪", "Cherry Collar"), slot: "collar", set: "fruit", desc: L("鈴の代わりにさくらんぼが2つ", "Two cherries instead of a bell"), bonus: { regenMul: 1.1 } },
   beanie: { id: "beanie", name: L("毛糸の帽子", "Knit Cap"), slot: "hat", set: "knit", desc: L("耳の穴の位置がちょっとずれている", "The ear holes are a bit off"), bonus: { dmgMul: 1.05 } },
   sweater: { id: "sweater", name: L("手編みのセーター", "Hand-Knit Sweater"), slot: "body", set: "knit", desc: L("ママの力作。猫の顔のもよう入り", "Mama's masterpiece. Has a cat face on it"), bonus: { iframes: 0.2 } },
   sunglass: { id: "sunglass", name: L("おもちゃのサングラス", "Toy Sunglasses"), slot: "hat", set: "hyakkin", desc: L("レンズがハート形。すぐずり落ちる", "Heart-shaped lenses. Keep slipping off"), bonus: { dmgMul: 1.05 } },
-  haramaki: { id: "haramaki", name: L("毛糸の腹巻き", "Knit Belly Warmer"), slot: "body", set: "hyakkin", desc: L("「おなかを冷やさないように」と言われた", "\"Don't let your tummy get cold,\" they said"), bonus: { maxHp: 2 } },
+  haramaki: { id: "haramaki", name: L("毛糸の腹巻き", "Knit Belly Warmer"), slot: "body", set: "hyakkin", desc: L("「おなかを冷やさないように」と言われた", "\"Don't let your tummy get cold,\" they said"), bonus: { maxHp: 20 } },
   bowtie: { id: "bowtie", name: L("蝶ネクタイ", "Bow Tie"), slot: "collar", set: "hyakkin", desc: L("なぜか金色。結婚式帰りっぽい", "Gold, for some reason. Looks fresh from a wedding"), bonus: { regenMul: 1.1 } },
   usamimi: { id: "usamimi", name: L("うさ耳フード", "Bunny Ear Hood"), slot: "hat", set: "petshop", desc: L("猫なのにうさぎ。店員さんのおすすめ", "A cat dressed as a bunny. Staff pick"), bonus: { speedMul: 1.05 } },
   raincoat: { id: "raincoat", name: L("黄色いレインコート", "Yellow Raincoat"), slot: "body", set: "petshop", desc: L("雨の日は外に出ないのに買った", "Bought it, though you never go out in the rain"), bonus: { iframes: 0.2 } },
@@ -222,13 +227,44 @@ export function setCounts(gear: Gear): Record<string, number> {
 }
 
 /** レリックと装備（セットボーナス込み）の合計。 */
+/** 同じレリックは何個まで重ねられるか。 */
+export const RELIC_STACK = 5;
+const PROB = new Set<keyof Bonus>(["crit", "guard", "killHeal", "extraShot"]);
+/**
+ * 同じレリックを n 個重ねた効果。強くなる倍率は足し算（＋15%が2つで＋30%）、減らす倍率は掛け算、
+ * 確率は「どれか1つが当たる」、それ以外はそのまま n 倍。
+ */
+export function stackPart(b: Part, n: number): Part {
+  if (n <= 1) return b;
+  const out: Part = {};
+  for (const [k, v] of Object.entries(b) as [keyof Bonus, number][]) {
+    out[k] = k.endsWith("Mul") ? (v >= 1 ? 1 + (v - 1) * n : v ** n) : PROB.has(k) ? +(1 - (1 - v) ** n).toFixed(3) : v * n;
+  }
+  return out;
+}
+
+/** 重ねすぎて壊れないための上限・下限。 */
+const CAPS: Partial<Record<keyof Bonus, [number, number]>> = {
+  crit: [0, 0.6], guard: [0, 0.5], killHeal: [0, 0.6], extraShot: [0, 0.75], choiceAdd: [-9, 2], iframes: [-9, 1.5], shield: [0, 3],
+  speedMul: [0, 1.45], manaCostMul: [0.4, 9], castMul: [0.45, 9], dashCdMul: [0.3, 9], summonAdd: [-9, 4], zapAdd: [-9, 5],
+  hurtMul: [0.4, 9], stillRegen: [0, 3], rangeMul: [0, 2.2], elemMul: [0, 3],
+};
+export function capBonus(b: Bonus): Bonus {
+  const out = { ...b };
+  for (const [k, [lo, hi]] of Object.entries(CAPS) as [keyof Bonus, [number, number]][]) out[k] = Math.min(hi, Math.max(lo, out[k]));
+  return out;
+}
+
+/** 持っているレリックの数（id → 個数）。 */
+export const relicCounts = (relics: string[]) => relics.reduce<Record<string, number>>((m, r) => { m[r] = (m[r] ?? 0) + 1; return m; }, {});
+
 export function totalBonus(relics: string[], gear: Gear, extra: Part = {}): Bonus {
   let b = addBonus(NO_BONUS, extra);
-  for (const r of relics) b = addBonus(b, RELICS[r].bonus);
+  for (const [r, n] of Object.entries(relicCounts(relics))) b = addBonus(b, stackPart(RELICS[r].bonus, n));
   for (const s of GEAR_SLOTS) { const g = gear[s]; if (g) b = addBonus(b, gearBonus(g)); }
   for (const [set, n] of Object.entries(setCounts(gear))) {
     if (n >= 2) b = addBonus(b, SETS[set].two);
     if (n >= 3) b = addBonus(b, SETS[set].three);
   }
-  return b;
+  return capBonus(b);
 }

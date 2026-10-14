@@ -11,7 +11,7 @@ export const CURSES: Record<string, CurseDef> = {
   mure: { id: "mure", name: L("虫の群れ", "Bug Swarm"), desc: L("1回に出てくる虫 ＋1匹", "＋1 bug per wave") },
   neage: { id: "neage", name: L("ママがきびしい", "Strict Mama"), desc: L("ママのところでカリカリが1.5倍いる", "Mama's Repair Corner costs 1.5x kibble") },
   nemui: { id: "nemui", name: L("ねむい", "Sleepy"), desc: L("やる気の回復 −15%", "Energy Regen −15%"), bonus: { regenMul: 0.85 } },
-  kaze: { id: "kaze", name: L("かぜぎみ", "Sniffles"), desc: L("最大HP −♥1", "Max HP −♥1"), bonus: { maxHp: -2 } },
+  kaze: { id: "kaze", name: L("かぜぎみ", "Sniffles"), desc: L("最大HP −20", "Max HP −20"), bonus: { maxHp: -20 } },
 };
 export const CURSE_IDS = Object.keys(CURSES);
 
