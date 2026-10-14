@@ -8,6 +8,7 @@ import { MAX_STARS, rarOf, SPELL_IDS, SPELLS, spellDef, starsOf, type Element, t
 import { CURSE_IDS, CURSES, curseBonus } from "../core/curses";
 import { scoreOf } from "../core/score";
 import { makeRng, type Rng } from "../core/rng";
+import { L, L as tr } from "../i18n"; // tr: 部屋の形を L と呼んでいる関数の中で使う
 import { addBonus, GEAR, GEAR_IDS, NO_BONUS, RELIC_IDS, RELICS, rollGear, totalBonus, type Bonus, type Gear, type GearItem, type Rarity } from "../core/items";
 import { DEFAULT_RUN, DIFFS, favSlots, metaBonus, type RunOptions } from "../core/meta";
 import {
@@ -26,26 +27,26 @@ export type EnemyType = "roach" | "mosquito" | "spider" | "hornet" | "stinkbug" 
 
 /** 体力・半径・速さ・飛ぶか・ボスか・名前。 */
 export const ENEMY: Record<EnemyType, { hp: number; r: number; speed: number; fly?: boolean; boss?: boolean; kid?: boolean; dummy?: boolean; name: string }> = {
-  roach: { hp: 16, r: 0.4, speed: 3.0, name: "ゴキブリ" },
-  mosquito: { hp: 9, r: 0.3, speed: 2.8, fly: true, name: "蚊" },
-  spider: { hp: 14, r: 0.42, speed: 2.2, name: "クモ" },
-  stinkbug: { hp: 18, r: 0.42, speed: 1.6, name: "カメムシ" },
-  camel: { hp: 14, r: 0.4, speed: 1.0, name: "カマドウマ" },
-  ant: { hp: 6, r: 0.28, speed: 3.4, name: "アリ" },
-  caterpillar: { hp: 26, r: 0.45, speed: 1.1, name: "毛虫" },
-  hornet: { hp: 380, r: 1.0, speed: 1.2, fly: true, boss: true, name: "スズメバチ" },
-  stinkKing: { hp: 330, r: 1.05, speed: 1.0, boss: true, name: "カメムシ大王" },
-  camelKing: { hp: 340, r: 1.0, speed: 1.0, boss: true, name: "カマドウマ親分" },
-  queen: { hp: 320, r: 1.05, speed: 0.9, boss: true, name: "毛虫の女王" },
-  mama: { hp: 1e9, r: 0.7, speed: 1.6, boss: true, name: "ママ" },   // さいご: 倒せない。猫を病院へ連れて行こうと近づいてくる
+  roach: { hp: 16, r: 0.4, speed: 3.0, name: L("ゴキブリ", "Roach") },
+  mosquito: { hp: 9, r: 0.3, speed: 2.8, fly: true, name: L("蚊", "Mosquito") },
+  spider: { hp: 14, r: 0.42, speed: 2.2, name: L("クモ", "Spider") },
+  stinkbug: { hp: 18, r: 0.42, speed: 1.6, name: L("カメムシ", "Stinkbug") },
+  camel: { hp: 14, r: 0.4, speed: 1.0, name: L("カマドウマ", "Cave Cricket") },
+  ant: { hp: 6, r: 0.28, speed: 3.4, name: L("アリ", "Ant") },
+  caterpillar: { hp: 26, r: 0.45, speed: 1.1, name: L("毛虫", "Caterpillar") },
+  hornet: { hp: 380, r: 1.0, speed: 1.2, fly: true, boss: true, name: L("スズメバチ", "Giant Hornet") },
+  stinkKing: { hp: 330, r: 1.05, speed: 1.0, boss: true, name: L("カメムシ大王", "Stinkbug King") },
+  camelKing: { hp: 340, r: 1.0, speed: 1.0, boss: true, name: L("カマドウマ親分", "Cricket Boss") },
+  queen: { hp: 320, r: 1.05, speed: 0.9, boss: true, name: L("毛虫の女王", "Caterpillar Queen") },
+  mama: { hp: 1e9, r: 0.7, speed: 1.6, boss: true, name: L("ママ", "Mama") },   // さいご: 倒せない。猫を病院へ連れて行こうと近づいてくる
   // ときどきリビングに来る子どもたち。猫と遊びたくて追いかけてくるが、猫は必死に逃げる。
   // 攻撃は効かない（虫ではない）。つかまると数秒だっこでもみくちゃにされて動けず、♥が減る
-  boy: { hp: 1e9, r: 0.5, speed: 2.7, kid: true, name: "お兄ちゃん（6さい）" },
-  girl: { hp: 1e9, r: 0.45, speed: 1.6, kid: true, name: "妹（3さい）" },
+  boy: { hp: 1e9, r: 0.5, speed: 2.7, kid: true, name: L("お兄ちゃん（6さい）", "Big Bro (6)") },
+  girl: { hp: 1e9, r: 0.45, speed: 1.6, kid: true, name: L("妹（3さい）", "Little Sis (3)") },
   // まれにリビングで寝ころんでいる大好きなパパ（攻撃は当たらない）。お腹でじっとしていると、最大HP・やる気の最大がアップ。たまに猫吸いされて失敗
-  papa: { hp: 1e9, r: 0.9, speed: 0, kid: true, name: "パパ" },
+  papa: { hp: 1e9, r: 0.9, speed: 0, kid: true, name: L("パパ", "Papa") },
   // トレーニング部屋の的。動かず、攻撃もせず、倒れない（受けたダメージを数えるだけ）
-  shrimp: { hp: 1e9, r: 0.55, speed: 0, dummy: true, name: "エビのけりぐるみ" },
+  shrimp: { hp: 1e9, r: 0.55, speed: 0, dummy: true, name: L("エビのけりぐるみ", "Shrimp Kicker Toy") },
 };
 export const isDummy = (t: EnemyType) => !!ENEMY[t].dummy;
 export const isKid = (t: EnemyType) => !!ENEMY[t].kid;
@@ -55,7 +56,7 @@ export const PAPA_NAP = 2.5;
 const HUG: Partial<Record<EnemyType, number>> = { boy: 2.0, girl: 2.8 };
 const REST: Partial<Record<EnemyType, number>> = { boy: 2.5, girl: 3.5 };
 /** 子どもの声。 */
-const KID_CALL: Partial<Record<EnemyType, string>> = { boy: "お兄ちゃん「ねこちゃん、あそぼー！」", girl: "妹「にゃんにゃ、まってー！」" };
+const KID_CALL: Partial<Record<EnemyType, string>> = { boy: L("お兄ちゃん「ねこちゃん、あそぼー！」", "Big Bro: \"Kitty, let's play!\""), girl: L("妹「にゃんにゃ、まってー！」", "Little Sis: \"Kitty, wait up!\"") };
 const isBoss = (t: EnemyType) => !!ENEMY[t].boss;
 const isFly = (t: EnemyType) => !!ENEMY[t].fly;
 
@@ -101,10 +102,10 @@ export interface Enemy {
 /** 強い虫: 体が大きく体力3倍、カリカリをたくさん落とす。性質は1つ。 */
 export type Elite = "fast" | "split" | "burst" | "hard";
 export const ELITE_INFO: Record<Elite, { name: string; color: string }> = {
-  fast: { name: "すばしこい", color: "#4dabf7" },
-  split: { name: "分かれる", color: "#69db7c" },
-  burst: { name: "はじける", color: "#ff922b" },
-  hard: { name: "かたい", color: "#adb5bd" },
+  fast: { name: L("すばしこい", "Speedy"), color: "#4dabf7" },
+  split: { name: L("分かれる", "Splitting"), color: "#69db7c" },
+  burst: { name: L("はじける", "Bursting"), color: "#ff922b" },
+  hard: { name: L("かたい", "Tough"), color: "#adb5bd" },
 };
 const ELITES = Object.keys(ELITE_INFO) as Elite[];
 
@@ -208,24 +209,24 @@ export type RewardKind = "hp" | "mp" | "spell" | "toy" | "relic" | "gear" | "sho
 /** 特別な部屋（虫が出ない部屋と、強い虫の部屋）。 */
 export const SPECIAL: RewardKind[] = ["treasure", "rest", "fusion", "challenge", "curse"];
 export const REWARD_INFO: Record<RewardKind, { icon: string; label: string; color: string }> = {
-  hp: { icon: "♥", label: "最大HP アップ", color: "#ff5f7e" },
-  mp: { icon: "⚡", label: "やる気 アップ", color: "#3fa7ff" },
-  spell: { icon: "★", label: "技・修飾をもらう", color: "#ffb52e" },
-  toy: { icon: "🧸", label: "おもちゃをもらう", color: "#c77dff" },
-  relic: { icon: "◆", label: "レリックをもらう", color: "#20c997" },
-  gear: { icon: "👒", label: "装備をもらう", color: "#f783ac" },
-  shop: { icon: "👩", label: "ママのところ（おねだり・お直し）", color: "#fab005" },
-  boss: { icon: "☠", label: "ボス", color: "#e03131" },
-  next: { icon: "➜", label: "次の季節へ", color: "#2f9e44" },
-  treasure: { icon: "🎁", label: "宝箱の部屋（虫なし）", color: "#f59f00" },
-  rest: { icon: "🛋", label: "ママのおひざ（虫なし・全回復）", color: "#ff8787" },
-  fusion: { icon: "🐾", label: "秘密の隠し場所（虫なし）", color: "#7048e8" },
-  challenge: { icon: "‼", label: "強い虫の部屋（ごほうび2倍）", color: "#c92a2a" },
-  curse: { icon: "☁", label: "あやしい箱（呪いと引きかえ）", color: "#5f3dc4" },
+  hp: { icon: "♥", label: L("最大HP アップ", "Max HP Up"), color: "#ff5f7e" },
+  mp: { icon: "⚡", label: L("やる気 アップ", "Energy Up"), color: "#3fa7ff" },
+  spell: { icon: "★", label: L("技・修飾をもらう", "Get a Move/Modifier"), color: "#ffb52e" },
+  toy: { icon: "🧸", label: L("おもちゃをもらう", "Get a Toy"), color: "#c77dff" },
+  relic: { icon: "◆", label: L("レリックをもらう", "Get a Charm"), color: "#20c997" },
+  gear: { icon: "👒", label: L("装備をもらう", "Get Gear"), color: "#f783ac" },
+  shop: { icon: "👩", label: L("ママのところ（おねだり・お直し）", "Mama's Repair Corner (beg & fix)"), color: "#fab005" },
+  boss: { icon: "☠", label: L("ボス", "Boss"), color: "#e03131" },
+  next: { icon: "➜", label: L("次の季節へ", "Next Season"), color: "#2f9e44" },
+  treasure: { icon: "🎁", label: L("宝箱の部屋（虫なし）", "Treasure Room (no bugs)"), color: "#f59f00" },
+  rest: { icon: "🛋", label: L("ママのおひざ（虫なし・全回復）", "Mama's Lap (no bugs, full heal)"), color: "#ff8787" },
+  fusion: { icon: "🐾", label: L("秘密の隠し場所（虫なし）", "Secret Stash (no bugs)"), color: "#7048e8" },
+  challenge: { icon: "‼", label: L("強い虫の部屋（ごほうび2倍）", "Elite Bug Room (2x rewards)"), color: "#c92a2a" },
+  curse: { icon: "☁", label: L("あやしい箱（呪いと引きかえ）", "Suspicious Box (for a curse)"), color: "#5f3dc4" },
 };
 /** 特別な部屋の置き物。 */
 export type AltarKind = "treasure" | "rest" | "fusion" | "curse" | "kotatsu";
-export const ALTAR_NAME: Record<AltarKind, string> = { treasure: "宝箱", rest: "ママのおひざ", fusion: "秘密の隠し場所", curse: "あやしい箱", kotatsu: "猫こたつ" };
+export const ALTAR_NAME: Record<AltarKind, string> = { treasure: L("宝箱", "Treasure Chest"), rest: L("ママのおひざ", "Mama's Lap"), fusion: L("秘密の隠し場所", "Secret Stash"), curse: L("あやしい箱", "Suspicious Box"), kotatsu: L("猫こたつ", "Cat Kotatsu") };
 
 /** 持ち物画面の置き場所。 */
 export interface Spot { where: "slot" | "sub" | "bag"; i: number }
@@ -264,9 +265,9 @@ export interface Pickup { id: number; pos: Vec; value: number; t: number }
 /** ママのところの品物（カリカリと交換で技とおやつをもらい、ほかのも見せてもらえる。売れない）。 */
 export interface ShopItem { kind: "spell" | "potion"; id: string; price: number; sold: boolean }
 export const POTIONS: Record<string, { name: string; desc: string; price: number }> = {
-  milk: { name: "猫用ミルク", desc: "♥1 回復", price: 6 },
-  churu: { name: "ちゅ〜る", desc: "♥ぜんぶ回復", price: 16 },
-  goldNiboshi: { name: "金のにぼし", desc: "持っているカリカリが1.25倍（最低＋3）", price: 6 },
+  milk: { name: L("猫用ミルク", "Cat Milk"), desc: L("♥1 回復", "Heal ♥1"), price: 6 },
+  churu: { name: L("ちゅ〜る", "Churu Treat"), desc: L("♥ぜんぶ回復", "Heal all ♥"), price: 16 },
+  goldNiboshi: { name: L("金のにぼし", "Golden Sardine"), desc: L("持っているカリカリが1.25倍（最低＋3）", "Kibble you hold ×1.25 (min +3)"), price: 6 },
 };
 
 export type Choice = { kind: "spell" | "toy" | "relic" | "gear"; id: string; gear?: GearItem }
@@ -454,14 +455,16 @@ export class World {
 
   get title() {
     const r = this.room;
-    if (r.kind === "final") return "さいご・ママ";
-    if (this.opts.training) return "トレーニング部屋";
+    if (r.kind === "final") return L("さいご・ママ", "Final · Mama");
+    if (this.opts.training) return L("トレーニング部屋", "Training Room");
     // エンドレスは2年目から「2年目の秋」のように
-    const S = `${this.opts.endless && r.act >= ACTS ? `${Math.floor(r.act / ACTS) + 1}年目の` : ""}${SEASON_NAME[r.season]}`;
-    if (r.kind === "shop") return `${S}・ママのところ`;
-    if (r.altar) return `${S}・${ALTAR_NAME[r.altar.kind]} ${r.index + 1}/${ROOMS_PER_ACT}`;
-    if (r.challenge) return `${S}・強い虫の部屋 ${r.index + 1}/${ROOMS_PER_ACT}`;
-    return `${S}・${r.kind === "boss" ? "ボス" : `${THEME_NAME[r.theme]} ${r.index + 1}/${ROOMS_PER_ACT}`}`;
+    const S = L(`${this.opts.endless && r.act >= ACTS ? `${Math.floor(r.act / ACTS) + 1}年目の` : ""}${SEASON_NAME[r.season]}`,
+      `${this.opts.endless && r.act >= ACTS ? `Year ${Math.floor(r.act / ACTS) + 1} ` : ""}${SEASON_NAME[r.season]}`);
+    if (r.kind === "shop") return L(`${S}・ママのところ`, `${S} · Mama's Repair Corner`);
+    if (r.altar) return L(`${S}・${ALTAR_NAME[r.altar.kind]} ${r.index + 1}/${ROOMS_PER_ACT}`, `${S} · ${ALTAR_NAME[r.altar.kind]} ${r.index + 1}/${ROOMS_PER_ACT}`);
+    if (r.challenge) return L(`${S}・強い虫の部屋 ${r.index + 1}/${ROOMS_PER_ACT}`, `${S} · Elite Bug Room ${r.index + 1}/${ROOMS_PER_ACT}`);
+    return L(`${S}・${r.kind === "boss" ? "ボス" : `${THEME_NAME[r.theme]} ${r.index + 1}/${ROOMS_PER_ACT}`}`,
+      `${S} · ${r.kind === "boss" ? "Boss" : `${THEME_NAME[r.theme]} ${r.index + 1}/${ROOMS_PER_ACT}`}`);
   }
 
   /** エンドレスモードのポイント。 */
@@ -480,7 +483,7 @@ export class World {
     }
     this.projectiles = this.projectiles.filter((pr) => pr.owner !== "enemy");
     this.fx.push({ kind: "puff", pos: { ...p.pos }, radius: 3.5, color: "#ffd43b", t: 0, life: 0.5 });
-    this.phase = "play"; this.notify("復活！もうひとがんばり");
+    this.phase = "play"; this.notify(L("復活！もうひとがんばり", "Revived! One more try!"));
   }
   get score() { return scoreOf({ rooms: this.cleared, bosses: this.bosses, elites: this.elites, kills: this.kills }); }
 
@@ -573,8 +576,8 @@ export class World {
       const pos = openFloor(layout, cellCenter(layout, layout.cols >> 1, (layout.rows >> 1) + 2));
       const e = makeEnemy(this.nextId++, "papa", pos, 0, 1); e.home = { ...pos }; this.enemies.push(e);
     }
-    if (this.room.papa && !this.room.kids.length) this.notify("パパがリビングで寝ころんでいる！お腹の上でじっとしてみよう");
-    if (this.room.kids.length) this.notify(this.room.kids.length > 1 ? "子どもたちが猫と遊びたがっている！にげて！" : `${KID_CALL[this.room.kids[0]]} にげて！`);
+    if (this.room.papa && !this.room.kids.length) this.notify(L("パパがリビングで寝ころんでいる！お腹の上でじっとしてみよう", "Papa is lying in the living room! Try sitting still on his belly"));
+    if (this.room.kids.length) this.notify(this.room.kids.length > 1 ? L("子どもたちが猫と遊びたがっている！にげて！", "The kids want to play with the cat! Run!") : L(`${KID_CALL[this.room.kids[0]]} にげて！`, `${KID_CALL[this.room.kids[0]]} Run!`));
   }
 
   // ---------- トレーニング部屋 ----------
@@ -642,7 +645,7 @@ export class World {
     const far = floors.filter((p) => dist(p, this.player.pos) > 7);
     // 強い虫: 強い虫の部屋は半分、ふつうの部屋はときどき1匹
     const wave = r.waves[r.wave];
-    if (wave.length >= 14) this.notify(`${ENEMY[wave[0]].name}の大群だ！`);
+    if (wave.length >= 14) this.notify(tr(`${ENEMY[wave[0]].name}の大群だ！`, `A swarm of ${ENEMY[wave[0]].name}!`));
     const elite = new Set<number>();
     if (r.challenge) wave.forEach((_, k) => { if (k % 2 === 0) elite.add(k); });
     else if (this.rng.next() < this.eliteChance()) elite.add(Math.floor(this.rng.next() * wave.length));
@@ -741,7 +744,7 @@ export class World {
       if (p.held <= 0 || !k) {
         p.held = 0; p.holder = null; p.iframes = Math.max(p.iframes, 1.2);
         if (k && k.type === "papa") { p.pos = { x: k.pos.x + 1.4, z: k.pos.z }; }   // パパはやさしくおろしてくれる
-        else if (k) { k.phase = REST[k.type] ?? 3; p.pos = { ...k.pos }; p.vel = { x: p.facing * 7, z: 0 }; this.notify("にげた！"); }
+        else if (k) { k.phase = REST[k.type] ?? 3; p.pos = { ...k.pos }; p.vel = { x: p.facing * 7, z: 0 }; this.notify(L("にげた！", "Escaped!")); }
       }
       return;
     }
@@ -870,7 +873,7 @@ export class World {
     if (al.used) return;
     if (al.kind === "rest") {
       al.used = true; p.hp = p.maxHp; this.events.push("clear");
-      this.notify("ママのおひざで ひと休み（♥ぜんぶ回復）"); return;
+      this.notify(L("ママのおひざで ひと休み（♥ぜんぶ回復）", "A nap on Mama's lap (all ♥ healed)")); return;
     }
     if (al.kind === "treasure") { al.used = true; this.events.push("clear"); this.offerTreasure(); return; }
     al.used = true; this.offerPacts();
@@ -896,7 +899,7 @@ export class World {
     this.bag = this.bag.filter((_, i) => !picks.includes(i));
     this.bag.push(got);
     this.events.push("forge");
-    this.notify(`隠し場所の奥から ${spellDef(got).name} が出てきた`);
+    this.notify(L(`隠し場所の奥から ${spellDef(got).name} が出てきた`, `Found ${spellDef(got).name} deep in the stash`));
     return got;
   }
 
@@ -982,7 +985,7 @@ export class World {
     this.enemies = []; this.projectiles = []; this.pickups = []; this.shop = null; this.doorOpen = false; this.flow = null; this.finalT = 0;
     this.player.pos = cellCenter(layout, layout.entry.c, layout.entry.r); this.player.vel = { x: 0, z: 0 };
     this.spawnWave();
-    this.notify("ママ「病院いこうね〜♪」");
+    this.notify(L("ママ「病院いこうね〜♪」", "Mama: \"Time for the vet~♪\""));
     this.events.push("final");
   }
 
@@ -1212,7 +1215,7 @@ export class World {
       this.hurtPlayer(1, e.pos);
       p.held = HUG[e.type] ?? 2; p.holder = e.id; p.vel = { x: 0, z: 0 }; p.hurt = 0;
       this.events.push("hug");
-      this.notify(`${ENEMY[e.type].name}につかまった！ダッシュでじたばた！`);
+      this.notify(L(`${ENEMY[e.type].name}につかまった！ダッシュでじたばた！`, `Caught by ${ENEMY[e.type].name}! Dash to wriggle free!`));
     }
   }
 
@@ -1231,14 +1234,14 @@ export class World {
     if (this.rng.next() < 0.3) {   // 強制猫吸い
       p.held = 2.2; p.holder = e.id; p.vel = { x: 0, z: 0 };
       this.events.push("hug");
-      this.notify("パパに強制猫吸いされた！すーはーすーはー…（上限アップ失敗）");
+      this.notify(L("パパに強制猫吸いされた！すーはーすーはー…（上限アップ失敗）", "Papa snuffled your fur! Sniff sniff... (no max-up)"));
       return;
     }
     this.baseMaxHp += 2; p.maxHp += 2; p.hp = Math.min(p.maxHp, p.hp + 2);
     this.manaUp.max += 15;
     for (const h of this.held) { h.def.manaMax += 15; }
     this.events.push("clear");
-    this.notify("パパのお腹でぐっすり…最大HP ＋♥1・やる気の最大 ＋15");
+    this.notify(L("パパのお腹でぐっすり…最大HP ＋♥1・やる気の最大 ＋15", "Snoozed on Papa's belly... Max HP +♥1, Max Energy +15"));
   }
 
   private hurtPlayer(n: number, from: Vec) {
@@ -1246,11 +1249,11 @@ export class World {
     if (p.iframes > 0) return;
     if (p.shield > 0) {   // バリア（部屋ごと）
       p.shield--; p.iframes = 0.6; this.fx.push({ kind: "puff", pos: { ...p.pos }, radius: 0.8, color: "#a5d8ff", t: 0, life: 0.4 });
-      this.notify("バリア！"); return;
+      this.notify(L("バリア！", "Barrier!")); return;
     }
     if (this.bonus.guard && this.rng.next() < this.bonus.guard) {   // 騎士猫: 当たりを防ぐ
       p.iframes = 0.5; this.fx.push({ kind: "puff", pos: { ...p.pos }, radius: 0.6, color: "#dee2e6", t: 0, life: 0.35 });
-      this.notify("ふせいだ！"); return;
+      this.notify(L("ふせいだ！", "Blocked!")); return;
     }
     p.hp -= n * DIFFS[this.opts.difficulty].dmg; p.iframes = 1.0 + this.bonus.iframes; p.hurt = 0.45;
     this.chargeSub("hurt", 1);
@@ -1554,11 +1557,11 @@ export class World {
       for (let k = 0; k < 8; k++) this.pickups.push({ id: this.nextId++, pos: { x: p.pos.x + (this.rng.next() - 0.5) * 3, z: p.pos.z + (this.rng.next() - 0.5) * 3 }, value: 2, t: 0 });
     }
     const reward = r.reward;
-    if (reward === "hp") { this.baseMaxHp += 2; p.maxHp += 2; p.hp = Math.min(p.maxHp, p.hp + 2); this.notify("最大HP ＋1♥"); }
+    if (reward === "hp") { this.baseMaxHp += 2; p.maxHp += 2; p.hp = Math.min(p.maxHp, p.hp + 2); this.notify(L("最大HP ＋1♥", "Max HP +1♥")); }
     else if (reward === "mp") {
       this.manaUp.max += 20; this.manaUp.regen += 4;
       for (const h of this.toys) { h.def.manaMax += 20; h.def.manaRegen += 4; h.mana = this.manaMaxOf(h.def); }
-      p.mana = this.manaMax; this.notify("やる気 最大＋20・回復＋4（全部のおもちゃ）");
+      p.mana = this.manaMax; this.notify(L("やる気 最大＋20・回復＋4（全部のおもちゃ）", "Energy max +20, regen +4 (all toys)"));
     }
     else if (reward === "spell" || reward === "toy" || reward === "relic" || reward === "gear") { this.offer(reward); return; }
     this.doorOpen = true;
@@ -1595,7 +1598,7 @@ export class World {
   /** あやしい箱: 呪いと引きかえの、強いごほうび（3つから1つ。いらないも選べる）。 */
   private offerPacts() {
     const curses = pickN(this.rng, CURSE_IDS.filter((c) => !this.curses.includes(c)), 3);
-    if (!curses.length) { this.notify("箱は空っぽだった"); return; }
+    if (!curses.length) { this.notify(L("箱は空っぽだった", "The box was empty")); return; }
     const relic = this.relicPool();
     this.choices = curses.map((id, k): Choice => {
       let reward: Choice & { kind: "spell" | "relic" | "gear" };
@@ -1616,15 +1619,15 @@ export class World {
       this.curses.push(c.id); this.coins += c.coins; this.recalc();
       this.events.push("curse");
       this.phase = "reward"; this.takeReward(c.reward);
-      this.notify(`呪い「${CURSES[c.id].name}」を受けた`);
+      this.notify(L(`呪い「${CURSES[c.id].name}」を受けた`, `Cursed: "${CURSES[c.id].name}"`));
       return;
     }
     if (c?.kind === "spell") this.bag.push(c.id);
     if (c?.kind === "toy") this.addToy(c.id);
-    if (c?.kind === "relic") { this.relics.push(c.id); this.recalc(); this.notify(`${RELICS[c.id].name} を手に入れた`); }
+    if (c?.kind === "relic") { this.relics.push(c.id); this.recalc(); this.notify(L(`${RELICS[c.id].name} を手に入れた`, `Got ${RELICS[c.id].name}`)); }
     if (c?.kind === "gear") {
       const g = c.gear ?? { id: c.id, rar: 0, fx: [] };
-      this.gear[GEAR[g.id].slot] = g; this.recalc(); this.notify(`${GEAR[g.id].name} を装備した`);
+      this.gear[GEAR[g.id].slot] = g; this.recalc(); this.notify(L(`${GEAR[g.id].name} を装備した`, `Equipped ${GEAR[g.id].name}`));
     }
     this.choices = [];
     this.phase = "play";
@@ -1642,12 +1645,12 @@ export class World {
     if (t.auto) {
       if (this.batt.length >= MAX_BATT) { const old = this.batt.shift()!; this.bag.push(...spellsOf(old.def)); }
       this.batt.push(held(t, this.manaMaxOf(t)));
-      this.notify(`${t.name} を置いた（電池式・自動で動く）`);
+      this.notify(L(`${t.name} を置いた（電池式・自動で動く）`, `Placed ${t.name} (battery toy, runs itself)`));
       return;
     }
     if (this.toys.length < MAX_TOYS) {
       this.toys.push(held(t, this.manaMaxOf(t)));
-      this.notify(`${t.name} を持った（${this.toys.length}つ目）`);
+      this.notify(L(`${t.name} を持った（${this.toys.length}つ目）`, `Picked up ${t.name} (toy #${this.toys.length})`));
       return;
     }
     // はめていた技は新しいおもちゃの空きスロットへ左から詰め、あふれた分は手持ちへ
@@ -1657,7 +1660,7 @@ export class World {
     this.toys[this.cur] = held(t, Math.min(this.player.mana, this.manaMaxOf(t)));
     this.player.cursor = 0;
     this.player.mana = this.toys[this.cur].mana;
-    this.notify(`${t.name} と交換した`);
+    this.notify(L(`${t.name} と交換した`, `Swapped for ${t.name}`));
   }
 
   /** 置き場所どうしで入れ替える（スロット・サブスロット・手持ち）。toy は持ち物画面のタブ（held の番号）。 */

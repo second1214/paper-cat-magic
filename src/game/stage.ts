@@ -3,16 +3,18 @@
 // 部屋は 1マス=1 の升目でできている。テンプレートの記号:
 //   # 壁   . 床   o 家具（まとまりごとに1つの家具になる）   E 入口   1/2/3 出口（扉）の候補
 import type { Rng } from "../core/rng";
+import { L } from "../i18n";
 
 export type Season = "spring" | "summer" | "autumn" | "winter";
 export type Theme =
   | "garden" | "pond" | "veggie"   // 外（お庭）
   | "living" | "bedroom" | "study" | "washitsu" | "western" | "kitchen" | "bath" | "entrance";
 
-export const SEASON_NAME: Record<Season, string> = { spring: "春", summer: "夏", autumn: "秋", winter: "冬" };
+export const SEASON_NAME: Record<Season, string> = { spring: L("春", "Spring"), summer: L("夏", "Summer"), autumn: L("秋", "Autumn"), winter: L("冬", "Winter") };
 export const THEME_NAME: Record<Theme, string> = {
-  garden: "お庭", pond: "池のあるお庭", veggie: "家庭菜園", living: "リビング", bedroom: "寝室", study: "書斎", washitsu: "和室",
-  western: "洋室", kitchen: "キッチン", bath: "お風呂場", entrance: "玄関",
+  garden: L("お庭", "Garden"), pond: L("池のあるお庭", "Pond Garden"), veggie: L("家庭菜園", "Veggie Patch"), living: L("リビング", "Living Room"),
+  bedroom: L("寝室", "Bedroom"), study: L("書斎", "Study"), washitsu: L("和室", "Tatami Room"),
+  western: L("洋室", "Guest Room"), kitchen: L("キッチン", "Kitchen"), bath: L("お風呂場", "Bathroom"), entrance: L("玄関", "Entryway"),
 };
 /** 外のステージ（芝生の床・生け垣の壁）。 */
 export const OUTDOOR: Theme[] = ["garden", "pond", "veggie"];

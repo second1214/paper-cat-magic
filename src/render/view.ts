@@ -7,6 +7,7 @@ import { buildRoom, type BuiltRoom } from "./roomBuilder";
 import { elementCanvas, INK, kibbleCanvas, rewardCanvas, spellCanvas, stickerCanvas, techCanvas } from "../art/items";
 import type { Element, TechFx } from "../core/spells";
 import type { Season } from "../game/stage";
+import { L } from "../i18n";
 
 /** 紙人形をカメラ側へ少し倒して、見下ろしでも潰れて見えないようにする。 */
 const LEAN = 0.42;
@@ -510,6 +511,6 @@ export class GameView {
 function signCanvas() {
   return stickerCanvas(320, 100, (g) => {
     g.fillStyle = "#fab005"; g.strokeStyle = INK; g.lineWidth = 6; g.beginPath(); g.roundRect(10, 10, 300, 80, 16); g.fill(); g.stroke();
-    g.fillStyle = INK; g.font = "bold 38px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("ママのところ", 160, 52);
+    g.fillStyle = INK; g.font = "bold 38px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(L("ママのところ", "Mama's Corner"), 160, 52);
   }, 0.03);
 }

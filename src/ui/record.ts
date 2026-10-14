@@ -5,6 +5,7 @@ import { NO_META, UPGRADES, type MetaLv } from "../core/meta";
 import { addStats, newlyOpen, NO_STATS, type Stats, type Unlock } from "../core/unlock";
 import type { Entry } from "../core/score";
 import { store } from "../platform";
+import { L } from "../i18n";
 
 /** じぶんのエンドレスの記録（上位10回）。 */
 export interface LocalScore extends Entry { at: number; act: number }
@@ -69,8 +70,10 @@ export function nameEndless(at: number, name: string) {
 }
 
 export function recordText(r: Record) {
-  if (r.plays === 0) return "まだ記録はありません";
+  if (r.plays === 0) return L("まだ記録はありません", "No records yet");
   const act = Math.floor(r.best / (ROOMS_PER_ACT + 1)), idx = r.best % (ROOMS_PER_ACT + 1);
-  const where = `${SEASON_NAME[SEASONS[act]]}・${idx === ROOMS_PER_ACT ? "ボス" : `${idx + 1}部屋目`}`;
-  return `いちばん遠く: <b>${where}</b> ／ 守りきった: <b>${r.wins}回</b> ／ 遊んだ: ${r.plays}回 ／ にぼし: <b>${r.niboshi}</b>`;
+  const where = L(`${SEASON_NAME[SEASONS[act]]}・${idx === ROOMS_PER_ACT ? "ボス" : `${idx + 1}部屋目`}`,
+    `${SEASON_NAME[SEASONS[act]]} · ${idx === ROOMS_PER_ACT ? "Boss" : `Room ${idx + 1}`}`);
+  return L(`いちばん遠く: <b>${where}</b> ／ 守りきった: <b>${r.wins}回</b> ／ 遊んだ: ${r.plays}回 ／ にぼし: <b>${r.niboshi}</b>`,
+    `Farthest: <b>${where}</b> / Wins: <b>${r.wins}</b> / Plays: ${r.plays} / Sardines: <b>${r.niboshi}</b>`);
 }

@@ -1,14 +1,15 @@
 // おもちゃ（装備）と発射計画。スロットを左から読み、1回で出す技の一覧を決める（純粋関数）。
 import { spellDef, type Modifier, type ProjectileStats, type SpellDef, type TriggerOn } from "./spells";
+import { L } from "../i18n";
 
 /** サブスロットがたまる条件。 */
 export type SubCharge = "still" | "hit" | "dash" | "kill" | "hurt";
 export const SUB_LABEL: Record<SubCharge, (n: number) => string> = {
-  still: (n) => `${n}秒じっとする`,
-  hit: (n) => `技を${n}回当てる`,
-  dash: (n) => `${n}回ダッシュする`,
-  kill: (n) => `虫を${n}匹たおす`,
-  hurt: (n) => n > 1 ? `${n}回ダメージを受ける` : "ダメージを受ける",
+  still: (n) => L(`${n}秒じっとする`, `Stay still ${n}s`),
+  hit: (n) => L(`技を${n}回当てる`, `Land ${n} hits`),
+  dash: (n) => L(`${n}回ダッシュする`, `Dash ${n} time${n > 1 ? "s" : ""}`),
+  kill: (n) => L(`虫を${n}匹たおす`, `Defeat ${n} bug${n > 1 ? "s" : ""}`),
+  hurt: (n) => n > 1 ? L(`${n}回ダメージを受ける`, `Take damage ${n} times`) : L("ダメージを受ける", "Take damage"),
 };
 
 export interface ToyDef {
@@ -214,90 +215,90 @@ const empty = (n: number) => Array.from({ length: n }, (): string | null => null
 /** おもちゃ。どれも本当に売っていそうな、ふつうの猫のおもちゃ。 */
 export const TOYS: Record<string, ToyDef> = {
   jarashi: {
-    id: "jarashi", name: "ねこじゃらし", desc: "ふつうの使いやすさ。8スロット",
+    id: "jarashi", name: L("ねこじゃらし", "Cat Teaser"), desc: L("ふつうの使いやすさ。8スロット", "Easy to use. 8 slots"),
     slots: empty(8), manaMax: 80, manaRegen: 30, castDelay: 0.2, recharge: 0.55,
   },
   tombo: {
-    id: "tombo", name: "トンボじゃらし", desc: "トンボが少し虫を追いかける。6スロットで休みが短い",
+    id: "tombo", name: L("トンボじゃらし", "Dragonfly Teaser"), desc: L("トンボが少し虫を追いかける。6スロットで休みが短い", "The dragonfly chases bugs a little. 6 slots, short Resting"),
     slots: empty(6), manaMax: 70, manaRegen: 34, castDelay: 0.16, recharge: 0.35,
     baseMod: { homing: 0.35 },
   },
   tissue: {
-    id: "tissue", name: "ティッシュボール", desc: "丸めたティッシュが壁で1回はね返る。12スロット、休みが長い",
+    id: "tissue", name: L("ティッシュボール", "Tissue Ball"), desc: L("丸めたティッシュが壁で1回はね返る。12スロット、休みが長い", "Balled-up tissue bounces off walls once. 12 slots, long Resting"),
     slots: empty(12), manaMax: 110, manaRegen: 28, castDelay: 0.22, recharge: 0.9,
     baseMod: { bounce: 1 },
   },
   keri: {
-    id: "keri", name: "けりぐるみ", desc: "抱えてけりけりする細長いぬいぐるみ。技の攻撃力×1.35。5スロットで振るのが遅い",
+    id: "keri", name: L("けりぐるみ", "Kicker Toy"), desc: L("抱えてけりけりする細長いぬいぐるみ。技の攻撃力×1.35。5スロットで振るのが遅い", "A long plush to hug and kick. Move damage ×1.35. 5 slots, slow casting"),
     slots: empty(5), manaMax: 90, manaRegen: 30, castDelay: 0.32, recharge: 0.6,
     baseMod: { damageMul: 1.35 },
   },
   pingpong: {
-    id: "pingpong", name: "ピンポン玉", desc: "軽くてよく弾む。技が速くなり、壁で2回はね返る。7スロット",
+    id: "pingpong", name: L("ピンポン玉", "Ping-Pong Ball"), desc: L("軽くてよく弾む。技が速くなり、壁で2回はね返る。7スロット", "Light and bouncy. Faster moves that bounce off walls twice. 7 slots"),
     slots: empty(7), manaMax: 70, manaRegen: 32, castDelay: 0.18, recharge: 0.5,
     baseMod: { bounce: 2, speedMul: 1.25 },
   },
   himo: {
-    id: "himo", name: "ただのひも", desc: "高いおもちゃより夢中になる。14スロットあるが休みが長い",
+    id: "himo", name: L("ただのひも", "Just a String"), desc: L("高いおもちゃより夢中になる。14スロットあるが休みが長い", "More fun than pricey toys. 14 slots, but long Resting"),
     slots: empty(14), manaMax: 100, manaRegen: 26, castDelay: 0.13, recharge: 1.3,
   },
   cap: {
-    id: "cap", name: "ペットボトルのキャップ", desc: "床をカシャカシャ滑る。5スロットだけど、やる気の回復がとても速く休みも短い",
+    id: "cap", name: L("ペットボトルのキャップ", "Bottle Cap"), desc: L("床をカシャカシャ滑る。5スロットだけど、やる気の回復がとても速く休みも短い", "Clatters across the floor. Only 5 slots, but very fast Energy regen and short Resting"),
     slots: empty(5), manaMax: 60, manaRegen: 46, castDelay: 0.1, recharge: 0.25,
   },
   longrod: {
-    id: "longrod", name: "ロングじゃらし", desc: "釣りざおみたいに長い。技が1.4倍遠くまで届き、少し大きい。9スロット",
+    id: "longrod", name: L("ロングじゃらし", "Long Teaser"), desc: L("釣りざおみたいに長い。技が1.4倍遠くまで届き、少し大きい。9スロット", "Long like a fishing rod. Moves reach 1.4x farther and are a bit bigger. 9 slots"),
     slots: empty(9), manaMax: 85, manaRegen: 30, castDelay: 0.22, recharge: 0.7,
     baseMod: { lifeMul: 1.4, sizeMul: 1.1 },
   },
   suzuball: {
-    id: "suzuball", name: "鈴入りボール", desc: "転がすと鳴りっぱなし。全部のスロットを1回でいっぺんに出す（休みが長い）",
+    id: "suzuball", name: L("鈴入りボール", "Bell Ball"), desc: L("転がすと鳴りっぱなし。全部のスロットを1回でいっぺんに出す（休みが長い）", "Jingles nonstop when rolled. Casts all slots at once (long Resting)"),
     slots: empty(6), manaMax: 120, manaRegen: 32, castDelay: 0.2, recharge: 1.4, castAll: true,
   },
   kamibukuro: {
-    id: "kamibukuro", name: "紙袋", desc: "中でじっとしてから飛び出す。止まっているとサブスロットがたまり、いっぺんに出る",
+    id: "kamibukuro", name: L("紙袋", "Paper Bag"), desc: L("中でじっとしてから飛び出す。止まっているとサブスロットがたまり、いっぺんに出る", "Sit inside, then pounce out. Standing still charges sub slots, which fire all at once"),
     slots: empty(6), manaMax: 80, manaRegen: 30, castDelay: 0.2, recharge: 0.55,
     sub: { slots: empty(2), charge: "still", need: 1.5 },
   },
   tunnel: {
-    id: "tunnel", name: "猫トンネル", desc: "シャカシャカ鳴るトンネル。ダッシュでくぐるとサブスロットがたまる",
+    id: "tunnel", name: L("猫トンネル", "Cat Tunnel"), desc: L("シャカシャカ鳴るトンネル。ダッシュでくぐるとサブスロットがたまる", "A crinkly tunnel. Dashing through charges sub slots"),
     slots: empty(7), manaMax: 80, manaRegen: 30, castDelay: 0.2, recharge: 0.6,
     sub: { slots: empty(2), charge: "dash", need: 2 },
   },
   nezumiPlush: {
-    id: "nezumiPlush", name: "ねずみのぬいぐるみ", desc: "かじられてボロボロ。技を当てるとサブスロットがたまる。かみつき入り",
+    id: "nezumiPlush", name: L("ねずみのぬいぐるみ", "Mouse Plush"), desc: L("かじられてボロボロ。技を当てるとサブスロットがたまる。かみつき入り", "Chewed to tatters. Landing hits charges sub slots. Comes with Bite"),
     slots: ["bite", null, null, null, null, null], manaMax: 80, manaRegen: 30, castDelay: 0.22, recharge: 0.6,
     sub: { slots: empty(3), charge: "hit", need: 14 },
   },
   matatabiStick: {
-    id: "matatabiStick", name: "またたびの木", desc: "かじるとごきげん。虫をたおすとサブスロットがたまる",
+    id: "matatabiStick", name: L("またたびの木", "Silvervine Stick"), desc: L("かじるとごきげん。虫をたおすとサブスロットがたまる", "Chewing it feels great. Defeating bugs charges sub slots"),
     slots: empty(7), manaMax: 85, manaRegen: 30, castDelay: 0.2, recharge: 0.6,
     sub: { slots: empty(2), charge: "kill", need: 4 },
   },
   chiiku: {
-    id: "chiiku", name: "知育ボール", desc: "転がすとおやつが出る。ダメージを受けるとサブスロットがすぐ出て反撃",
+    id: "chiiku", name: L("知育ボール", "Treat Puzzle Ball"), desc: L("転がすとおやつが出る。ダメージを受けるとサブスロットがすぐ出て反撃", "Roll it for treats. Taking damage fires sub slots right away to strike back"),
     slots: empty(6), manaMax: 80, manaRegen: 30, castDelay: 0.2, recharge: 0.55,
     sub: { slots: empty(3), charge: "hurt", need: 1 },
   },
   fukubukuro: {
-    id: "fukubukuro", name: "ねこじゃらし福袋", desc: "お正月の福袋にねこじゃらしが10本。16スロット、やる気がたっぷりで休みが長い",
+    id: "fukubukuro", name: L("ねこじゃらし福袋", "Cat Teaser Lucky Bag"), desc: L("お正月の福袋にねこじゃらしが10本。16スロット、やる気がたっぷりで休みが長い", "A New Year lucky bag with 10 cat teasers. 16 slots, lots of Energy, long Resting"),
     slots: empty(16), manaMax: 170, manaRegen: 40, castDelay: 0.18, recharge: 1.6,
   },
   // ---- 電池式（持っているだけで自動で動く。持ち替えの3つとは別に2つまで） ----
   denmouse: {
-    id: "denmouse", name: "電動ねずみ", desc: "電池で走り回るねずみ。1.4秒ごとに自動で一番近い虫へ。ひっかき入り",
+    id: "denmouse", name: L("電動ねずみ", "Robo Mouse"), desc: L("電池で走り回るねずみ。1.4秒ごとに自動で一番近い虫へ。ひっかき入り", "A battery mouse that zooms around. Auto-targets the nearest bug every 1.4s. Comes with Scratch"),
     slots: ["claw", null], manaMax: 50, manaRegen: 20, castDelay: 0.2, recharge: 0.4, auto: 1.4,
   },
   autolaser: {
-    id: "autolaser", name: "自動レーザー", desc: "置いておくと赤い点がくるくる動く。2.4秒ごとに自動。レーザーポインター入り",
+    id: "autolaser", name: L("自動レーザー", "Auto Laser"), desc: L("置いておくと赤い点がくるくる動く。2.4秒ごとに自動。レーザーポインター入り", "Set it down and the red dot spins around. Auto every 2.4s. Comes with Laser Pointer"),
     slots: ["laser", null], manaMax: 60, manaRegen: 22, castDelay: 0.2, recharge: 0.4, auto: 2.4,
   },
   pichifish: {
-    id: "pichifish", name: "ぴちぴち魚", desc: "USBで充電する、ぴちぴち動く魚のぬいぐるみ。1.8秒ごとに自動。猫パンチ入り",
+    id: "pichifish", name: L("ぴちぴち魚", "Flippy Fish"), desc: L("USBで充電する、ぴちぴち動く魚のぬいぐるみ。1.8秒ごとに自動。猫パンチ入り", "A USB-charged flopping fish plush. Auto every 1.8s. Comes with Paw Flurry"),
     slots: ["punch", null, null], manaMax: 55, manaRegen: 24, castDelay: 0.2, recharge: 0.4, auto: 1.8,
   },
   kurukuru: {
-    id: "kurukuru", name: "電動くるくるじゃらし", desc: "台の上で羽根がくるくる回る。3秒ごとに自動。ぶんぶん入り",
+    id: "kurukuru", name: L("電動くるくるじゃらし", "Spinning Teaser"), desc: L("台の上で羽根がくるくる回る。3秒ごとに自動。ぶんぶん入り", "Feathers spin on a stand. Auto every 3s. Comes with Swish"),
     slots: ["swing", null, null], manaMax: 70, manaRegen: 22, castDelay: 0.2, recharge: 0.4, auto: 3,
   },
 };
@@ -328,18 +329,18 @@ export function groupSummary(toy: ToyDef): { start: number; end: number; damage:
 /** おもちゃの説明欄の数値。 */
 export function toyStats(t: ToyDef): [string, string][] {
   const out: [string, string][] = [
-    ["スロット", `${t.slots.length}`],
-    ["やる気 最大", `${t.manaMax}`],
-    ["やる気 回復", `${t.manaRegen}/秒`],
-    ["振る間隔", `${t.castDelay}秒`],
-    ["休けい", `${t.recharge}秒`],
+    [L("スロット", "Slots"), `${t.slots.length}`],
+    [L("やる気 最大", "Max Energy"), `${t.manaMax}`],
+    [L("やる気 回復", "Energy Regen"), L(`${t.manaRegen}/秒`, `${t.manaRegen}/s`)],
+    [L("振る間隔", "Cast Delay"), L(`${t.castDelay}秒`, `${t.castDelay}s`)],
+    [L("休けい", "Resting"), L(`${t.recharge}秒`, `${t.recharge}s`)],
   ];
-  if (t.baseMod?.homing) out.push(["性質", "技が少し追尾"]);
-  if (t.baseMod?.bounce) out.push(["性質", `技が${t.baseMod.bounce}回はね返る`]);
-  if (t.baseMod?.damageMul) out.push(["性質", `攻撃力×${t.baseMod.damageMul}`]);
-  if (t.baseMod?.lifeMul) out.push(["性質", `とどく距離×${t.baseMod.lifeMul}`]);
-  if (t.castAll) out.push(["性質", "全部いっぺんに出す"]);
-  if (t.sub) out.push(["サブスロット", `${t.sub.slots.length}つ（${SUB_LABEL[t.sub.charge](t.sub.need)}と発動）`]);
-  if (t.auto) out.push(["電池式", `${t.auto}秒ごとに自動`]);
+  if (t.baseMod?.homing) out.push([L("性質", "Trait"), L("技が少し追尾", "Moves home in a little")]);
+  if (t.baseMod?.bounce) out.push([L("性質", "Trait"), L(`技が${t.baseMod.bounce}回はね返る`, `Moves bounce ${t.baseMod.bounce}x`)]);
+  if (t.baseMod?.damageMul) out.push([L("性質", "Trait"), L(`攻撃力×${t.baseMod.damageMul}`, `Damage ×${t.baseMod.damageMul}`)]);
+  if (t.baseMod?.lifeMul) out.push([L("性質", "Trait"), L(`とどく距離×${t.baseMod.lifeMul}`, `Range ×${t.baseMod.lifeMul}`)]);
+  if (t.castAll) out.push([L("性質", "Trait"), L("全部いっぺんに出す", "Casts everything at once")]);
+  if (t.sub) out.push([L("サブスロット", "Sub Slots"), L(`${t.sub.slots.length}つ（${SUB_LABEL[t.sub.charge](t.sub.need)}と発動）`, `${t.sub.slots.length} (fires after: ${SUB_LABEL[t.sub.charge](t.sub.need)})`)]);
+  if (t.auto) out.push([L("電池式", "Battery Toy"), L(`${t.auto}秒ごとに自動`, `Auto every ${t.auto}s`)]);
   return out;
 }

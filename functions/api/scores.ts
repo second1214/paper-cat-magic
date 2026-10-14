@@ -27,24 +27,24 @@ async function who(req: Request) {
 }
 
 export async function onRequestGet({ env }: Ctx) {
-  if (!env.DB) return json({ ok: false, error: "ランキングは準備中です" }, 503);
+  if (!env.DB) return json({ ok: false, error: "ランキングは準備中です / Ranking not available yet" }, 503);
   await ready(env.DB);
   const r = await env.DB.prepare("SELECT name, score, rooms, bosses, elites, kills, at FROM scores ORDER BY score DESC, at ASC LIMIT 50").all();
   return json({ ok: true, top: r.results });
 }
 
 export async function onRequestPost({ request, env }: Ctx) {
-  if (!env.DB) return json({ ok: false, error: "ランキングは準備中です" }, 503);
+  if (!env.DB) return json({ ok: false, error: "ランキングは準備中です / Ranking not available yet" }, 503);
   let b: Partial<Entry>;
-  try { b = await request.json(); } catch { return json({ ok: false, error: "送り方がおかしい" }, 400); }
+  try { b = await request.json(); } catch { return json({ ok: false, error: "送り方がおかしい / Bad request" }, 400); }
   const name = cleanName(String(b.name ?? ""));
-  if (!name) return json({ ok: false, error: "その名前は使えません" }, 400);
+  if (!name) return json({ ok: false, error: "その名前は使えません / Name not allowed" }, 400);
   const run = { rooms: Number(b.rooms), bosses: Number(b.bosses), elites: Number(b.elites), kills: Number(b.kills) };
-  if (!plausible(run) || scoreOf(run) !== Number(b.score)) return json({ ok: false, error: "記録がおかしい" }, 400);
+  if (!plausible(run) || scoreOf(run) !== Number(b.score)) return json({ ok: false, error: "記録がおかしい / Invalid record" }, 400);
   await ready(env.DB);
   const ip = await who(request), now = Date.now();
   const last = await env.DB.prepare("SELECT at FROM scores WHERE ip = ? ORDER BY at DESC LIMIT 1").bind(ip).first<{ at: number }>();
-  if (last && now - last.at < 30_000) return json({ ok: false, error: "少し時間をおいてから送ってね" }, 429);
+  if (last && now - last.at < 30_000) return json({ ok: false, error: "少し時間をおいてから送ってね / Please wait a bit before sending again" }, 429);
   const score = scoreOf(run);
   await env.DB.prepare("INSERT INTO scores (name, score, rooms, bosses, elites, kills, ip, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(name, score, run.rooms, run.bosses, run.elites, run.kills, ip, now).run();
