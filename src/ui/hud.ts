@@ -23,7 +23,7 @@ const bugUrl = (t: EnemyType) => {
 import { isJa, L, setLang } from "../i18n";
 import { ALTAR_NAME, REWARD_INFO, type Choice, type HeldToy, type Spot, type World } from "../game/world";
 import { elementCanvas, gearCanvas, kibbleCanvas, relicCanvas, rewardCanvas, spellCanvas, toyCanvas, urlOf } from "../art/items";
-import { bonusRows, GEAR, GEAR_FX, GEAR_IDS, GEAR_SLOTS, gearBonus, RARITY, RELIC_IDS, RELICS, SETS, setCounts, SLOT_NAME, type Gear, type GearItem } from "../core/items";
+import { bonusRows, relicCounts, RELIC_STACK, stackPart, GEAR, GEAR_FX, GEAR_IDS, GEAR_SLOTS, gearBonus, RARITY, RELIC_IDS, RELICS, SETS, setCounts, SLOT_NAME, type Gear, type GearItem } from "../core/items";
 
 /** 名前などを HTML に入れるときの文字の置きかえ。 */
 const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -79,11 +79,18 @@ function elementNote(el?: string) {
   return `<p class="elem" style="--c:${info.color}"><img src="${urlOf(elementCanvas(el as keyof typeof ELEMENT_INFO))}" alt=""><span><b>${info.name}</b> ${info.desc}</span></p>`;
 }
 /** レリックの説明カード。 */
-function relicCard(id: string, attrs = "") {
+/** レリックの説明カード。have: もう持っている数（重ねるともらえる合計の効果も見せる）。 */
+function relicCard(id: string, attrs = "", have = 0, inBag = false) {
   const r = RELICS[id];
+  if (inBag && have > 1) {   // 持ち物: 重ねた合計の効果
+    return `<div class="card" ${attrs}>
+      <div class="head"><img src="${urlOf(relicCanvas(id))}" alt=""><div><b>${r.name} ×${have}</b><span class="tag relic">${L("レリック", "Charm")}</span></div></div>
+      ${statsTable(bonusRows(stackPart(r.bonus, have)))}<p class="desc">${r.desc}</p></div>`;
+  }
+  const stack = have && !inBag ? `<p class="desc stack">${L(`持っている: ${have}個（${RELIC_STACK}個まで重なる）。もらうと合計:`, `Owned: ${have} (stacks up to ${RELIC_STACK}). Total if taken:`)}</p>${statsTable(bonusRows(stackPart(r.bonus, have + 1)))}` : "";
   return `<div class="card" ${attrs}>
-    <div class="head"><img src="${urlOf(relicCanvas(id))}" alt=""><div><b>${r.name}</b><span class="tag relic">${L("レリック", "Charm")}</span></div></div>
-    ${statsTable(bonusRows(r.bonus))}<p class="desc">${r.desc}</p></div>`;
+    <div class="head"><img src="${urlOf(relicCanvas(id))}" alt=""><div><b>${r.name}${have && !inBag ? ` ×${have + 1}` : ""}</b><span class="tag relic">${L("レリック", "Charm")}</span></div></div>
+    ${statsTable(bonusRows(r.bonus))}<p class="desc">${r.desc}</p>${stack}</div>`;
 }
 
 /** 装備の説明カード。レアリティ・特殊効果・セットのボーナスと、今そろっている数も見せる。 */
@@ -221,10 +228,8 @@ export class Hud {
 
   update() {
     const w = this.world(), p = w.player, toy = w.toy;
-    this.el("hearts").innerHTML = Array.from({ length: p.maxHp / 2 }, (_, i) => {
-      const v = p.hp - i * 2;
-      return `<span class="heart ${v >= 2 ? "full" : v === 1 ? "half" : ""}">♥</span>`;
-    }).join("");
+    const hpRate = Math.max(0, p.hp / p.maxHp);
+    this.el("hearts").innerHTML = `<div class="hpbar ${hpRate <= 0.3 ? "low" : ""}"><i style="width:${hpRate * 100}%"></i><span>♥ ${Math.ceil(p.hp)} / ${p.maxHp}</span></div>`;
     this.el("manaFill").style.width = `${(p.mana / w.manaMax) * 100}%`;
     this.el("manaNum").textContent = `${Math.floor(p.mana)}/${w.manaMax}`;
     this.el("coins").innerHTML = `<img src="${urlOf(kibbleCanvas())}" alt="">${w.coins}${w.opts.endless ? `<span class="pts">★${w.score}</span>` : ""}`;
@@ -327,8 +332,9 @@ export class Hud {
       const rec = loadRecord();
       el.innerHTML = `<div class="panel growPanel"><h2>${L("ねこの成長", "Cat Growth")}</h2><p class="muted">${L("冒険でもらった にぼし で、ずっと強くなる。今のにぼし: ", "Spend sardines from runs to grow stronger for good. Sardines: ")}<b class="nib">${rec.niboshi}</b></p>
         <div class="grows">${UPGRADES.map((u) => {
-          const lv = rec.meta[u.id], max = lv >= u.max, cost = u.cost(lv);
-          return `<div class="grow"><div><b>${u.name}</b><span class="lv">${"●".repeat(lv)}${"○".repeat(u.max - lv)}</span><small>${u.desc}</small></div>
+          const lv = rec.meta[u.id] ?? 0, max = lv >= u.max, cost = u.cost(lv);
+          const dots = u.max <= 10 ? `${"●".repeat(lv)}${"○".repeat(u.max - lv)}` : `Lv ${lv}`;   // 上限なしはレベルの数字
+          return `<div class="grow"><div><b>${u.name}</b><span class="lv">${dots}</span><small>${u.desc}</small></div>
             <button data-u="${u.id}" ${max || rec.niboshi < cost ? "disabled" : ""}>${max ? L("最大", "MAX") : L(`にぼし ${cost}`, `${cost} sardines`)}</button></div>`;
         }).join("")}</div>
         <div class="favNow"><b>${L(`おきにいり（${favSlots(rec.meta)}枠）`, `Favorites (${favSlots(rec.meta)} slots)`)}</b>${rec.favorites.length ? `<div class="zcells">${rec.favorites.map((id) => cell(id, "tabindex=-1")).join("")}</div><small>${L("冒険のはじめから手持ちに入る", "In your bag from the start of each run")}</small>` : `<small>${L("まだありません。クリアしたときに、持っている技から選べる", "None yet. Pick from your moves when you clear a run")}</small>`}</div>
@@ -530,7 +536,7 @@ export class Hud {
   private gearHtml(w: World) {
     const pick = this.pick;
     const worn = GEAR_SLOTS.map((sl) => w.gear[sl]).find((g) => g && g.id === pick);
-    const detail = worn ? gearCard(worn, w.gear) : pick && RELICS[pick] ? relicCard(pick)
+    const detail = worn ? gearCard(worn, w.gear) : pick && RELICS[pick] ? relicCard(pick, "", w.relics.filter((r) => r === pick).length, true)
       : `<div class="card"><b>${L("装備・レリック", "Gear & Charms")}</b><p class="desc">${L("装備は帽子・服・首輪の3か所。同じセットを2つ・3つそろえるとボーナス。レリックは持っているだけで効く。", "Gear goes in 3 spots: hat, clothes, collar. Match 2 or 3 of a set for a bonus. Charms work just by having them.")}</p></div>`;
     const counts = setCounts(w.gear);
     const sets = Object.values(SETS).map((st) => {
@@ -544,7 +550,7 @@ export class Hud {
         <div class="gearRow">${GEAR_SLOTS.map((sl) => `<div class="gslot">${itemCell("gear", w.gear[sl]?.id ?? null, `data-pick="${w.gear[sl]?.id ?? ""}"`, pick && pick === w.gear[sl]?.id ? "sel" : "", w.gear[sl]?.rar ?? 0)}<span>${SLOT_NAME[sl]}</span></div>`).join("")}<div class="sets">${sets}</div></div>
         ${w.curses.length ? `<div class="bagTitle">${L(`呪い（${w.curses.length}）`, `Curses (${w.curses.length})`)}</div><div class="curses">${w.curses.map((c) => `<span class="curse"><b>${CURSES[c].name}</b>${CURSES[c].desc}</span>`).join("")}</div>` : ""}
         <div class="bagTitle">${L(`レリック（${w.relics.length}）`, `Charms (${w.relics.length})`)}</div>
-        <div class="baggrid">${w.relics.length ? w.relics.map((r) => itemCell("relic", r, `data-pick="${r}"`, pick === r ? "sel" : "")).join("") : `<span class="muted">${L("まだ持っていません（◆の扉・ボスでもらえる）", "None yet (from ◆ doors and bosses)")}</span>`}</div>
+        <div class="baggrid">${w.relics.length ? Object.entries(relicCounts(w.relics)).map(([r, n]) => itemCell("relic", r, `data-pick="${r}"`, pick === r ? "sel" : "").replace("</button>", n > 1 ? `<i class="cnt">×${n}</i></button>` : "</button>")).join("") : `<span class="muted">${L("まだ持っていません（◆の扉・ボスでもらえる）", "None yet (from ◆ doors and bosses)")}</span>`}</div>
       </div></div>`;
   }
 
@@ -555,7 +561,7 @@ export class Hud {
     const boss = w.room.kind === "boss", al = w.room.altar;
     const title = boss ? L(`${ENEMY[w.room.waves[0][0]].name}を追い払った！`, `Drove off the ${ENEMY[w.room.waves[0][0]].name}!`) : al?.kind === "treasure" ? L("宝箱を開けた！", "Opened the chest!") : al?.kind === "curse" ? L("あやしい箱を開けた…", "Opened the suspicious box…")
       : L(`${(w.title.split(/・| · /)[1] ?? "").replace(/ \d.*$/, "")}を片付けた！`, `Cleared the ${(w.title.split(/・| · /)[1] ?? "").replace(/ \d.*$/, "")}!`);
-    const one = (c: Choice, a = "") => c.kind === "pact" ? "" : c.kind === "toy" ? toyCard(TOYS[c.id], a) : c.kind === "relic" ? relicCard(c.id, a) : c.kind === "gear" ? gearCard(c.gear ?? { id: c.id, rar: 0, fx: [] }, w.gear, a) : spellCard(c.id, a);
+    const one = (c: Choice, a = "") => c.kind === "pact" ? "" : c.kind === "toy" ? toyCard(TOYS[c.id], a) : c.kind === "relic" ? relicCard(c.id, a, w.relics.filter((r) => r === c.id).length) : c.kind === "gear" ? gearCard(c.gear ?? { id: c.id, rar: 0, fx: [] }, w.gear, a) : spellCard(c.id, a);
     const card = (c: Choice, i: number) => {
       const a = `data-i="${i}" role="button" tabindex="0"`;
       if (c.kind !== "pact") return one(c, a);

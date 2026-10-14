@@ -47,5 +47,5 @@ describe("playthrough", () => {
     }
     expect(rooms).toBe(4 * (ROOMS_PER_ACT + 1) + 1);   // ＋さいごのママ
     expect(w.room.kind).toBe("final");
-  });
+  }, 30000);   // 1年分を通すので時間がかかる（並列で遅くなっても落ちないように）
 });

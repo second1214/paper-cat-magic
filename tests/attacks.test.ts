@@ -20,7 +20,7 @@ function arena(slots: (string | null)[], foeAt: { dx: number; dz: number }) {
   const foe: Enemy = {
     id: 999, type: "roach", pos: { x: w.player.pos.x + foeAt.dx, z: w.player.pos.z + foeAt.dz }, vel: { x: 0, z: 0 },
     hp: 1000, maxHp: 1000, radius: 0.4, speed: 0, slow: 0, hurt: 0, t: 0.9, phase: 0, spawn: 0,
-    wet: 0, sticky: 0, repel: 0, repelDps: 0, repelTick: 0, push: { x: 0, z: 0 }, elite: null,
+    wet: 0, sticky: 0, repel: 0, repelDps: 0, repelTick: 0, push: { x: 0, z: 0 }, elite: null, atk: 0,
   };
   w.enemies = [foe];
   w.toy.slots = slots; w.player.cursor = 0; w.player.castCd = 0; w.player.mana = 999; w.toy.manaMax = 999;

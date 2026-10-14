@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { cellCenter } from "../src/game/stage";
 import { World, type Enemy } from "../src/game/world";
+import { NO_META } from "../src/core/meta";
 import { rarOf, SPELLS } from "../src/core/spells";
 import { lockedKeys, newlyOpen, NO_STATS, UNLOCKS } from "../src/core/unlock";
 
@@ -20,7 +21,7 @@ function arena(foe: { dx: number; dz: number } | null, seed = 5) {
 }
 const dummy = (x: number, z: number, id = 999): Enemy => ({
   id, type: "roach", pos: { x, z }, vel: { x: 0, z: 0 }, hp: 1000, maxHp: 1000, radius: 0.4, speed: 0, slow: 0, hurt: 0, t: 0.9, phase: 0, spawn: 0,
-  wet: 0, sticky: 0, repel: 0, repelDps: 0, repelTick: 0, push: { x: 0, z: 0 }, elite: null,
+  wet: 0, sticky: 0, repel: 0, repelDps: 0, repelTick: 0, push: { x: 0, z: 0 }, elite: null, atk: 0,
 });
 function run(w: World, sec: number, o: { fire?: boolean; move?: { x: number; z: number }; dash?: boolean } = {}) {
   for (let t = 0; t < sec; t += 1 / 60) { w.player.hp = w.player.maxHp; w.update(1 / 60, { move: o.move ?? { x: 0, z: 0 }, aim: { x: 1, z: 0 }, fire: !!o.fire, dash: !!o.dash }); }
@@ -149,7 +150,7 @@ describe("特別な部屋・強い虫・呪い", () => {
 describe("解放（負けても積み上がる）", () => {
   it("解放していないものは、ごほうび・お店に出てこない", () => {
     const locked = lockedKeys(NO_STATS);
-    const w = new World(4, { difficulty: 1, meta: { hp: 0, atk: 0, mana: 0, speed: 0, luck: 0, gift: 0, fav: 0 }, locked });
+    const w = new World(4, { difficulty: 1, meta: { ...NO_META }, locked });
     w.start();
     const seen = new Set<string>();
     for (let k = 0; k < 60; k++) {
@@ -292,7 +293,7 @@ describe("画面を埋め尽くす連鎖", () => {
 
 describe("エンドレスモード", () => {
   it("夏のボスのあとも季節がめぐり、2年目へ進む（ママの部屋にならない）", () => {
-    const w = new World(7, { difficulty: 1, meta: { hp: 0, atk: 0, mana: 0, speed: 0, luck: 0, gift: 0, fav: 0 }, endless: true });
+    const w = new World(7, { difficulty: 1, meta: { ...NO_META }, endless: true });
     w.start();
     w.enterRoom(3, 8, null);   // 夏のボス
     w.enemies = []; w.room.waves = [[]];
@@ -320,7 +321,7 @@ describe("エンドレスモード", () => {
 });
 
 describe("おきにいり（クリアしたときに選んだ技を引き継ぐ）", () => {
-  const meta = (fav: number) => ({ hp: 0, atk: 0, mana: 0, speed: 0, luck: 0, gift: 0, fav });
+  const meta = (fav: number) => ({ ...NO_META, fav });
   it("おきにいりは最初から手持ちに入る（枠の数まで。★もそのまま）", () => {
     const w = new World(3, { difficulty: 1, meta: meta(0), favorites: ["friend++", "kezukuroi"] });
     expect(w.bag).toContain("friend++");
@@ -339,7 +340,7 @@ describe("おきにいり（クリアしたときに選んだ技を引き継ぐ�
 });
 
 describe("トレーニング部屋", () => {
-  const train = (multi = false) => { const w = new World(3, { difficulty: 1, meta: { hp: 0, atk: 0, mana: 0, speed: 0, luck: 0, gift: 0, fav: 0 }, training: true }); w.enterTraining(multi); w.start(); return w; };
+  const train = (multi = false) => { const w = new World(3, { difficulty: 1, meta: { ...NO_META }, training: true }); w.enterTraining(multi); w.start(); return w; };
   it("けりぐるみは動かず・倒れず・猫を傷つけず、受けたダメージをDPSとして数える", () => {
     const w = train();
     expect(w.enemies).toHaveLength(1);
@@ -384,7 +385,7 @@ describe("リビングのパパ", () => {
     for (let seed = 1; seed <= 30; seed++) {
       const w = withPapa(seed), hp = w.player.maxHp, mana = w.manaMax;
       still(w, 2.8);
-      if (w.player.maxHp === hp + 2) { expect(w.manaMax).toBe(mana + 15); ok++; }
+      if (w.player.maxHp === hp + 20) { expect(w.manaMax).toBe(mana + 15); ok++; }
       else { expect(w.player.held).toBeGreaterThan(0); expect(w.manaMax).toBe(mana); sucked++; }
       const hp2 = w.player.maxHp; still(w, 6); expect(w.player.maxHp).toBe(hp2);   // 2回目はない
     }
@@ -423,5 +424,40 @@ describe("選択肢の引き直し", () => {
     w.rerollChoices();
     expect(w.phase).toBe("reward"); expect(w.choices.every((c) => c.kind === "spell")).toBe(true);
     expect(w.canReroll).toBe(false);
+  });
+});
+
+describe("持ち物の移動", () => {
+  it("技を空のスロットへ動かしても、元の枠に手持ちの技が入らない（増えない）", () => {
+    const w = new World(3); w.start();
+    const s = w.toy.slots, from = s.findIndex(Boolean), to = s.findIndex((x, i) => !x && i > from);
+    w.bag = ["claw", "bite", "laser", "hairball", "yarn", "punch", "hiss", "swing"];
+    const id = s[from], bagBefore = [...w.bag];
+    w.move({ where: "slot", i: from }, { where: "slot", i: to });
+    expect(w.toy.slots[to]).toBe(id); expect(w.toy.slots[from]).toBeNull();
+    expect(w.bag).toEqual(bagBefore);
+  });
+});
+
+describe("バランス", () => {
+  it("虫の攻撃と体力は季節で上がり、エンドレスの2年目からは増え続ける", async () => {
+    const { dmgScale, hpScale } = await import("../src/game/world");
+    expect(dmgScale(3)).toBeGreaterThan(dmgScale(0));
+    expect(dmgScale(12) / dmgScale(8)).toBeGreaterThan(1.7);
+    expect(hpScale(12, false) / hpScale(8, false)).toBeGreaterThan(2);
+  });
+  it("レリックを全部持っていたら、重ねられるものが出る", async () => {
+    const w = new World(5); w.start();
+    const { RELIC_IDS } = await import("../src/core/items");
+    w.relics = [...RELIC_IDS];
+    (w as unknown as { offer(k: string): void }).offer("relic");
+    expect(w.choices.length).toBeGreaterThan(0);
+    expect(w.choices.every((c) => c.kind === "relic")).toBe(true);
+  });
+  it("九つの命で1度だけ起き上がる", () => {
+    const w = new World(5, { difficulty: 1, meta: { ...NO_META, nine: 1 } }); w.start();
+    const hurt = (n: number) => (w as unknown as { hurtPlayer(n: number, f: { x: number; z: number }): void }).hurtPlayer(n, { x: 0, z: 0 });
+    hurt(9999); expect(w.phase).toBe("play"); expect(w.player.hp).toBeGreaterThan(0);
+    w.player.iframes = 0; hurt(9999); expect(w.phase).toBe("dead");
   });
 });

@@ -5,7 +5,7 @@ import { World, type Enemy } from "../src/game/world";
 import { SPELLS } from "../src/core/spells";
 import { planCast, type ToyDef } from "../src/core/wand";
 
-const dummy = (x: number, z: number, id: number, hp = 1000): Enemy => ({ id, type: "roach", pos: { x, z }, vel: { x: 0, z: 0 }, hp, maxHp: hp, radius: 0.4, speed: 0, slow: 0, hurt: 0, t: 0.9, phase: 0, spawn: 0, wet: 0, sticky: 0, repel: 0, repelDps: 0, repelTick: 0, push: { x: 0, z: 0 }, elite: null });
+const dummy = (x: number, z: number, id: number, hp = 1000): Enemy => ({ id, type: "roach", pos: { x, z }, vel: { x: 0, z: 0 }, hp, maxHp: hp, radius: 0.4, speed: 0, slow: 0, hurt: 0, t: 0.9, phase: 0, spawn: 0, wet: 0, sticky: 0, repel: 0, repelDps: 0, repelTick: 0, push: { x: 0, z: 0 }, elite: null, atk: 0 });
 /** 縦5マス×横11マスが床の所に猫を置く。 */
 function arena() {
   const w = new World(5); w.start(); w.room.waves = [[]]; w.enemies = []; w.projectiles = [];
