@@ -145,6 +145,9 @@ export interface Projectile {
   split: number;
 }
 
+/** つづけて等で、このあと出す技（off: 扇状・円周にずらす角度、skip: 当たらない虫）。 */
+type Spawn = { shot: Shot; pos: Vec; dir: Vec; off?: number; skip?: number[] };
+
 /** 画面を埋め尽くしても重くならないよう、猫の技が同時に出ていられる数。 */
 export const MAX_PLAYER_SHOTS = 400;
 
@@ -941,7 +944,7 @@ export class World {
     }
     if (s.motion === "trap") {
       pr.vel = { x: 0, z: 0 };
-      const ahead = { x: from.x + d.x * s.reach, z: from.z + d.z * s.reach }, c = cellAt(L, ahead.x, ahead.z);
+      const ahead = anchored ? { ...from } : { x: from.x + d.x * s.reach, z: from.z + d.z * s.reach }, c = cellAt(L, ahead.x, ahead.z);   // つづけてなら着弾地点に置く
       pr.pos = cellValue(L, c.c, c.r) === Cell.Floor ? ahead : { ...from };
       const traps = this.projectiles.filter((q) => q.motion === "trap");
       if (traps.length >= 4) this.projectiles = this.projectiles.filter((q) => q !== traps[0]);
@@ -1141,18 +1144,21 @@ export class World {
 
   // ---------- 弾 ----------
   /** 多段で遅れて当たる分。 */
-  private later: { t: number; eid: number; dmg: number; info: HitInfo; dir: Vec }[] = [];
+  private later: { t: number; eid: number; dmg: number; info: HitInfo; dir: Vec; kill?: Shot[] }[] = [];
 
   private updateProjectiles(dt: number) {
     const keep: Projectile[] = [];
-    const spawned: { shot: Shot; pos: Vec; dir: Vec; skip?: number[] }[] = [];
+    const spawned: Spawn[] = [];
     const L = this.room.layout, p = this.player;
     const blocks = (x: number, z: number) => { const c = cellAt(L, x, z), v = cellValue(L, c.c, c.r); return v !== Cell.Floor; };
 
     this.later = this.later.filter((h) => {
       h.t -= dt; if (h.t > 0) return true;
       const e = this.enemies.find((q) => q.id === h.eid);
-      if (e && e.hp > 0) this.hitEnemy(e, h.dmg, h.info, h.dir);
+      if (e && e.hp > 0) {
+        this.hitEnemy(e, h.dmg, h.info, h.dir);
+        if (h.kill && e.hp <= 0) this.payload(spawned, h.kill, e.pos, h.dir, e.id);   // かじかじの続きでとどめ
+      }
       return false;
     });
 
@@ -1185,7 +1191,7 @@ export class World {
       // ひと呼吸: 時間が来たら、その場所から右の技
       if (pr.payloadAt > 0 && !pr.payloadDone && (pr.t >= pr.payloadAt || dead)) {
         pr.payloadDone = true;
-        for (const s of pr.payload) spawned.push({ shot: s, pos: { ...pr.pos }, dir: pr.motion === "shot" ? norm(pr.vel) : pr.dir });
+        this.payload(spawned, pr.payload, pr.pos, pr.motion === "shot" ? norm(pr.vel) : pr.dir);
       }
 
       if (!dead && pr.owner === "enemy") {
@@ -1211,15 +1217,15 @@ export class World {
           pr.hitLog.set(e.id, { n: (rec?.n ?? 0) + (pr.motion === "shot" ? pr.hits : 1), next: pr.t + pr.hitEvery });
           if (pr.explode <= 0) this.hitEnemy(e, pr.damage, info, push);
           const out = pr.motion === "shot" ? norm(pr.vel) : pr.dir;
-          const emit = () => { for (const s of pr.payload) spawned.push({ shot: s, pos: { ...e.pos }, dir: out }); };
+          const emit = () => this.payload(spawned, pr.payload, e.pos, out, e.id);   // 着弾地点（その虫の場所）から
           // つづけて系: 当たったら（1回）／当たるたびに／倒したら
           if (pr.payload.length && !pr.payloadAt) {
             if (pr.trig === "kill") { if (e.hp <= 0) emit(); }
-            else if (pr.trig === "every") { if (pr.t >= pr.trigNext) { pr.trigNext = pr.t + 0.15; emit(); } }
+            else if (pr.trig === "every") { if (pr.motion === "shot" || pr.t >= pr.trigNext) { pr.trigNext = pr.t + 0.15; emit(); } }   // 飛ぶ技は貫通した虫ごと、ほかは0.15秒おき
             else if (pr.trig === "hit" && (pr.motion === "shot" || pr.motion === "summon" || !pr.payloadDone)) { pr.payloadDone = true; emit(); }
           }
           if (pr.motion === "shot") {
-            for (let k = 1; k < pr.hits; k++) this.later.push({ t: k * pr.hitEvery, eid: e.id, dmg: pr.damage, info, dir: push }); // かじかじ: 食い込んで削る
+            for (let k = 1; k < pr.hits; k++) this.later.push({ t: k * pr.hitEvery, eid: e.id, dmg: pr.damage, info, dir: push, kill: pr.trig === "kill" && !pr.payloadAt ? pr.payload : undefined }); // かじかじ: 食い込んで削る
             if (pr.pierce > 0) pr.pierce--; else { dead = true; break; }
           }
         }
@@ -1233,13 +1239,16 @@ export class World {
           if (hx || !hz) pr.vel.x *= -1;
           if (hz || !hx) pr.vel.z *= -1;
           pr.pos.x = ox; pr.pos.z = oz;
-          if (pr.trig === "bounce" && pr.owner === "player") for (const s of pr.payload) spawned.push({ shot: s, pos: { x: ox, z: oz }, dir: norm(pr.vel) });   // ぴょんぴょん
+          if (pr.trig === "bounce" && pr.owner === "player") this.payload(spawned, pr.payload, { x: ox, z: oz }, norm(pr.vel));   // ぴょんぴょん: はね返った所から
         } else dead = true;
       }
       if (dead) {
         if (pr.owner === "player" && pr.explode > 0) this.explode(pr, spawned);
         if (pr.owner === "player" && pr.payload.length && pr.hitLog.size === 0 && pr.motion === "shot" && !pr.payloadAt && pr.trig === "hit")
-          for (const s of pr.payload) spawned.push({ shot: s, pos: { x: ox, z: oz }, dir: norm(pr.vel) });
+          this.payload(spawned, pr.payload, { x: ox, z: oz }, norm(pr.vel));   // 当たらずに消えたら、消えた所から
+        if (pr.owner === "player" && pr.payloadAt > 0 && !pr.payloadDone && pr.payload.length) {   // ひと呼吸: 時間の前に当たって消えても出す
+          pr.payloadDone = true; this.payload(spawned, pr.payload, pr.pos, pr.motion === "shot" ? norm(pr.vel) : pr.dir);
+        }
         if (pr.owner === "player" && pr.split > 0 && pr.motion === "shot") this.splitShot(pr, { x: ox, z: oz }, spawned, pr.hitLog.size === 0);
         continue;
       }
@@ -1248,7 +1257,7 @@ export class World {
     this.projectiles = keep;
     for (const s of spawned) {
       const n = this.projectiles.length;
-      this.fire(s.shot, s.pos, s.dir, "player", 0, true);
+      this.fire(s.shot, s.pos, s.dir, "player", s.off ?? 0, true);
       if (s.skip && this.projectiles.length > n) for (const id of s.skip) this.projectiles[n].hitLog.set(id, { n: 99, next: 1e9 });   // 割れた元の虫には当たらない
     }
     const before = this.enemies.length, dead: Enemy[] = [];
@@ -1287,7 +1296,7 @@ export class World {
   }
 
   /** 召喚した仲間の動き。ルンバは壁ではね返りながら走る。友達猫は近くの虫を追ってひっかく（いなければ猫のそばへ）。 */
-  private updateSummon(pr: Projectile, dt: number, spawned: { shot: Shot; pos: Vec; dir: Vec }[]) {
+  private updateSummon(pr: Projectile, dt: number, spawned: Spawn[]) {
     const before = { ...pr.pos };
     if (pr.tech === "roomba") {
       this.moveCircle(pr.pos, pr.vel, pr.radius, dt, false, false);
@@ -1308,7 +1317,7 @@ export class World {
     const info: HitInfo = { slow: pr.slow, element: pr.element, tech: "claw", color: pr.color, knock: pr.knock };
     this.hitEnemy(t, pr.damage, info, dir);
     for (let k = 1; k < pr.hits; k++) this.later.push({ t: k * 0.12, eid: t.id, dmg: pr.damage, info, dir });
-    for (const s of pr.payload) spawned.push({ shot: s, pos: { ...pr.pos }, dir });
+    this.payload(spawned, pr.payload, pr.pos, dir, t.id);
   }
 
   /** カメムシのくさいガス（その場にしばらく残り、猫が触れるとダメージ）。 */
@@ -1316,8 +1325,21 @@ export class World {
     this.fire({ stats: { ...enemyShot("#a9e34b", 0), radius: r, life: 2.6, tech: "gas" as TechFx }, payload: [] }, pos, { x: 1, z: 0 }, "enemy");
   }
 
+  /**
+   * つづけて等で出す技を並べる。2つ以上なら扇状（回る技は円周）にずらす。
+   * 飛ぶ技・ビームは、きっかけになった虫（skip）には当たらず、その先の虫へ向かう。
+   */
+  private payload(spawned: Spawn[], list: Shot[], pos: Vec, dir: Vec, skip?: number) {
+    const k = list.length;
+    list.forEach((s, n) => spawned.push({
+      shot: s, pos: { ...pos }, dir,
+      off: k > 1 ? (s.stats.motion === "orbit" ? (n / k) * Math.PI * 2 : (n - (k - 1) / 2) * 0.16) : 0,
+      skip: skip !== undefined && (s.stats.motion === "shot" || s.stats.motion === "beam") ? [skip] : undefined,
+    }));
+  }
+
   /** 毛糸のほつれ: 消えた弾が、まわりへ割れて飛び散る（割れた弾はもう割れない）。 */
-  private splitShot(pr: Projectile, at: Vec, spawned: { shot: Shot; pos: Vec; dir: Vec; skip?: number[] }[], wall: boolean) {
+  private splitShot(pr: Projectile, at: Vec, spawned: Spawn[], wall: boolean) {
     // 虫に当たったら全方向へ（その虫には当たらない）、壁なら跳ね返る向きへ扇状に
     const n = pr.split, back = Math.atan2(-pr.vel.z, -pr.vel.x), skip = [...pr.hitLog.keys()];
     const stats: ProjectileStats = {
@@ -1331,7 +1353,7 @@ export class World {
     }
   }
 
-  private explode(pr: Projectile, spawned: { shot: Shot; pos: Vec; dir: Vec }[] = []) {
+  private explode(pr: Projectile, spawned: Spawn[] = []) {
     this.fx.push({ kind: "tech", tech: pr.tech, pos: { ...pr.pos }, radius: pr.explode, color: pr.color, t: 0, life: 0.45 });
     const info: HitInfo = { slow: pr.slow, element: pr.element, tech: pr.tech, color: pr.color, knock: pr.knock };
     for (const e of this.enemies) {
@@ -1339,7 +1361,7 @@ export class World {
       const d = dist(e.pos, pr.pos);
       if (d < pr.explode + e.radius) {
         this.hitEnemy(e, pr.damage * (1 - 0.4 * Math.min(1, d / pr.explode)), info, norm({ x: e.pos.x - pr.pos.x, z: e.pos.z - pr.pos.z }), false);
-        if (pr.trig === "kill" && e.hp <= 0) for (const s of pr.payload) spawned.push({ shot: s, pos: { ...e.pos }, dir: pr.dir });   // とどめ
+        if (pr.trig === "kill" && e.hp <= 0) this.payload(spawned, pr.payload, e.pos, pr.dir, e.id);   // とどめ
       }
     }
   }

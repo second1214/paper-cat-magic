@@ -331,7 +331,7 @@ export const SPELLS: Record<string, SpellDef> = {
   },
   chain: {
     id: "chain", name: "つづけて", kind: "trigger", mana: 8, glyph: "連", color: "#d6336c",
-    desc: "左の技が当たった所から、右の技を出す（例: ひっかき→つづけて→ぶんぶん＝当たった所でぶんぶん）",
+    desc: "左の技が当たった所から、右の技を出す（例: ひっかき→つづけて→ぶんぶん＝当たった所でぶんぶん）。右が飛ぶ技なら、当たった虫を通りこして先の虫へ",
   },
   nandodemo: {
     id: "nandodemo", name: "何度でも", kind: "trigger", on: "every", mana: 12, glyph: "毎", color: "#c2255c",
