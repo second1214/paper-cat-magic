@@ -148,6 +148,16 @@ const ZUKAN: { title: string; ids: string[]; kind?: "toy" | "relic" | "gear" }[]
 /** タイトルまわりの画面。null ならゲーム中。 */
 type Screen = "title" | "howto" | "zukan" | "diff" | "grow" | "endless" | "rank" | null;
 
+/** スクロールできる枠の位置を覚え、書きかえた後に同じ枠（同じ場所・同じクラス）へ戻す関数を返す。 */
+function keepScroll(): () => void {
+  const sel = ".panel, .zgroups, .fuseBag";
+  const keyOf = (e: Element, i: number) => `${e.closest("[id]")?.id ?? ""}|${e.className}|${i}`;
+  const keys = (f: (e: HTMLElement, k: string) => void) => { const n = new Map<string, number>(); document.querySelectorAll<HTMLElement>(sel).forEach((e) => { const b = keyOf(e, 0), i = n.get(b) ?? 0; n.set(b, i + 1); f(e, keyOf(e, i)); }); };
+  const saved = new Map<string, number>();
+  keys((e, k) => { if (e.scrollTop) saved.set(k, e.scrollTop); });
+  return () => keys((e, k) => { const t = saved.get(k); if (t && e.scrollTop !== t) e.scrollTop = t; });
+}
+
 export class Hud {
   private el = (id: string) => document.getElementById(id)!;
   bagOpen = false;
@@ -254,6 +264,7 @@ export class Hud {
       `<span class="chip"><img src="${urlOf(rewardCanvas(d.reward))}" alt="">${REWARD_INFO[d.reward].label}</span>`).join("");
 
     document.body.classList.toggle("titling", w.phase === "intro");
+    const scroll = keepScroll();   // 書きかえても、スクロール位置は同じ画面なら保つ（タップのたびに上へ戻らない）
     this.renderTitle(w);
     this.renderPause();
     this.renderBag(w);
@@ -262,6 +273,7 @@ export class Hud {
     this.renderBench(w);
     this.renderTrain(w);
     this.renderResult(w);
+    scroll();
   }
 
   /** 毎フレーム変わるメーター（サブスロット・電池式の次の自動まで）だけを書きかえる。 */
