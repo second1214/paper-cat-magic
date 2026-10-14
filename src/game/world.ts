@@ -935,7 +935,8 @@ export class World {
       if (s.tech !== "roomba") pr.vel = { x: 0, z: 0 };
       // 上限で呼ぶと一番古い仲間が帰る（召喚の上限）
       const mine = this.projectiles.filter((q) => q.motion === "summon" && q.tech === s.tech);
-      const limit = (SUMMON_LIMIT[s.tech] ?? 1) + this.bonus.summonAdd;
+      // 呼べる数は種類ごと（札を何枚つけても同じ）。★で＋1ずつ、レリック「ねずみのおもちゃ」で＋1
+      const limit = (s.limit ?? 1) + this.bonus.summonAdd;
       if (mine.length >= limit) {
         const old = mine[0];
         this.fx.push({ kind: "puff", pos: { ...old.pos }, radius: 0.6, color: "#ffffff", t: 0, life: 0.4 });
@@ -1584,11 +1585,6 @@ export class World {
 }
 
 const ZERO: Vec = { x: 0, z: 0 };
-
-/** 召喚の同時に出せる数（技の定義から）。 */
-const SUMMON_LIMIT: Partial<Record<TechFx, number>> = Object.fromEntries(
-  Object.values(SPELLS).filter((d) => d.projectile?.motion === "summon").map((d) => [d.projectile!.tech, d.limit ?? 1]),
-);
 
 /** 点 q と線分 (ax,az)-b の距離。 */
 function segDist(q: Vec, ax: number, az: number, b: Vec) {

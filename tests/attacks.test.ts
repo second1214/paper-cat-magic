@@ -141,3 +141,24 @@ describe("召喚（修飾は仲間の攻撃にかかる・召喚ごとの上限�
     expect(left).toEqual(ids.slice(-SPELLS.friend.limit!));
   });
 });
+
+describe("召喚の上限は鍛えるほど増える", () => {
+  const most = (slots: string[], relic = false) => {
+    const { w } = arena(slots, { dx: 40, dz: 0 });
+    if (relic) { w.phase = "reward"; w.choices = [{ kind: "relic", id: "nezumi" }]; w.takeReward(w.choices[0]); }
+    let n = 0;
+    for (let k = 0; k < 8; k++) { w.player.castCd = 0; w.player.mana = 999; run(w, 1 / 60); run(w, 0.2, false); n = Math.max(n, w.projectiles.filter((p) => p.motion === "summon").length); }
+    return n;
+  };
+  it("札を何枚つけても上限は同じ（ルンバ3枚でも1台）", () => expect(most(["roomba", "roomba", "roomba"])).toBe(1));
+  it("友達猫 2 → ★で3 → ★★で4 → レリックで5", () => {
+    expect(most(["friend"])).toBe(2);
+    expect(most(["friend+"])).toBe(3);
+    expect(most(["friend++"])).toBe(4);
+    expect(most(["friend++"], true)).toBe(5);
+  });
+  it("ルンバ 1 → ★で2 → ★★で3", () => {
+    expect(most(["roomba+"])).toBe(2);
+    expect(most(["roomba++"])).toBe(3);
+  });
+});
