@@ -327,7 +327,7 @@ export const SPELLS: Record<string, SpellDef> = {
   },
   churu: {
     id: "churu", name: L("ちゅ〜る休憩", "Treat Break"), kind: "modifier", mana: -15, glyph: "回", color: "#f783ac",
-    desc: L("ひとなめして元気回復。読むとやる気が15戻る（ほかの技のやる気を肩代わり）", "One lick to perk up. Restores 15 Energy when read (pays for other moves)"), modifier: {},
+    desc: L("ひとなめして元気回復。読むとやる気が15戻る（★で20・25。ほかの技のやる気を肩代わり）", "One lick to perk up. Restores 15 Energy when read (20 / 25 with ★; pays for other moves)"), modifier: {},
   },
   double: {
     id: "double", name: L("二刀流", "Dual Wield"), kind: "multicast", mana: 6, glyph: "×2", color: "#e67700", count: 2,
@@ -492,7 +492,8 @@ export function spellDef(id: string): SpellDef {
     if (m.pierce) m.pierce += n;
     d.modifier = m;
   }
-  if (b.kind !== "attack") d.mana = Math.max(1, Math.round(b.mana * 0.7 ** n));
+  // 修飾は鍛えるほど消費が軽く、やる気が戻るもの（ちゅ〜る休憩）は戻る量が増える
+  if (b.kind !== "attack") d.mana = b.mana < 0 ? Math.round(b.mana * (1 + n * 0.3)) : Math.max(1, Math.round(b.mana * 0.7 ** n));
   if (b.limit) { d.limit = b.limit + n; d.projectile = { ...d.projectile!, limit: d.limit }; }   // 召喚は鍛えるほど呼べる数が増える
   starred.set(id, d);
   return d;
