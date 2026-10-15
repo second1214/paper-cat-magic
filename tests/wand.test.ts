@@ -177,3 +177,14 @@ describe("groupSummary", () => {
     expect(groupSummary(t)).toHaveLength(1);
   });
 });
+
+describe("ちゅ〜る休憩", () => {
+  it("★にしても、やる気が戻る（戻る量が増える）", async () => {
+    const { spellDef } = await import("../src/core/spells");
+    expect(spellDef("churu").mana).toBe(-15);
+    expect(spellDef("churu+").mana).toBeLessThan(-15);
+    expect(spellDef("churu++").mana).toBeLessThan(spellDef("churu+").mana);
+    const t = toy(["churu++", "claw"]);
+    expect(planCast(t, 0, 999).manaUsed).toBeLessThan(0);
+  });
+});
