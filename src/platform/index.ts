@@ -10,6 +10,9 @@ interface CgSdk {
 }
 
 export const PORTAL = import.meta.env.VITE_PORTAL ?? "web";
+
+/** 画像などの場所。CrazyGames 版はフォルダなしの平らな構成（cat/a.png → cat_a.png。iPhone からでもアップロードできるように）。 */
+export const asset = (p: string) => import.meta.env.BASE_URL + (import.meta.env.VITE_FLAT ? p.split("/").join("_") : p);
 let sdk: CgSdk | null = null;
 
 const loadScript = (src: string) => new Promise<void>((ok, ng) => { const s = document.createElement("script"); s.src = src; s.onload = () => ok(); s.onerror = ng; document.head.appendChild(s); });

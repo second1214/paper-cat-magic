@@ -24,6 +24,7 @@ import { isJa, L, setLang } from "../i18n";
 import { ALTAR_NAME, REWARD_INFO, type Choice, type HeldToy, type Spot, type World } from "../game/world";
 import { elementCanvas, gearCanvas, kibbleCanvas, relicCanvas, rewardCanvas, spellCanvas, toyCanvas, urlOf } from "../art/items";
 import { bonusRows, relicCounts, RELIC_STACK, stackPart, GEAR, GEAR_FX, GEAR_IDS, GEAR_SLOTS, gearBonus, RARITY, RELIC_IDS, RELICS, SETS, setCounts, SLOT_NAME, type Gear, type GearItem } from "../core/items";
+import { asset } from "../platform";
 
 /** 名前などを HTML に入れるときの文字の置きかえ。 */
 const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -35,7 +36,7 @@ const spellImg = (id: string) => urlOf(spellCanvas(baseId(id), spellDef(id).proj
 
 /** ママの場面絵とセリフ。 */
 const mama = (img: "scared" | "relief" | "pet" | "scream", line: string, small = false) =>
-  `<div class="mama ${small ? "small" : ""}"><img src="${import.meta.env.BASE_URL}mama/${img}.png" alt="${L("ママ", "Mama")}"><div class="say">${line}</div></div>`;
+  `<div class="mama ${small ? "small" : ""}"><img src="${asset(`mama/${img}.png`)}" alt="${L("ママ", "Mama")}"><div class="say">${line}</div></div>`;
 
 /** 修飾のかかる向きの矢印（▶右・◀左・◀▶両側・全 全体・つづけて/ふたつ持ちは左右をつなぐ）。 */
 const arrowOf = (s: SpellDef) => s.kind === "attack" ? "" : s.kind === "modifier" ? DIR_INFO[s.dir ?? "right"].arrow : s.kind === "multicast" ? "▶" : "◀▶";
@@ -371,7 +372,7 @@ export class Hud {
     const base = import.meta.env.BASE_URL, rec = loadRecord(), saved = loadRun();
     el.innerHTML = `<div class="title">
       <div class="logo"><small>${L("ママを虫から守れ！", "Protect Mama from bugs!")}</small>My Cat Is <br>So Cute</div>
-      <div class="hero"><img class="mom" src="${base}mama/scared.png" alt="${L("ママ", "Mama")}"><img class="cat" src="${base}cat/P03_sit_happy.png" alt="${L("猫", "Cat")}">
+      <div class="hero"><img class="mom" src="${asset("mama/scared.png")}" alt="${L("ママ", "Mama")}"><img class="cat" src="${asset("cat/P03_sit_happy.png")}" alt="${L("猫", "Cat")}">
         <img class="bug b1" src="${bugUrl("roach")}" alt=""><img class="bug b2" src="${bugUrl("mosquito")}" alt=""></div>
       <div class="menu">
         ${saved ? `<button class="go cont">${L("つづきから", "Continue")}<small>${runLabel(saved)}</small></button>` : ""}

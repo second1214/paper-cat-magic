@@ -1,5 +1,6 @@
 // 主人公の猫（紙人形）。状態に応じてステッカー画像を差し替える。
 import * as THREE from "three";
+import { asset } from "../platform";
 
 const STAND = 1.45; // 立ち姿の高さ（ワールド単位）。カメラを引いたので大きめ
 const RUN = (STAND / 297) * 1.15;
@@ -30,7 +31,7 @@ export class CatDoll {
     const doll = new CatDoll();
     const loader = new THREE.TextureLoader();
     await Promise.all(Object.entries(FRAMES).map(async ([name, px]) => {
-      const tex = await loader.loadAsync(`${base}cat/${name}.png`);
+      const tex = await loader.loadAsync(asset(`cat/${name}.png`));
       tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
       const w = tex.image.width * px, h = tex.image.height * px;
       const geo = new THREE.PlaneGeometry(w, h); geo.translate(0, h / 2, 0);

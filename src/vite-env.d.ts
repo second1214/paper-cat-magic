@@ -5,4 +5,6 @@ interface ImportMetaEnv {
   readonly VITE_PORTAL?: string;
   /** みんなのランキングの API の場所（なければ同じ場所）。 */
   readonly VITE_API?: string;
+  /** 画像をフォルダなしの平らな構成で置く（cat/a.png → cat_a.png）。 */
+  readonly VITE_FLAT?: string;
 }
