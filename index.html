@@ -289,6 +289,14 @@
       .tbtn.on { transform: scale(.92); filter: brightness(1.2); }
       body.touch #hint { bottom: auto; top: 76px; }
 
+      /* 横長で高さの足りない画面（CrazyGames の埋め込み枠など）: タイトルは横並びにして、スクロールなしで収める */
+      @media (min-aspect-ratio: 3/2) and (max-height: 760px) {
+        .title { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 22px; width: min(860px, 100%); }
+        .logo { width: 100%; font-size: clamp(30px, 7vh, 46px); } .logo br { display: none; }
+        .hero { height: min(52vh, 300px); } .title .menu { width: min(440px, 50vw); }
+        .record { width: 100%; max-width: max-content; }
+      }
+
       /* 低い画面（スマホ横持ち） */
       @media (max-height: 520px) {
         .title .menu { width: min(460px, 60vw); gap: 6px; } .title .menu button { padding: 7px; font-size: 15px; }
