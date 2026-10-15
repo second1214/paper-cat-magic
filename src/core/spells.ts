@@ -327,7 +327,7 @@ export const SPELLS: Record<string, SpellDef> = {
   },
   churu: {
     id: "churu", name: L("ちゅ〜る休憩", "Treat Break"), kind: "modifier", mana: -15, glyph: "回", color: "#f783ac",
-    desc: L("ひとなめして元気回復。読むとやる気が15戻る（★で20・25。ほかの技のやる気を肩代わり）", "One lick to perk up. Restores 15 Energy when read (20 / 25 with ★; pays for other moves)"), modifier: {},
+    desc: L("ひとなめして元気回復。読むとやる気が15戻る（★で19・24。ほかの技のやる気を肩代わり）", "One lick to perk up. Restores 15 Energy when read (19 / 24 with ★; pays for other moves)"), modifier: {},
   },
   double: {
     id: "double", name: L("二刀流", "Dual Wield"), kind: "multicast", mana: 6, glyph: "×2", color: "#e67700", count: 2,
