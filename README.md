@@ -174,7 +174,7 @@ npm run build:crazy   # dist-crazygames/（フォルダなしの平らな構成�
 ```
 
 - CrazyGames SDK v3 を読み込み、読み込み・遊んでいる最中（gameplayStart/Stop）・うれしい瞬間（ボス撃破・クリア）を伝える。保存は SDK の保存（アカウントに同期）を使う
-- ごほうび広告: やられたときに1回だけその場で復活／結果画面でにぼし2倍。ふつうの Web 版には出ない
+- ごほうび広告: やられたときに1回だけその場で復活／結果画面でにぼし2倍／部屋クリアの選択肢を引き直し。お試し公開（Basic Launch）では広告が禁止なので、ふつうの `npm run build:crazy` には出ない。本公開のときは `VITE_ADS=1 npm run build:crazy` で作る。ふつうの Web 版には出ない
 - みんなのランキングは `https://my-cat-is-so-cute.pages.dev/api/scores` を呼ぶ（`.env.crazygames`。API は CORS 対応）
 - 共通の切り替えは `src/platform/`
 

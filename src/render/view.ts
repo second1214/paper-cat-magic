@@ -94,28 +94,37 @@ export class GameView {
   }
 
   async init(base: string) {
-    this.cat = await CatDoll.load(base);
+    // 画像は全部いっしょに読む（1枚ずつ待つと、回線が遅いときに読み込みがとても長くなる）
+    const load = async (url: string) => { try { const t = await new THREE.TextureLoader().loadAsync(url); t.colorSpace = THREE.SRGBColorSpace; return t; } catch { return null; } };
+    const kids = ["boy", "girl"] as const;
+    const [cat, mamaTex, kidTex, shop, sleep, suck, friends] = await Promise.all([
+      CatDoll.load(base),
+      load(asset("mama/walk.png")),   // ニコニコでキャリーを持って歩いてくるママ
+      Promise.all(kids.map((k) => Promise.all(["walk", "run", "hug"].map((v) => load(asset(`kids/${k}_${v}.png`)))))),
+      load(asset("mama/shop.png")),
+      load(asset("papa/sleep.png")),
+      load(asset("papa/suck.png")),
+      Promise.all([1, 2, 3, 4].map((i) => grayCat(asset(`cat/A01_walk_${i}.png`)))),
+    ]);
+    this.cat = cat;
     this.cat.group.traverse((o) => { o.castShadow = true; });
     this.scene.add(this.cat.group);
     for (const t of Object.keys(ENEMY) as EnemyType[]) if (t !== "mama") this.enemyTex.set(t, enemyTexture(t));
-    const mamaTex = await new THREE.TextureLoader().loadAsync(asset("mama/walk.png"));   // ニコニコでキャリーを持って歩いてくるママ
-    mamaTex.colorSpace = THREE.SRGBColorSpace; this.enemyTex.set("mama", mamaTex);
-    // 子どもの絵（public/kids にあればそれを、なければ仮の絵）。hug は猫をだっこしている絵
-    const load = async (url: string) => { try { const t = await new THREE.TextureLoader().loadAsync(url); t.colorSpace = THREE.SRGBColorSpace; return t; } catch { return null; } };
-    for (const k of ["boy", "girl"] as const) {
-      const walk = await load(asset(`kids/${k}_walk.png`)); if (walk) this.enemyTex.set(k, walk);   // 両手をのばして追いかける
-      const run = await load(asset(`kids/${k}_run.png`)); if (run) this.runTex.set(k, run);          // ひと息ついて走り回る
-      const hug = await load(asset(`kids/${k}_hug.png`));
+    if (mamaTex) this.enemyTex.set("mama", mamaTex);
+    // 子どもの絵（public/kids にあればそれを、なければ仮の絵）。walk: 両手をのばして追いかける／run: ひと息ついて走り回る／hug: 猫をだっこ
+    kids.forEach((k, n) => {
+      const [walk, run, hug] = kidTex[n];
+      if (walk) this.enemyTex.set(k, walk);
+      if (run) this.runTex.set(k, run);
       this.hugTex.set(k, hug ? { tex: hug, drawsCat: true } : { tex: canvasTexture(kidCanvas(k, true)), drawsCat: false });
-    }
-    const shop = await load(asset("mama/shop.png")); if (shop) this.mamaShopTex = shop;
+    });
+    if (shop) this.mamaShopTex = shop;
     // パパ: 寝ころんでいる絵と、猫吸いの絵（猫が描いてあれば猫の人形は隠す）
-    const sleep = await load(asset("papa/sleep.png")); if (sleep) this.enemyTex.set("papa", sleep);
-    const suck = await load(asset("papa/suck.png"));
+    if (sleep) this.enemyTex.set("papa", sleep);
     this.hugTex.set("papa", suck ? { tex: suck, drawsCat: true } : { tex: canvasTexture(papaCanvas(true)), drawsCat: false });
     this.kibble = canvasTexture(kibbleCanvas());
     for (const t of ["claw", "bite", "hairball", "hiss", "swing", "yarn", "laser", "pounce", "punch", "post", "friend", "roomba", "squirt", "duck", "hammer", "bubble", "flash", "pumpkin", "box", "roller"] as const) this.techTex.set(t, canvasTexture(techCanvas(t)));
-    this.friendTex = await Promise.all([1, 2, 3, 4].map((i) => grayCat(asset(`cat/A01_walk_${i}.png`))));
+    this.friendTex = friends;
     for (const e of ["static", "wet", "sticky", "repel"] as const) this.elemTex.set(e, canvasTexture(elementCanvas(e)));
   }
 

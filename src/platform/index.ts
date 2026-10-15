@@ -45,7 +45,8 @@ export function setPlaying(on: boolean) {
 export const happy = () => { try { sdk?.game.happytime(); } catch { /* なにもしない */ } };
 
 /** 広告を見てごほうびがもらえるか。 */
-export const adsAvailable = () => !!sdk;
+/** お試し公開（Basic Launch）では広告が使えないので、本公開用のビルド（VITE_ADS=1）だけで出す。 */
+export const adsAvailable = () => !!sdk && import.meta.env.VITE_ADS === "1";
 
 /** ごほうび広告を流す。最後まで見たら true。流れている間は onStart/onEnd で音を止める。 */
 export function rewardedAd(onStart: () => void, onEnd: () => void): Promise<boolean> {
