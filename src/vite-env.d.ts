@@ -7,4 +7,6 @@ interface ImportMetaEnv {
   readonly VITE_API?: string;
   /** 画像をフォルダなしの平らな構成で置く（cat/a.png → cat_a.png）。 */
   readonly VITE_FLAT?: string;
+  /** ごほうび広告を出す（CrazyGames の本公開のときだけ 1）。 */
+  readonly VITE_ADS?: string;
 }
