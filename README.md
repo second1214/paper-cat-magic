@@ -170,7 +170,7 @@ npm run build   # dist/ に出力
 ### CrazyGames 版
 
 ```sh
-npm run build:crazy   # dist-crazygames/ と、アップロード用の my-cat-crazygames.zip を作る
+npm run build:crazy   # dist-crazygames/（フォルダなしの平らな構成。iPhone からも全部選んでアップロードできる）と my-cat-crazygames.zip を作る
 ```
 
 - CrazyGames SDK v3 を読み込み、読み込み・遊んでいる最中（gameplayStart/Stop）・うれしい瞬間（ボス撃破・クリア）を伝える。保存は SDK の保存（アカウントに同期）を使う

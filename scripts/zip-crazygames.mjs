@@ -1,9 +1,16 @@
-// dist-crazygames を CrazyGames にアップロードする zip にまとめる（追加の道具なしで動くよう、zip を自前で書く）。
-import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+// dist-crazygames をフォルダなしの平らな構成にし、CrazyGames にアップロードする zip にまとめる（追加の道具なしで動くよう、zip を自前で書く）。
+import { readdirSync, readFileSync, renameSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { crc32, deflateRawSync } from "node:zlib";
 
 const root = "dist-crazygames", out = "my-cat-crazygames.zip";
+// フォルダの中身を外に出して平らにする（cat/a.png → cat_a.png。コードも同じ名前で読む）
+for (const d of readdirSync(root)) {
+  const p = join(root, d);
+  if (!statSync(p).isDirectory()) continue;
+  for (const f of readdirSync(p)) renameSync(join(p, f), join(root, `${d}_${f}`));
+  rmdirSync(p);
+}
 const walk = (d) => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? walk(p) : [p]; });
 const files = walk(root).sort();
 const local = [], central = [];
